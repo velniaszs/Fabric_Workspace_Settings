@@ -1,0 +1,262 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_96590"
+        },
+        "api": {
+          "name": "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac",
+          "logicalName": "crbab_fabricdelegated"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "4d133a99-c31a-427b-bff2-eef3dfdd8ae8"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          }
+        }
+      },
+      "actions": {
+        "Initialize_variable": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "a5971595-bcb8-4bd4-a6f2-5f5e0ebe036a"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "gwArray",
+                "type": "array",
+                "value": []
+              }
+            ]
+          }
+        },
+        "Initialize_variable_2": {
+          "runAfter": {
+            "Initialize_variable": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "4368b210-7d6d-4f02-a805-9fe1ff27f5a4"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "cont",
+                "type": "string",
+                "value": "``"
+              }
+            ]
+          }
+        },
+        "Initialize_variable_3": {
+          "runAfter": {
+            "Initialize_variable_2": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "6bf2d2ac-ada8-4671-bbd8-753890fe5057"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "more",
+                "type": "boolean",
+                "value": true
+              }
+            ]
+          }
+        },
+        "Do_until": {
+          "actions": {
+            "ListGateways": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "a0f9445a-aac4-4d3a-84c1-07e72d9b4890"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac",
+                  "operationId": "ListGateways",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac"
+                },
+                "parameters": {
+                  "continuationToken": "@variables('cont')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Set_variable": {
+              "runAfter": {
+                "Set_variable_3": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "9976b984-b6b1-4f43-924b-0d420a2775ae"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "cont",
+                "value": "@{coalesce(body('ListGateways')?['continuationToken'], '')}"
+              }
+            },
+            "Set_variable_2": {
+              "runAfter": {
+                "Set_variable": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "77fe2407-e10b-4a54-b9c6-c784ce1fe40a"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "more",
+                "value": "@not(empty(variables('cont')))"
+              }
+            },
+            "Set_variable_3": {
+              "runAfter": {
+                "MergePages": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "baaa8f2f-9ea8-4ebd-809e-93028099ad3c"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "gwArray",
+                "value": "@outputs('MergePages')"
+              }
+            },
+            "MergePages": {
+              "runAfter": {
+                "Increment_variable": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "6a16e1ed-de69-4e8e-ac42-0ed55581e38c"
+              },
+              "type": "Compose",
+              "inputs": "@union(variables('gwArray'), coalesce(body('ListGateways')?['value'], json('[]')))"
+            },
+            "Increment_variable": {
+              "runAfter": {
+                "ListGateways": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "9f60e682-c7c7-4c50-a431-82d641498bc9"
+              },
+              "type": "IncrementVariable",
+              "inputs": {
+                "name": "pageCount",
+                "value": 1
+              }
+            }
+          },
+          "runAfter": {
+            "Initialize_variable_4": [
+              "Succeeded"
+            ]
+          },
+          "expression": "@or(equals(variables('more'), false), greaterOrEquals(variables('pageCount'), 5))",
+          "limit": {
+            "count": 60,
+            "timeout": "PT1H"
+          },
+          "metadata": {
+            "operationMetadataId": "15b2fff8-841f-434b-aa8f-db5a0ab3daae"
+          },
+          "type": "Until"
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Do_until": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1b564436-3463-4f05-bd45-837dbc5c2741"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "gatewaysjson": "@{string(variables('gwArray'))}"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "gatewaysjson": {
+                  "title": "GatewaysJson",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "Initialize_variable_4": {
+          "runAfter": {
+            "Initialize_variable_3": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "de91689a-74af-41c4-b6e0-c6e80d72bd5a"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "pageCount",
+                "type": "integer",
+                "value": 0
+              }
+            ]
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

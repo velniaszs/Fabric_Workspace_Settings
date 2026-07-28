@@ -13,7 +13,7 @@
       "triggers": {
         "manual": {
           "metadata": {
-            "operationMetadataId": "445c8a15-558f-4a7e-bccc-9403b71d4afd"
+            "operationMetadataId": "82cc2cff-b308-4623-8c1b-d289b91c4825"
           },
           "type": "Request",
           "kind": "PowerAppV2",
@@ -27,10 +27,18 @@
                   "x-ms-dynamically-added": true,
                   "description": "Please enter your input",
                   "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "Action",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
                 }
               },
               "required": [
-                "text"
+                "text",
+                "text_1"
               ]
             }
           }
@@ -40,7 +48,7 @@
         "Initialize_variable": {
           "runAfter": {},
           "metadata": {
-            "operationMetadataId": "117bab4e-c18e-45e2-bc33-81c95ebe5f81"
+            "operationMetadataId": "d175ce54-6417-4b55-8bf2-3301794896d7"
           },
           "type": "InitializeVariable",
           "inputs": {
@@ -60,7 +68,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "84340bc5-b4a8-43d5-b208-03d58e9b1e16"
+            "operationMetadataId": "005baa1f-99e6-48ef-97a0-46d5ad29d55c"
           },
           "type": "Http",
           "inputs": {
@@ -79,7 +87,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "232b95e4-6b5e-444a-ad0b-017d8cc7faa4"
+            "operationMetadataId": "30a52bd3-4efc-45e3-b910-5e26e7df384c"
           },
           "type": "ParseJson",
           "inputs": {
@@ -107,86 +115,44 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "c9a768fb-828a-4d13-ac92-7e0a4198d157"
+            "operationMetadataId": "37a9c9b6-e1c5-4c2d-a621-d71fe025dca7"
           },
           "type": "Http",
           "inputs": {
-            "method": "GET",
-            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy",
+            "method": "PUT",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/git",
             "headers": {
               "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}",
-              "Accept": "application/json"
+              "Content-Type": "application/json"
+            },
+            "body": {
+              "defaultAction": "@{triggerBody()['text_1']}"
             }
           }
         },
         "Respond_to_a_Power_App_or_flow": {
-          "runAfter": {
-            "Parse_JSON_2": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "dce3d354-41a5-42f4-8731-9567bd1387f8"
-          },
-          "type": "Response",
-          "kind": "PowerApp",
-          "inputs": {
-            "statusCode": 200,
-            "body": {
-              "oapenabled": "@equals(body('Parse_JSON_2')?['outbound']?['publicAccessRules']?['defaultAction'], 'Deny')"
-            },
-            "schema": {
-              "type": "object",
-              "properties": {
-                "oapenabled": {
-                  "title": "OAPEnabled",
-                  "x-ms-dynamically-added": true,
-                  "type": "boolean"
-                }
-              }
-            }
-          }
-        },
-        "Parse_JSON_2": {
           "runAfter": {
             "HTTP_2": [
               "Succeeded"
             ]
           },
           "metadata": {
-            "operationMetadataId": "feab6413-6bf1-407e-8923-6fd17ce15a79"
+            "operationMetadataId": "6c4ecaec-857b-4b24-9356-33ba65b93b55"
           },
-          "type": "ParseJson",
+          "type": "Response",
+          "kind": "PowerApp",
           "inputs": {
-            "content": "@body('HTTP_2')",
+            "statusCode": 200,
+            "body": {
+              "status": "\"OK\""
+            },
             "schema": {
               "type": "object",
               "properties": {
-                "inbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
-                },
-                "outbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                "status": {
+                  "title": "Status",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
                 }
               }
             }

@@ -1,11 +1,11 @@
-<ImportExportXml version="9.2.26063.166" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26063.166" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
+<ImportExportXml version="9.2.26064.174" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26064.174" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
   <SolutionManifest>
     <UniqueName>Cr08ecd</UniqueName>
     <LocalizedNames>
       <LocalizedName description="Common Data Services Default Solution" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.0.0.1</Version>
+    <Version>1.0.0.3</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>Crf5954</UniqueName>
@@ -81,8 +81,14 @@
       <RootComponent type="1" schemaName="crbab_workspaces" behavior="0" />
       <RootComponent type="29" id="{1875ac61-1884-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{21afad93-eb84-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{42395f29-8c89-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{4469367c-ad89-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{54775ced-cd85-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{5ec91b70-4c8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{8a588a8d-8e89-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{f82666cb-4d8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="300" schemaName="crbab_app5_baf10" behavior="0" />
+      <RootComponent type="372" id="{48b10ebf-2717-4b71-9212-bca0f95b824e}" schemaName="crbab_fabricdelegated" behavior="0" />
     </RootComponents>
     <MissingDependencies>
       <MissingDependency>
@@ -90,10 +96,6 @@
           <package appName="Power Pages Core Package" version="1.1.2605.258">PowerPages_Core (1.1.2605.258)</package>
         </Required>
         <Dependent type="60" displayName="Information" parentDisplayName="Workspaces" id="{8e65725b-7d60-4d45-bb64-15ccd3228d98}" />
-      </MissingDependency>
-      <MissingDependency>
-        <Required type="EnvironmentVariableDefinition" displayName="ab_TenantId" solution="Active" id.schemaname="ab_TenantId" />
-        <Dependent type="EnvironmentVariableValue" displayName="ab_TenantId" id.environmentvariabledefinitionid.schemaname="ab_TenantId" />
       </MissingDependency>
     </MissingDependencies>
   </SolutionManifest>

@@ -13,7 +13,7 @@
       "triggers": {
         "manual": {
           "metadata": {
-            "operationMetadataId": "445c8a15-558f-4a7e-bccc-9403b71d4afd"
+            "operationMetadataId": "d78a13bc-9a28-4622-8876-5bcc99b856f3"
           },
           "type": "Request",
           "kind": "PowerAppV2",
@@ -27,10 +27,18 @@
                   "x-ms-dynamically-added": true,
                   "description": "Please enter your input",
                   "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "RulesJson",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
                 }
               },
               "required": [
-                "text"
+                "text",
+                "text_1"
               ]
             }
           }
@@ -40,7 +48,7 @@
         "Initialize_variable": {
           "runAfter": {},
           "metadata": {
-            "operationMetadataId": "117bab4e-c18e-45e2-bc33-81c95ebe5f81"
+            "operationMetadataId": "c543700e-3034-4027-aa7c-d26a38de1e48"
           },
           "type": "InitializeVariable",
           "inputs": {
@@ -60,7 +68,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "84340bc5-b4a8-43d5-b208-03d58e9b1e16"
+            "operationMetadataId": "b443a15d-31f6-4a59-b6f1-ed12ee0a6669"
           },
           "type": "Http",
           "inputs": {
@@ -79,7 +87,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "232b95e4-6b5e-444a-ad0b-017d8cc7faa4"
+            "operationMetadataId": "0b503a55-a17a-4b41-a9c8-d3855209fa37"
           },
           "type": "ParseJson",
           "inputs": {
@@ -107,86 +115,82 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "c9a768fb-828a-4d13-ac92-7e0a4198d157"
+            "operationMetadataId": "50f62686-a1aa-4ff8-937e-edd12b574671"
           },
           "type": "Http",
           "inputs": {
-            "method": "GET",
-            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy",
+            "method": "PUT",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/gateways",
             "headers": {
               "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}",
-              "Accept": "application/json"
-            }
-          }
-        },
-        "Respond_to_a_Power_App_or_flow": {
-          "runAfter": {
-            "Parse_JSON_2": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "dce3d354-41a5-42f4-8731-9567bd1387f8"
-          },
-          "type": "Response",
-          "kind": "PowerApp",
-          "inputs": {
-            "statusCode": 200,
-            "body": {
-              "oapenabled": "@equals(body('Parse_JSON_2')?['outbound']?['publicAccessRules']?['defaultAction'], 'Deny')"
+              "Content-Type": "application/json"
             },
-            "schema": {
-              "type": "object",
-              "properties": {
-                "oapenabled": {
-                  "title": "OAPEnabled",
-                  "x-ms-dynamically-added": true,
-                  "type": "boolean"
-                }
-              }
-            }
+            "body": "@triggerBody()['text_1']"
           }
         },
-        "Parse_JSON_2": {
+        "RespondSuccess": {
           "runAfter": {
             "HTTP_2": [
               "Succeeded"
             ]
           },
           "metadata": {
-            "operationMetadataId": "feab6413-6bf1-407e-8923-6fd17ce15a79"
+            "operationMetadataId": "4c5ce0b0-8ed4-488c-8a84-d726b5068d59"
           },
-          "type": "ParseJson",
+          "type": "Response",
+          "kind": "PowerApp",
           "inputs": {
-            "content": "@body('HTTP_2')",
+            "statusCode": 200,
+            "body": {
+              "status": "\"OK\"",
+              "errormessage": "\"\""
+            },
             "schema": {
               "type": "object",
               "properties": {
-                "inbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                "status": {
+                  "title": "Status",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
                 },
-                "outbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                "errormessage": {
+                  "title": "ErrorMessage",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "RespondError": {
+          "runAfter": {
+            "HTTP_2": [
+              "Failed"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "25851538-08b4-4dd0-b3c4-80334cfdfb80"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "status": "\"Error\"",
+              "errormessage": "@{coalesce(body('HTTP_2')?['message'], body('HTTP_2')?['errorCode'], string(body('HTTP_2')))}"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "title": "Status",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "errormessage": {
+                  "title": "ErrorMessage",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
                 }
               }
             }
@@ -194,7 +198,7 @@
         }
       }
     },
-    "templateName": null
+    "templateName": ""
   },
   "schemaVersion": "1.0.0.0"
 }

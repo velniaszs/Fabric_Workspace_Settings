@@ -1,4 +1,4 @@
-<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26063.166" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
+<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26064.174" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
   <Entities>
     <Entity>
       <Name LocalizedName="AllowedConnectionType" OriginalName="AllowedConnectionType">crbab_AllowedConnectionType</Name>
@@ -89,6 +89,46 @@
               </displaynames>
               <Descriptions>
                 <Description description="Type of the cloud service connection" languagecode="1033" />
+              </Descriptions>
+            </attribute>
+            <attribute PhysicalName="crbab_ElementType">
+              <Type>nvarchar</Type>
+              <Name>crbab_elementtype</Name>
+              <LogicalName>crbab_elementtype</LogicalName>
+              <RequiredLevel>none</RequiredLevel>
+              <DisplayMask>ValidForAdvancedFind|ValidForForm|ValidForGrid</DisplayMask>
+              <ImeMode>auto</ImeMode>
+              <ValidForUpdateApi>1</ValidForUpdateApi>
+              <ValidForReadApi>1</ValidForReadApi>
+              <ValidForCreateApi>1</ValidForCreateApi>
+              <IsCustomField>1</IsCustomField>
+              <IsAuditEnabled>1</IsAuditEnabled>
+              <IsSecured>0</IsSecured>
+              <IntroducedVersion>1.0</IntroducedVersion>
+              <IsCustomizable>1</IsCustomizable>
+              <IsRenameable>1</IsRenameable>
+              <CanModifySearchSettings>1</CanModifySearchSettings>
+              <CanModifyRequirementLevelSettings>1</CanModifyRequirementLevelSettings>
+              <CanModifyAdditionalSettings>1</CanModifyAdditionalSettings>
+              <SourceType>0</SourceType>
+              <IsGlobalFilterEnabled>0</IsGlobalFilterEnabled>
+              <IsSortableEnabled>0</IsSortableEnabled>
+              <CanModifyGlobalFilterSettings>1</CanModifyGlobalFilterSettings>
+              <CanModifyIsSortableSettings>1</CanModifyIsSortableSettings>
+              <IsDataSourceSecret>0</IsDataSourceSecret>
+              <AutoNumberFormat></AutoNumberFormat>
+              <IsSearchable>0</IsSearchable>
+              <IsFilterable>0</IsFilterable>
+              <IsRetrievable>0</IsRetrievable>
+              <IsLocalizable>0</IsLocalizable>
+              <Format>text</Format>
+              <MaxLength>100</MaxLength>
+              <Length>200</Length>
+              <displaynames>
+                <displayname description="ElementType" languagecode="1033" />
+              </displaynames>
+              <Descriptions>
+                <Description description="" languagecode="1033" />
               </Descriptions>
             </attribute>
             <attribute PhysicalName="crbab_isactive">
@@ -3223,6 +3263,136 @@
         <LocalizedName languagecode="1033" description="SetOutboundRules" />
       </LocalizedNames>
     </Workflow>
+    <Workflow WorkflowId="{42395f29-8c89-f111-ab0f-7c1e528d41fb}" Name="GetGitPolicy">
+      <JsonFileName>/Workflows/GetGitPolicy-42395F29-8C89-F111-AB0F-7C1E528D41FB.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.1</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="GetGitPolicy" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{8a588a8d-8e89-f111-ab0f-7c1e528d41fb}" Name="SetGitPolicy">
+      <JsonFileName>/Workflows/SetGitPolicy-8A588A8D-8E89-F111-AB0F-7C1E528D41FB.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.1</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="SetGitPolicy" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{4469367c-ad89-f111-ab0f-7c1e528d41fb}" Name="ListGateways">
+      <JsonFileName>/Workflows/ListGateways-4469367C-AD89-F111-AB0F-7C1E528D41FB.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.1</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="ListGateways" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{5ec91b70-4c8a-f111-ab0f-7c1e528d41fb}" Name="GetGatewayRules">
+      <JsonFileName>/Workflows/GetGatewayRules-5EC91B70-4C8A-F111-AB0F-7C1E528D41FB.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.1</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="GetGatewayRules" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{f82666cb-4d8a-f111-ab0f-7c1e528d41fb}" Name="SetGatewayRules">
+      <JsonFileName>/Workflows/SetGatewayRules-F82666CB-4D8A-F111-AB0F-7C1E528D41FB.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.1</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="SetGatewayRules" />
+      </LocalizedNames>
+    </Workflow>
   </Workflows>
   <FieldSecurityProfiles></FieldSecurityProfiles>
   <Templates />
@@ -3508,6 +3678,44 @@
       </AdditionalUris>
     </CanvasApp>
   </CanvasApps>
+  <Connectors>
+    <Connector>
+      <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
+      <description></description>
+      <displayname>FabricDelegated</displayname>
+      <iconbrandcolor>#007ee5</iconbrandcolor>
+      <name>crbab_fabricdelegated</name>
+      <connectortype>1</connectortype>
+      <openapidefinition>/Connector/crbab_fabricdelegated_openapidefinition.json</openapidefinition>
+      <connectionparameters>/Connector/crbab_fabricdelegated_connectionparameters.json</connectionparameters>
+      <policytemplateinstances>/Connector/crbab_fabricdelegated_policytemplateinstances.json</policytemplateinstances>
+      <iconblob>/Connector/crbab_fabricdelegated_iconblob.Png</iconblob>
+    </Connector>
+  </Connectors>
+  <connectionreferences>
+    <connectionreference connectionreferencelogicalname="crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_65783">
+      <connectionreferencedisplayname>FabricDelegated Cr08ecd-65783</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac</connectorid>
+      <customconnectorid>
+        <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
+      </customconnectorid>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+    <connectionreference connectionreferencelogicalname="crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_96590">
+      <connectionreferencedisplayname>FabricDelegated Cr08ecd-96590</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac</connectorid>
+      <customconnectorid>
+        <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
+      </customconnectorid>
+      <iscustomizable>1</iscustomizable>
+      <promptingbehavior>0</promptingbehavior>
+      <statecode>0</statecode>
+      <statuscode>1</statuscode>
+    </connectionreference>
+  </connectionreferences>
   <Languages>
     <Language>1033</Language>
   </Languages>

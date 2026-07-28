@@ -13,7 +13,7 @@
       "triggers": {
         "manual": {
           "metadata": {
-            "operationMetadataId": "445c8a15-558f-4a7e-bccc-9403b71d4afd"
+            "operationMetadataId": "8bb6d07d-ea7e-4bee-9696-93068348abe3"
           },
           "type": "Request",
           "kind": "PowerAppV2",
@@ -40,7 +40,7 @@
         "Initialize_variable": {
           "runAfter": {},
           "metadata": {
-            "operationMetadataId": "117bab4e-c18e-45e2-bc33-81c95ebe5f81"
+            "operationMetadataId": "a247a7ec-1c76-4948-93b1-a8320b1889e9"
           },
           "type": "InitializeVariable",
           "inputs": {
@@ -60,7 +60,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "84340bc5-b4a8-43d5-b208-03d58e9b1e16"
+            "operationMetadataId": "406f715a-e011-4b7e-8d1d-2b3230741bbb"
           },
           "type": "Http",
           "inputs": {
@@ -79,7 +79,7 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "232b95e4-6b5e-444a-ad0b-017d8cc7faa4"
+            "operationMetadataId": "885d9b4c-911b-43bf-a6df-7d39532f1ff5"
           },
           "type": "ParseJson",
           "inputs": {
@@ -107,12 +107,12 @@
             ]
           },
           "metadata": {
-            "operationMetadataId": "c9a768fb-828a-4d13-ac92-7e0a4198d157"
+            "operationMetadataId": "05d60d5a-589e-4ec7-b5e1-acb625853469"
           },
           "type": "Http",
           "inputs": {
             "method": "GET",
-            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/gateways",
             "headers": {
               "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}",
               "Accept": "application/json"
@@ -121,72 +121,27 @@
         },
         "Respond_to_a_Power_App_or_flow": {
           "runAfter": {
-            "Parse_JSON_2": [
+            "HTTP_2": [
               "Succeeded"
             ]
           },
           "metadata": {
-            "operationMetadataId": "dce3d354-41a5-42f4-8731-9567bd1387f8"
+            "operationMetadataId": "ec085a98-2888-4afc-9f7f-72ce8958fa6c"
           },
           "type": "Response",
           "kind": "PowerApp",
           "inputs": {
             "statusCode": 200,
             "body": {
-              "oapenabled": "@equals(body('Parse_JSON_2')?['outbound']?['publicAccessRules']?['defaultAction'], 'Deny')"
+              "rulesjson": "@{string(body('HTTP_2'))}"
             },
             "schema": {
               "type": "object",
               "properties": {
-                "oapenabled": {
-                  "title": "OAPEnabled",
+                "rulesjson": {
+                  "title": "RulesJson",
                   "x-ms-dynamically-added": true,
-                  "type": "boolean"
-                }
-              }
-            }
-          }
-        },
-        "Parse_JSON_2": {
-          "runAfter": {
-            "HTTP_2": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "feab6413-6bf1-407e-8923-6fd17ce15a79"
-          },
-          "type": "ParseJson",
-          "inputs": {
-            "content": "@body('HTTP_2')",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "inbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
-                },
-                "outbound": {
-                  "type": "object",
-                  "properties": {
-                    "publicAccessRules": {
-                      "type": "object",
-                      "properties": {
-                        "defaultAction": {
-                          "type": "string"
-                        }
-                      }
-                    }
-                  }
+                  "type": "string"
                 }
               }
             }
