@@ -5,7 +5,7 @@
       <LocalizedName description="Common Data Services Default Solution" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.0.0.3</Version>
+    <Version>1.0.0.4</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>Crf5954</UniqueName>
@@ -88,7 +88,6 @@
       <RootComponent type="29" id="{8a588a8d-8e89-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{f82666cb-4d8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="300" schemaName="crbab_app5_baf10" behavior="0" />
-      <RootComponent type="372" id="{48b10ebf-2717-4b71-9212-bca0f95b824e}" schemaName="crbab_fabricdelegated" behavior="0" />
     </RootComponents>
     <MissingDependencies>
       <MissingDependency>

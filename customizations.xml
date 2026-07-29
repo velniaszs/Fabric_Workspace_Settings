@@ -3678,38 +3678,10 @@
       </AdditionalUris>
     </CanvasApp>
   </CanvasApps>
-  <Connectors>
-    <Connector>
-      <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
-      <description></description>
-      <displayname>FabricDelegated</displayname>
-      <iconbrandcolor>#007ee5</iconbrandcolor>
-      <name>crbab_fabricdelegated</name>
-      <connectortype>1</connectortype>
-      <openapidefinition>/Connector/crbab_fabricdelegated_openapidefinition.json</openapidefinition>
-      <connectionparameters>/Connector/crbab_fabricdelegated_connectionparameters.json</connectionparameters>
-      <policytemplateinstances>/Connector/crbab_fabricdelegated_policytemplateinstances.json</policytemplateinstances>
-      <iconblob>/Connector/crbab_fabricdelegated_iconblob.Png</iconblob>
-    </Connector>
-  </Connectors>
   <connectionreferences>
-    <connectionreference connectionreferencelogicalname="crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_65783">
-      <connectionreferencedisplayname>FabricDelegated Cr08ecd-65783</connectionreferencedisplayname>
-      <connectorid>/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac</connectorid>
-      <customconnectorid>
-        <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
-      </customconnectorid>
-      <iscustomizable>1</iscustomizable>
-      <promptingbehavior>0</promptingbehavior>
-      <statecode>0</statecode>
-      <statuscode>1</statuscode>
-    </connectionreference>
-    <connectionreference connectionreferencelogicalname="crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_96590">
-      <connectionreferencedisplayname>FabricDelegated Cr08ecd-96590</connectionreferencedisplayname>
-      <connectorid>/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac</connectorid>
-      <customconnectorid>
-        <connectorid>48b10ebf-2717-4b71-9212-bca0f95b824e</connectorid>
-      </customconnectorid>
+    <connectionreference connectionreferencelogicalname="crbab_sharedwebcontents_0b635">
+      <connectionreferencedisplayname>HTTP with Microsoft Entra ID (preauthorized) Cr08ecd-0b635</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>

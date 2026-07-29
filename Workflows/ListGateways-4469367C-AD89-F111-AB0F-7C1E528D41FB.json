@@ -1,14 +1,13 @@
 {
   "properties": {
     "connectionReferences": {
-      "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac": {
+      "shared_webcontents": {
         "runtimeSource": "invoker",
         "connection": {
-          "connectionReferenceLogicalName": "crbab_sharedfabricdelegated5f058da058242ac0ef5f0c1c5dd7f4e428ac_96590"
+          "connectionReferenceLogicalName": "crbab_sharedwebcontents_0b635"
         },
         "api": {
-          "name": "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac",
-          "logicalName": "crbab_fabricdelegated"
+          "name": "shared_webcontents"
         }
       }
     },
@@ -100,24 +99,6 @@
         },
         "Do_until": {
           "actions": {
-            "ListGateways": {
-              "runAfter": {},
-              "metadata": {
-                "operationMetadataId": "a0f9445a-aac4-4d3a-84c1-07e72d9b4890"
-              },
-              "type": "OpenApiConnection",
-              "inputs": {
-                "host": {
-                  "connectionName": "shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac",
-                  "operationId": "ListGateways",
-                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_fabricdelegated-5f058da058242ac0ef-5f0c1c5dd7f4e428ac"
-                },
-                "parameters": {
-                  "continuationToken": "@variables('cont')"
-                },
-                "authentication": "@parameters('$authentication')"
-              }
-            },
             "Set_variable": {
               "runAfter": {
                 "Set_variable_3": [
@@ -130,7 +111,7 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "cont",
-                "value": "@{coalesce(body('ListGateways')?['continuationToken'], '')}"
+                "value": "@{coalesce(body('Invoke_an_HTTP_request_2')?['continuationToken'], '')}"
               }
             },
             "Set_variable_2": {
@@ -173,11 +154,11 @@
                 "operationMetadataId": "6a16e1ed-de69-4e8e-ac42-0ed55581e38c"
               },
               "type": "Compose",
-              "inputs": "@union(variables('gwArray'), coalesce(body('ListGateways')?['value'], json('[]')))"
+              "inputs": "@union(variables('gwArray'), coalesce(body('Invoke_an_HTTP_request_2')?['value'], json('[]')))"
             },
             "Increment_variable": {
               "runAfter": {
-                "ListGateways": [
+                "Invoke_an_HTTP_request_2": [
                   "Succeeded"
                 ]
               },
@@ -188,6 +169,28 @@
               "inputs": {
                 "name": "pageCount",
                 "value": 1
+              }
+            },
+            "Invoke_an_HTTP_request_2": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "d0654a96-1572-427c-af0f-a00b3a01594d"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_webcontents",
+                  "operationId": "InvokeHttp",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents"
+                },
+                "parameters": {
+                  "request/method": "GET",
+                  "request/url": "@concat('https://api.fabric.microsoft.com/v1/gateways', if(empty(variables('cont')), '', concat('?continuationToken=', encodeUriComponent(variables('cont')))))",
+                  "request/headers": {
+                    "Accept": "application/json"
+                  }
+                },
+                "authentication": "@parameters('$authentication')"
               }
             }
           },
