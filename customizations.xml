@@ -1,4 +1,4 @@
-<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26064.174" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
+<ImportExportXml xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26071.167" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26071.00167">
   <Entities>
     <Entity>
       <Name LocalizedName="AllowedConnectionType" OriginalName="AllowedConnectionType">crbab_AllowedConnectionType</Name>
@@ -3183,8 +3183,178 @@
       </RibbonDiffXml>
     </Entity>
   </Entities>
-  <Roles></Roles>
+  <Roles>
+    <Role id="{fbf81a77-ad90-f111-8076-7ced8d74f424}" name="Workspace Settings Role">
+      <IsCustomizable>1</IsCustomizable>
+      <IsAutoAssigned>0</IsAutoAssigned>
+      <RolePrivileges>
+        <RolePrivilege name="prvActivateSynchronousWorkflow" level="Basic" />
+        <RolePrivilege name="prvAppendNewProcess" level="Global" />
+        <RolePrivilege name="prvAppendToAsyncOperation" level="Basic" />
+        <RolePrivilege name="prvAppendToNewProcess" level="Global" />
+        <RolePrivilege name="prvAppendToTranslationProcess" level="Global" />
+        <RolePrivilege name="prvAppendToWorkflow" level="Global" />
+        <RolePrivilege name="prvAppendToWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvAppendTranslationProcess" level="Global" />
+        <RolePrivilege name="prvAppendWorkflow" level="Basic" />
+        <RolePrivilege name="prvAppendWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvAssignAsyncOperation" level="Basic" />
+        <RolePrivilege name="prvAssignWorkflow" level="Basic" />
+        <RolePrivilege name="prvAssignWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvCreateNewProcess" level="Global" />
+        <RolePrivilege name="prvCreateSharePointData" level="Global" />
+        <RolePrivilege name="prvCreateTranslationProcess" level="Global" />
+        <RolePrivilege name="prvCreateUserApplicationMetadata" level="Basic" />
+        <RolePrivilege name="prvCreateUserEntityUISettings" level="Basic" />
+        <RolePrivilege name="prvCreateWorkflow" level="Basic" />
+        <RolePrivilege name="prvCreateWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvDeleteNewProcess" level="Global" />
+        <RolePrivilege name="prvDeleteTranslationProcess" level="Global" />
+        <RolePrivilege name="prvDeleteUserApplicationMetadata" level="Basic" />
+        <RolePrivilege name="prvDeleteUserEntityUISettings" level="Basic" />
+        <RolePrivilege name="prvDeleteWorkflow" level="Basic" />
+        <RolePrivilege name="prvDeleteWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvFlow" level="Global" />
+        <RolePrivilege name="prvReadAppConfigMaster" level="Global" />
+        <RolePrivilege name="prvReadAppModule" level="Global" />
+        <RolePrivilege name="prvReadAsyncOperation" level="Basic" />
+        <RolePrivilege name="prvReadAttribute" level="Global" />
+        <RolePrivilege name="prvReadAttributeMap" level="Global" />
+        <RolePrivilege name="prvReadBusinessUnit" level="Global" />
+        <RolePrivilege name="prvReadComplexControl" level="Global" />
+        <RolePrivilege name="prvReadconnectionreference" level="Global" />
+        <RolePrivilege name="prvReadconnector" level="Global" />
+        <RolePrivilege name="prvReadcrbab_AllowedConnectionType" level="Global" />
+        <RolePrivilege name="prvReadcrbab_Workspaces" level="Global" />
+        <RolePrivilege name="prvReadCustomization" level="Global" />
+        <RolePrivilege name="prvReadEntity" level="Global" />
+        <RolePrivilege name="prvReadEntityKey" level="Global" />
+        <RolePrivilege name="prvReadEntityMap" level="Global" />
+        <RolePrivilege name="prvReadHierarchyRule" level="Global" />
+        <RolePrivilege name="prvReadNewProcess" level="Global" />
+        <RolePrivilege name="prvReadOptionSet" level="Global" />
+        <RolePrivilege name="prvReadOrganization" level="Global" />
+        <RolePrivilege name="prvReadPluginAssembly" level="Global" />
+        <RolePrivilege name="prvReadPluginTraceLog" level="Global" />
+        <RolePrivilege name="prvReadPluginType" level="Global" />
+        <RolePrivilege name="prvReadQuery" level="Global" />
+        <RolePrivilege name="prvReadRelationship" level="Global" />
+        <RolePrivilege name="prvReadReport" level="Basic" />
+        <RolePrivilege name="prvReadRole" level="Global" />
+        <RolePrivilege name="prvReadSavedQueryVisualizations" level="Global" />
+        <RolePrivilege name="prvReadSdkMessage" level="Global" />
+        <RolePrivilege name="prvReadSdkMessageProcessingStep" level="Global" />
+        <RolePrivilege name="prvReadSdkMessageProcessingStepImage" level="Global" />
+        <RolePrivilege name="prvReadSharePointData" level="Global" />
+        <RolePrivilege name="prvReadSharePointDocument" level="Global" />
+        <RolePrivilege name="prvReadSystemApplicationMetadata" level="Global" />
+        <RolePrivilege name="prvReadSystemForm" level="Global" />
+        <RolePrivilege name="prvReadTeam" level="Global" />
+        <RolePrivilege name="prvReadTraceLog" level="Global" />
+        <RolePrivilege name="prvReadTransactionCurrency" level="Global" />
+        <RolePrivilege name="prvReadTranslationProcess" level="Global" />
+        <RolePrivilege name="prvReadUser" level="Local" />
+        <RolePrivilege name="prvReadUserApplicationMetadata" level="Basic" />
+        <RolePrivilege name="prvReadUserEntityUISettings" level="Basic" />
+        <RolePrivilege name="prvReadUserQuery" level="Basic" />
+        <RolePrivilege name="prvReadUserSettings" level="Global" />
+        <RolePrivilege name="prvReadWebResource" level="Global" />
+        <RolePrivilege name="prvReadWorkflow" level="Global" />
+        <RolePrivilege name="prvReadWorkflowSession" level="Global" />
+        <RolePrivilege name="prvShareUserEntityUISettings" level="Basic" />
+        <RolePrivilege name="prvShareWorkflow" level="Basic" />
+        <RolePrivilege name="prvShareWorkflowSession" level="Basic" />
+        <RolePrivilege name="prvWorkflowExecution" level="Global" />
+        <RolePrivilege name="prvWriteAsyncOperation" level="Basic" />
+        <RolePrivilege name="prvWriteNewProcess" level="Global" />
+        <RolePrivilege name="prvWriteSharePointData" level="Global" />
+        <RolePrivilege name="prvWriteTranslationProcess" level="Global" />
+        <RolePrivilege name="prvWriteUserApplicationMetadata" level="Basic" />
+        <RolePrivilege name="prvWriteUserEntityUISettings" level="Basic" />
+        <RolePrivilege name="prvWriteWorkflow" level="Basic" />
+        <RolePrivilege name="prvWriteWorkflowSession" level="Basic" />
+      </RolePrivileges>
+    </Role>
+  </Roles>
   <Workflows>
+    <Workflow WorkflowId="{50895fca-088f-f111-8076-7ced8d76bf1b}" Name="GetFabricToken">
+      <JsonFileName>/Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.2</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="GetFabricToken" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{5afcd720-158f-f111-8076-7ced8d76bf1b}" Name="PollFabricOperation">
+      <JsonFileName>/Workflows/PollFabricOperation-5AFCD720-158F-F111-8076-7CED8D76BF1B.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.2</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="PollFabricOperation" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{1e895d49-da8f-f111-8076-70a8a530ae85}" Name="ConnectWorkspaceToGit">
+      <JsonFileName>/Workflows/ConnectWorkspaceToGit-1E895D49-DA8F-F111-8076-70A8A530AE85.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.2</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="ConnectWorkspaceToGit" />
+      </LocalizedNames>
+    </Workflow>
     <Workflow WorkflowId="{1875ac61-1884-f111-ab0f-7c1e528d41fb}" Name="GetOAPSetting">
       <JsonFileName>/Workflows/GetOAPSetting-1875AC61-1884-F111-AB0F-7C1E528D41FB.json</JsonFileName>
       <Type>1</Type>
@@ -3203,7 +3373,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.0</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3229,7 +3398,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.0</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3255,7 +3423,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.0</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3281,7 +3448,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.1</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3307,7 +3473,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.1</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3333,7 +3498,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.1</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3359,7 +3523,6 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.1</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
@@ -3385,12 +3548,63 @@
       <IsTransacted>1</IsTransacted>
       <IntroducedVersion>1.0.0.1</IntroducedVersion>
       <IsCustomizable>1</IsCustomizable>
-      <BusinessProcessType>0</BusinessProcessType>
       <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
       <ModernFlowType>0</ModernFlowType>
       <PrimaryEntity>none</PrimaryEntity>
       <LocalizedNames>
         <LocalizedName languagecode="1033" description="SetGatewayRules" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{98b3e46a-278f-f111-8076-7ced8d76bf1b}" Name="ListGitConnections">
+      <JsonFileName>/Workflows/ListGitConnections-98B3E46A-278F-F111-8076-7CED8D76BF1B.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.2</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="ListGitConnections" />
+      </LocalizedNames>
+    </Workflow>
+    <Workflow WorkflowId="{39f29f3d-cf8f-f111-8076-7ced8d76cbfd}" Name="GetWorkspaceGitState">
+      <JsonFileName>/Workflows/GetWorkspaceGitState-39F29F3D-CF8F-F111-8076-7CED8D76CBFD.json</JsonFileName>
+      <Type>1</Type>
+      <Subprocess>0</Subprocess>
+      <Category>5</Category>
+      <Mode>0</Mode>
+      <Scope>4</Scope>
+      <OnDemand>0</OnDemand>
+      <TriggerOnCreate>0</TriggerOnCreate>
+      <TriggerOnDelete>0</TriggerOnDelete>
+      <AsyncAutodelete>0</AsyncAutodelete>
+      <SyncWorkflowLogOnFailure>0</SyncWorkflowLogOnFailure>
+      <StateCode>1</StateCode>
+      <StatusCode>2</StatusCode>
+      <RunAs>1</RunAs>
+      <IsTransacted>1</IsTransacted>
+      <IntroducedVersion>1.0.0.2</IntroducedVersion>
+      <IsCustomizable>1</IsCustomizable>
+      <BusinessProcessType>0</BusinessProcessType>
+      <IsCustomProcessingStepAllowedForOtherPublishers>1</IsCustomProcessingStepAllowedForOtherPublishers>
+      <ModernFlowType>0</ModernFlowType>
+      <PrimaryEntity>none</PrimaryEntity>
+      <LocalizedNames>
+        <LocalizedName languagecode="1033" description="GetWorkspaceGitState" />
       </LocalizedNames>
     </Workflow>
   </Workflows>
@@ -3646,21 +3860,21 @@
   <CanvasApps>
     <CanvasApp>
       <Name>crbab_app5_baf10</Name>
-      <AppVersion>2026-07-14T11:45:44Z</AppVersion>
+      <AppVersion>2026-08-05T06:18:38Z</AppVersion>
       <Status>Ready</Status>
-      <CreatedByClientVersion>3.26065.8.0</CreatedByClientVersion>
-      <MinClientVersion>3.26065.8.0</MinClientVersion>
-      <Tags>{"primaryDeviceWidth":"1366","primaryDeviceHeight":"768","supportsPortrait":"true","supportsLandscape":"true","primaryFormFactor":"Tablet","showStatusBar":"false","publisherVersion":"3.26065.8","minimumRequiredApiVersion":"2.2.0","hasComponent":"false","hasUnlockedComponent":"false","isUnifiedRootApp":"false","m365CopilotSettingValue":"0","sienaVersion":"20260714T114544Z-3.26065.8.0"}</Tags>
+      <CreatedByClientVersion>3.26073.9.0</CreatedByClientVersion>
+      <MinClientVersion>3.26073.9.0</MinClientVersion>
+      <Tags>{"primaryDeviceWidth":"1366","primaryDeviceHeight":"768","supportsPortrait":"true","supportsLandscape":"true","primaryFormFactor":"Tablet","showStatusBar":"false","publisherVersion":"3.26073.9","minimumRequiredApiVersion":"2.2.0","hasComponent":"false","hasUnlockedComponent":"false","isUnifiedRootApp":"false","m365CopilotSettingValue":"0","sienaVersion":"20260730T132111Z-3.26072.8.0"}</Tags>
       <IsCdsUpgraded>0</IsCdsUpgraded>
       <GalleryItemId xsi:nil="true"></GalleryItemId>
       <BackgroundColor>RGBA(0,176,240,1)</BackgroundColor>
       <DisplayName>Workspace Settings</DisplayName>
       <Description xsi:nil="true"></Description>
       <CommitMessage xsi:nil="true"></CommitMessage>
-      <Publisher xsi:nil="true"></Publisher>
+      <Publisher></Publisher>
       <AuthorizationReferences>[]</AuthorizationReferences>
-      <ConnectionReferences>{}</ConnectionReferences>
-      <DatabaseReferences>{"default.cds":{"databaseDetails":{"referenceType":"NotSpecified","environmentName":"default.cds","overrideValues":{"status":"NotSpecified","environmentVariableName":""}},"dataSources":{"Workspaceses":{"entitySetName":"crbab_workspaceses","logicalName":"crbab_workspaces"}}}}</DatabaseReferences>
+      <ConnectionReferences>{"c87d5c44-2391-4088-a659-1a813b758c0f":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["GetOAPSetting"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"5d006f92-95bd-4b7d-9643-85e616b4ee30"},"workflowEntityId":{"value":"1875ac61-1884-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetOAPSetting"}},"parameterHintsV2":{"workflowName":{"value":"5d006f92-95bd-4b7d-9643-85e616b4ee30"},"workflowEntityId":{"value":"1875ac61-1884-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetOAPSetting"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"ba76583c-abf5-4597-add9-ccee9f8c4d34":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["GetOutboundRules"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"869419d4-200a-4162-af0f-297a5f74cff6"},"workflowEntityId":{"value":"21afad93-eb84-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetOutboundRules"}},"parameterHintsV2":{"workflowName":{"value":"869419d4-200a-4162-af0f-297a5f74cff6"},"workflowEntityId":{"value":"21afad93-eb84-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetOutboundRules"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"fd584e75-4fe3-472b-9685-2977c04f9eaa":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["SetOutboundRules"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"dc03d1d9-21b9-4de3-a183-acf79999e411"},"workflowEntityId":{"value":"54775ced-cd85-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetOutboundRules"}},"parameterHintsV2":{"workflowName":{"value":"dc03d1d9-21b9-4de3-a183-acf79999e411"},"workflowEntityId":{"value":"54775ced-cd85-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetOutboundRules"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"fbdefe3b-9cd0-4ca1-9546-8b1c6c691a73":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["GetGitPolicy"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"86aab3b2-e665-44e7-901d-fba021c799f5"},"workflowEntityId":{"value":"42395f29-8c89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetGitPolicy"}},"parameterHintsV2":{"workflowName":{"value":"86aab3b2-e665-44e7-901d-fba021c799f5"},"workflowEntityId":{"value":"42395f29-8c89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetGitPolicy"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"c77dd339-4d25-4987-91e0-d70b45afc96a":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["SetGitPolicy"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"c9c461a8-6975-454e-b822-aae444617b01"},"workflowEntityId":{"value":"8a588a8d-8e89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetGitPolicy"}},"parameterHintsV2":{"workflowName":{"value":"c9c461a8-6975-454e-b822-aae444617b01"},"workflowEntityId":{"value":"8a588a8d-8e89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetGitPolicy"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"00ce33a6-5a84-4914-91ab-b581ec3ba441":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["GetGatewayRules"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"d846eccb-cb7e-4b47-bcdb-c4997f4e581b"},"workflowEntityId":{"value":"5ec91b70-4c8a-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetGatewayRules"}},"parameterHintsV2":{"workflowName":{"value":"d846eccb-cb7e-4b47-bcdb-c4997f4e581b"},"workflowEntityId":{"value":"5ec91b70-4c8a-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"GetGatewayRules"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"0a8cb067-e4d6-4e51-8b69-912fb6358f24":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["SetGatewayRules"],"dependencies":[],"dependents":[],"parameterHints":{"workflowName":{"value":"169bb2a9-b956-46ad-b200-1e4efb23f6a8"},"workflowEntityId":{"value":"f82666cb-4d8a-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetGatewayRules"}},"parameterHintsV2":{"workflowName":{"value":"169bb2a9-b956-46ad-b200-1e4efb23f6a8"},"workflowEntityId":{"value":"f82666cb-4d8a-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"SetGatewayRules"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"12152fb8-8dbb-493d-9580-2badd94715bc":{"id":"/providers/microsoft.powerapps/apis/shared_logicflows","displayName":"Logic flows","iconUri":"https://conn-afd-prod-endpoint-bmc9bqahasf3grgk.b01.azurefd.net/v1.0.1774/1.0.1774.4397/logicflows/icon.png","dataSources":["ListGateways"],"dependencies":["d211dc18-ee4f-44f4-9325-dbf8c8796435"],"dependents":[],"parameterHints":{"workflowName":{"value":"e90ce036-725f-4bd4-b975-3af1d700954d"},"workflowEntityId":{"value":"4469367c-ad89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"ListGateways"},"d211dc18-ee4f-44f4-9325-dbf8c8796435":{"value":"shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"}},"parameterHintsV2":{"workflowName":{"value":"e90ce036-725f-4bd4-b975-3af1d700954d"},"workflowEntityId":{"value":"4469367c-ad89-f111-ab0f-7c1e528d41fb"},"workflowDisplayName":{"value":"ListGateways"},"shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac":{"value":"d211dc18-ee4f-44f4-9325-dbf8c8796435"}},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","actions":["Run"],"isCustomApiSolutionAware":false},"d211dc18-ee4f-44f4-9325-dbf8c8796435":{"id":"/providers/microsoft.powerapps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac","displayName":"gateway_lst_app_con","iconUri":"https://defaulticons.powerapps.com/defaulticons/api-dedicated.png","dataSources":[],"dependencies":[],"dependents":["12152fb8-8dbb-493d-9580-2badd94715bc"],"parameterHints":{},"parameterHintsV2":{},"isOnPremiseConnection":false,"bypassConsent":false,"dataSets":{},"apiTier":"Standard","customApiLogicalName":"ab_gateway-5flst-5fapp-5fcon","isCustomApiSolutionAware":true}}</ConnectionReferences>
+      <DatabaseReferences>{"default.cds":{"databaseDetails":{"referenceType":"Environmental","environmentName":"default.cds","overrideValues":{"status":"NotSpecified","environmentVariableName":""}},"dataSources":{"Workspaceses":{"entitySetName":"crbab_workspaceses","logicalName":"crbab_workspaces"},"Users":{"entitySetName":"systemusers","logicalName":"systemuser"},"AllowedConnectionTypes":{"entitySetName":"crbab_allowedconnectiontypes","logicalName":"crbab_allowedconnectiontype"}}}}</DatabaseReferences>
       <AppComponents>[]</AppComponents>
       <AppComponentDependencies>[]</AppComponentDependencies>
       <CanConsumeAppPass>1</CanConsumeAppPass>
@@ -3669,7 +3883,7 @@
       <AdminControlBypassConsent>0</AdminControlBypassConsent>
       <EmbeddedApp xsi:nil="true"></EmbeddedApp>
       <IntroducedVersion>1.0</IntroducedVersion>
-      <CdsDependencies>{"cdsdependencies":[{"logicalname":"crbab_workspaces","componenttype":1}]}</CdsDependencies>
+      <CdsDependencies>{"cdsdependencies":[{"logicalname":"ab_gateway-5flst-5fapp-5fcon","componenttype":372,"componenttypeplatformname":"connector"},{"dependencyid":"1875ac61-1884-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"21afad93-eb84-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"54775ced-cd85-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"42395f29-8c89-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"8a588a8d-8e89-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"5ec91b70-4c8a-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"f82666cb-4d8a-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"dependencyid":"4469367c-ad89-f111-ab0f-7c1e528d41fb","componenttype":29,"componenttypeplatformname":"Workflow"},{"logicalname":"crbab_workspaces","componenttype":1},{"logicalname":"systemuser","componenttype":1},{"logicalname":"crbab_allowedconnectiontype","componenttype":1}]}</CdsDependencies>
       <IsCustomizable>1</IsCustomizable>
       <BackgroundImageUri>/CanvasApps/crbab_app5_baf10_BackgroundImageUri</BackgroundImageUri>
       <DocumentUri>/CanvasApps/crbab_app5_baf10_DocumentUri.msapp</DocumentUri>
@@ -3678,10 +3892,27 @@
       </AdditionalUris>
     </CanvasApp>
   </CanvasApps>
+  <Connectors>
+    <Connector>
+      <connectorid>6fffdbfa-ad9f-43c3-b186-33ab4ccf8aa1</connectorid>
+      <description></description>
+      <displayname>gateway_lst_app_con</displayname>
+      <iconbrandcolor>#007ee5</iconbrandcolor>
+      <name>ab_gateway-5flst-5fapp-5fcon</name>
+      <connectortype>1</connectortype>
+      <openapidefinition>/Connector/ab_gateway-5flst-5fapp-5fcon_openapidefinition.json</openapidefinition>
+      <connectionparameters>/Connector/ab_gateway-5flst-5fapp-5fcon_connectionparameters.json</connectionparameters>
+      <policytemplateinstances>/Connector/ab_gateway-5flst-5fapp-5fcon_policytemplateinstances.json</policytemplateinstances>
+      <iconblob>/Connector/ab_gateway-5flst-5fapp-5fcon_iconblob.Png</iconblob>
+    </Connector>
+  </Connectors>
   <connectionreferences>
-    <connectionreference connectionreferencelogicalname="crbab_sharedwebcontents_0b635">
-      <connectionreferencedisplayname>HTTP with Microsoft Entra ID (preauthorized) Cr08ecd-0b635</connectionreferencedisplayname>
-      <connectorid>/providers/Microsoft.PowerApps/apis/shared_webcontents</connectorid>
+    <connectionreference connectionreferencelogicalname="ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02">
+      <connectionreferencedisplayname>gateway_lst_app_con WorkspaceSol-51f02</connectionreferencedisplayname>
+      <connectorid>/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac</connectorid>
+      <customconnectorid>
+        <connectorid>6fffdbfa-ad9f-43c3-b186-33ab4ccf8aa1</connectorid>
+      </customconnectorid>
       <iscustomizable>1</iscustomizable>
       <promptingbehavior>0</promptingbehavior>
       <statecode>0</statecode>

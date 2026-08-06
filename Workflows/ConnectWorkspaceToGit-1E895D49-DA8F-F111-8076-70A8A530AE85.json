@@ -1,0 +1,634 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "b96fe333-e8ed-4aa6-a695-4851ab707cab"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "workspaceId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "connectionId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_2": {
+                  "title": "organizationName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_3": {
+                  "title": "projectName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_4": {
+                  "title": "repositoryName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_5": {
+                  "title": "branchName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_6": {
+                  "title": "directoryName",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_7": {
+                  "title": "initializationStrategy",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text",
+                "text_1",
+                "text_2",
+                "text_3",
+                "text_4",
+                "text_5",
+                "text_6",
+                "text_7"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Compose": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "8f8aaa68-fe3b-4f8d-93c4-0b3b6f01dc9d"
+          },
+          "type": "Compose",
+          "inputs": {
+            "workspaceId": "@{triggerBody()?['text']}",
+            "connectionId": "@{triggerBody()?['text_1']}",
+            "organizationName": "@{triggerBody()?['text_2']}",
+            "projectName": "@{triggerBody()?['text_3']}",
+            "repositoryName": "@{triggerBody()?['text_4']}",
+            "branchName": "@{triggerBody()?['text_5']}",
+            "directoryName": "@{triggerBody()?['text_6']}",
+            "initializationStrategy": "@{triggerBody()?['text_7']}"
+          }
+        },
+        "Run_a_Child_Flow": {
+          "runAfter": {
+            "Compose": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "79664f04-7fa6-4435-b0f5-e45c305c7e69"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_accessToken": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e1cfef0f-5b18-43dc-bdcb-6565f00352e5"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "accessToken",
+                "type": "string",
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
+              }
+            ]
+          }
+        },
+        "Initialize_outcome": {
+          "runAfter": {
+            "Initialize_accessToken": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "82635774-f6ec-4d08-a51f-2b58fbdca2b4"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "outcome",
+                "type": "string",
+                "value": "Unknown"
+              }
+            ]
+          }
+        },
+        "Initialize_message": {
+          "runAfter": {
+            "Initialize_outcome": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "b390254b-ffd1-4fc4-834b-2c9d598a5021"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "message",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Initialize_operationId": {
+          "runAfter": {
+            "Initialize_message": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1dcf71ed-55c1-4d93-9b58-d971aadbeaf4"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "operationId",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Check_existing": {
+          "runAfter": {
+            "Initialize_operationId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "acb65d3a-8bab-441f-ad68-75a7a5519cfd"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connection",
+            "headers": {
+              "Authorization": "Bearer @{variables('accessToken')}",
+              "Accept": "application/json"
+            }
+          }
+        },
+        "Is_not_connected": {
+          "actions": {
+            "Connect": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "09cc8492-7d7a-4f0e-a5ad-e2fe644c078e"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connect",
+                "headers": {
+                  "Authorization": "Bearer @{variables('accessToken')}",
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "gitProviderDetails": {
+                    "gitProviderType": "AzureDevOps",
+                    "organizationName": "@{triggerBody()['text_2']}",
+                    "projectName": "@{triggerBody()['text_3']}",
+                    "repositoryName": "@{triggerBody()['text_4']}",
+                    "branchName": "@{triggerBody()['text_5']}",
+                    "directoryName": "@{triggerBody()['text_6']}"
+                  },
+                  "myGitCredentials": {
+                    "source": "ConfiguredConnection",
+                    "connectionId": "@{triggerBody()['text_1']}"
+                  }
+                }
+              }
+            },
+            "Set_credentials": {
+              "runAfter": {
+                "Connect": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "75ddb802-9d99-4b23-9aa4-8cd26246d3a8"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "PATCH",
+                "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/myGitCredentials",
+                "headers": {
+                  "Authorization": "Bearer @{variables('accessToken')}",
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "source": "ConfiguredConnection",
+                  "connectionId": "@{triggerBody()['text_1']}"
+                }
+              }
+            },
+            "Initialize_connection": {
+              "runAfter": {
+                "Set_credentials": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "953f4255-ec23-45ba-8755-460dd5ccd931"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/initializeConnection",
+                "headers": {
+                  "Authorization": "Bearer @{variables('accessToken')}",
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "initializationStrategy": "@{triggerBody()['text_7']}"
+                }
+              }
+            },
+            "act_on_requiredAction": {
+              "runAfter": {
+                "Initialize_connection": [
+                  "Succeeded"
+                ]
+              },
+              "cases": {
+                "Case": {
+                  "case": "PreferWorkspace",
+                  "actions": {
+                    "CommitToGit": {
+                      "runAfter": {},
+                      "metadata": {
+                        "operationMetadataId": "90e153d4-d3f2-4854-bcd1-0266ea61088f"
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/commitToGit",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('accessToken')}",
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "mode": "All",
+                          "workspaceHead": "@{body('Initialize_connection')?['workspaceHead']}",
+                          "comment": "Initial sync from Fabric workspace"
+                        }
+                      }
+                    },
+                    "Set_variable_3": {
+                      "runAfter": {
+                        "CommitToGit": [
+                          "Succeeded"
+                        ]
+                      },
+                      "metadata": {
+                        "operationMetadataId": "45fdbcab-03ec-4f54-a755-7c9b7e76b7b4"
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "operationId",
+                        "value": "@{coalesce(outputs('CommitToGit')?['headers']?['x-ms-operation-id'], outputs('CommitToGit')?['headers']?['X-Ms-Operation-Id'], '')}"
+                      }
+                    }
+                  }
+                },
+                "Case_2": {
+                  "case": "PreferRemote",
+                  "actions": {
+                    "Update_from_git": {
+                      "runAfter": {},
+                      "metadata": {
+                        "operationMetadataId": "1c4f0834-6a76-482b-908a-3dc5d8a32c3b"
+                      },
+                      "type": "Http",
+                      "inputs": {
+                        "method": "POST",
+                        "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/updateFromGit",
+                        "headers": {
+                          "Authorization": "Bearer @{variables('accessToken')}",
+                          "Content-Type": "application/json"
+                        },
+                        "body": {
+                          "remoteCommitHash": "@{body('Initialize_connection')?['remoteCommitHash']}",
+                          "workspaceHead": "@{body('Initialize_connection')?['workspaceHead']}",
+                          "conflictResolution": {
+                            "conflictResolutionType": "Workspace",
+                            "conflictResolutionPolicy": "PreferRemote"
+                          },
+                          "options": {
+                            "allowOverrideItems": true
+                          }
+                        }
+                      }
+                    },
+                    "Set_variable_2": {
+                      "runAfter": {
+                        "Update_from_git": [
+                          "Succeeded"
+                        ]
+                      },
+                      "metadata": {
+                        "operationMetadataId": "98aaa2c2-2abe-42bc-a940-e3c92a711205"
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "operationId",
+                        "value": "@{coalesce(outputs('Update_from_git')?['headers']?['x-ms-operation-id'], outputs('Update_from_git')?['headers']?['X-Ms-Operation-Id'], '')}"
+                      }
+                    }
+                  }
+                }
+              },
+              "default": {
+                "actions": {
+                  "Set_variable": {
+                    "runAfter": {},
+                    "metadata": {
+                      "operationMetadataId": "840e6c86-a32b-4460-84ba-51317153316f"
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "outcome",
+                      "value": "Connected"
+                    }
+                  }
+                }
+              },
+              "expression": "@body('Initialize_connection')?['requiredAction']",
+              "metadata": {
+                "operationMetadataId": "59bdfdc0-7907-467d-9f8d-d06d33c35e54"
+              },
+              "type": "Switch"
+            },
+            "Has_operation": {
+              "actions": {
+                "Run_PollFabricOperation": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "872fb019-db8a-45be-8f74-82b04e8644b7"
+                  },
+                  "type": "Workflow",
+                  "inputs": {
+                    "host": {
+                      "workflowReferenceName": "5afcd720-158f-f111-8076-7ced8d76bf1b"
+                    },
+                    "body": {
+                      "text": "@variables('operationId')",
+                      "text_1": "@variables('accessToken')"
+                    }
+                  }
+                },
+                "Condition": {
+                  "actions": {
+                    "Set_variable_4": {
+                      "runAfter": {},
+                      "metadata": {
+                        "operationMetadataId": "10d33cd5-88c5-4f9e-94d6-93e101204580"
+                      },
+                      "type": "SetVariable",
+                      "inputs": {
+                        "name": "outcome",
+                        "value": "Connected"
+                      }
+                    }
+                  },
+                  "runAfter": {
+                    "Run_PollFabricOperation": [
+                      "Succeeded"
+                    ]
+                  },
+                  "else": {
+                    "actions": {
+                      "Set_variable_5": {
+                        "runAfter": {},
+                        "metadata": {
+                          "operationMetadataId": "a816f105-7667-44f0-8e6a-43ff2218e580"
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "outcome",
+                          "value": "Failed"
+                        }
+                      },
+                      "Set_variable_6": {
+                        "runAfter": {
+                          "Set_variable_5": [
+                            "Succeeded"
+                          ]
+                        },
+                        "metadata": {
+                          "operationMetadataId": "06a6635b-7f57-44c5-a8f9-9ae6f663d0e4"
+                        },
+                        "type": "SetVariable",
+                        "inputs": {
+                          "name": "message",
+                          "value": "@body('Run_PollFabricOperation')?['errormessage']"
+                        }
+                      }
+                    }
+                  },
+                  "expression": {
+                    "equals": [
+                      "@body('Run_PollFabricOperation')?['status']",
+                      "Succeeded "
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "fefabbee-33d2-45e6-8aaa-5512ba7aa377"
+                  },
+                  "type": "If"
+                }
+              },
+              "runAfter": {
+                "act_on_requiredAction": [
+                  "Succeeded"
+                ]
+              },
+              "else": {
+                "actions": {
+                  "Set_variable_7": {
+                    "runAfter": {},
+                    "metadata": {
+                      "operationMetadataId": "a57a60a9-f244-429d-9685-3b5e4191d56d"
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "outcome",
+                      "value": "Connected"
+                    }
+                  },
+                  "Set_variable_8": {
+                    "runAfter": {
+                      "Set_variable_7": [
+                        "Succeeded"
+                      ]
+                    },
+                    "metadata": {
+                      "operationMetadataId": "990cd4de-725b-484b-9d3e-9234e9c5e778"
+                    },
+                    "type": "SetVariable",
+                    "inputs": {
+                      "name": "message",
+                      "value": "Connected and initialized. No sync operation required."
+                    }
+                  }
+                }
+              },
+              "expression": {
+                "equals": [
+                  "@empty(variables('operationId'))",
+                  "@false"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "d8cbc72c-04c4-4856-a2e7-5f50ab832d43"
+              },
+              "type": "If"
+            }
+          },
+          "runAfter": {
+            "Check_existing": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Set_variable_no_outcome": {
+                "runAfter": {},
+                "metadata": {
+                  "operationMetadataId": "dcf05825-1ec6-415a-a99d-3dd88e54effb"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "outcome",
+                  "value": "AlreadyConnected"
+                }
+              },
+              "Set_variable_no_message": {
+                "runAfter": {
+                  "Set_variable_no_outcome": [
+                    "Succeeded"
+                  ]
+                },
+                "metadata": {
+                  "operationMetadataId": "4729636a-a961-4b3a-8fae-e748d28139f4"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "message",
+                  "value": "Workspace is already connected to a repository."
+                }
+              }
+            }
+          },
+          "expression": {
+            "equals": [
+              "@body('Check_existing')?['gitConnectionState']",
+              "NotConnected"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5829bc88-3238-4c90-921c-2af4d08d2be4"
+          },
+          "type": "If"
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Is_not_connected": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "75a013cf-374c-444e-9d2c-14a339208d39"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "outcome": "@variables('outcome')",
+              "message": "@variables('message')",
+              "operationid": "@variables('operationId')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "outcome": {
+                  "title": "outcome",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "message": {
+                  "title": "message",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "operationid": {
+                  "title": "operationId",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

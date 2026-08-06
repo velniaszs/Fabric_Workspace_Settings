@@ -1,2 +1,4 @@
-# VS Code
+# Local scratch scripts may contain credentials - never commit.
+*.ps1
 .vscode/
+tests/

@@ -1,26 +1,26 @@
-<ImportExportXml version="9.2.26064.174" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26064.174" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26064.00174">
+<ImportExportXml version="9.2.26071.167" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26071.167" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26071.00167">
   <SolutionManifest>
-    <UniqueName>Cr08ecd</UniqueName>
+    <UniqueName>WorkspaceSol</UniqueName>
     <LocalizedNames>
-      <LocalizedName description="Common Data Services Default Solution" languagecode="1033" />
+      <LocalizedName description="WorkspaceSol" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.0.0.4</Version>
+    <Version>1.0.0.5</Version>
     <Managed>0</Managed>
     <Publisher>
-      <UniqueName>Crf5954</UniqueName>
+      <UniqueName>Arunas</UniqueName>
       <LocalizedNames>
-        <LocalizedName description="CDS Default Publisher" languagecode="1033" />
+        <LocalizedName description="Pub" languagecode="1033" />
       </LocalizedNames>
       <Descriptions />
       <EMailAddress xsi:nil="true"></EMailAddress>
       <SupportingWebsiteUrl xsi:nil="true"></SupportingWebsiteUrl>
-      <CustomizationPrefix>crbab</CustomizationPrefix>
-      <CustomizationOptionValuePrefix>60224</CustomizationOptionValuePrefix>
+      <CustomizationPrefix>ab</CustomizationPrefix>
+      <CustomizationOptionValuePrefix>12081</CustomizationOptionValuePrefix>
       <Addresses>
         <Address>
           <AddressNumber>1</AddressNumber>
-          <AddressTypeCode xsi:nil="true"></AddressTypeCode>
+          <AddressTypeCode>1</AddressTypeCode>
           <City xsi:nil="true"></City>
           <County xsi:nil="true"></County>
           <Country xsi:nil="true"></Country>
@@ -36,7 +36,7 @@
           <PostalCode xsi:nil="true"></PostalCode>
           <PostOfficeBox xsi:nil="true"></PostOfficeBox>
           <PrimaryContactName xsi:nil="true"></PrimaryContactName>
-          <ShippingMethodCode xsi:nil="true"></ShippingMethodCode>
+          <ShippingMethodCode>1</ShippingMethodCode>
           <StateOrProvince xsi:nil="true"></StateOrProvince>
           <Telephone1 xsi:nil="true"></Telephone1>
           <Telephone2 xsi:nil="true"></Telephone2>
@@ -48,7 +48,7 @@
         </Address>
         <Address>
           <AddressNumber>2</AddressNumber>
-          <AddressTypeCode xsi:nil="true"></AddressTypeCode>
+          <AddressTypeCode>1</AddressTypeCode>
           <City xsi:nil="true"></City>
           <County xsi:nil="true"></County>
           <Country xsi:nil="true"></Country>
@@ -64,7 +64,7 @@
           <PostalCode xsi:nil="true"></PostalCode>
           <PostOfficeBox xsi:nil="true"></PostOfficeBox>
           <PrimaryContactName xsi:nil="true"></PrimaryContactName>
-          <ShippingMethodCode xsi:nil="true"></ShippingMethodCode>
+          <ShippingMethodCode>1</ShippingMethodCode>
           <StateOrProvince xsi:nil="true"></StateOrProvince>
           <Telephone1 xsi:nil="true"></Telephone1>
           <Telephone2 xsi:nil="true"></Telephone2>
@@ -79,15 +79,22 @@
     <RootComponents>
       <RootComponent type="1" schemaName="crbab_allowedconnectiontype" behavior="0" />
       <RootComponent type="1" schemaName="crbab_workspaces" behavior="0" />
+      <RootComponent type="20" id="{fbf81a77-ad90-f111-8076-7ced8d74f424}" behavior="0" />
       <RootComponent type="29" id="{1875ac61-1884-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{1e895d49-da8f-f111-8076-70a8a530ae85}" behavior="0" />
       <RootComponent type="29" id="{21afad93-eb84-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{39f29f3d-cf8f-f111-8076-7ced8d76cbfd}" behavior="0" />
       <RootComponent type="29" id="{42395f29-8c89-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{4469367c-ad89-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{50895fca-088f-f111-8076-7ced8d76bf1b}" behavior="0" />
       <RootComponent type="29" id="{54775ced-cd85-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{5afcd720-158f-f111-8076-7ced8d76bf1b}" behavior="0" />
       <RootComponent type="29" id="{5ec91b70-4c8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{8a588a8d-8e89-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{98b3e46a-278f-f111-8076-7ced8d76bf1b}" behavior="0" />
       <RootComponent type="29" id="{f82666cb-4d8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="300" schemaName="crbab_app5_baf10" behavior="0" />
+      <RootComponent type="372" id="{6fffdbfa-ad9f-43c3-b186-33ab4ccf8aa1}" schemaName="ab_gateway-5flst-5fapp-5fcon" behavior="0" />
     </RootComponents>
     <MissingDependencies>
       <MissingDependency>

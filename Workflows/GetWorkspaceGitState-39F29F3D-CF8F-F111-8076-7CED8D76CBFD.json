@@ -1,0 +1,338 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "a35d344d-0ad9-44ab-9284-f94f8c956af9"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "workspaceId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Initialize_workspaceid": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "57a737b9-8a13-4e83-8db3-d34d7afcf739"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "workspaceId",
+                "type": "string",
+                "value": "@triggerBody()['text']"
+              }
+            ]
+          }
+        },
+        "Run_a_Child_Flow": {
+          "runAfter": {
+            "Initialize_workspaceid": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "fee41f31-b78c-4731-8acc-4b3ab0143581"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_access_token": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e5f92064-1e06-429d-a751-a914e5861b8e"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "accessToken",
+                "type": "string",
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
+              }
+            ]
+          }
+        },
+        "Initialize_gitConnectionState": {
+          "runAfter": {
+            "Initialize_access_token": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e328b9e2-cac1-4d5d-bdb1-c3aa06bfcf05"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "gitConnectionState",
+                "type": "string",
+                "value": "Unknown"
+              }
+            ]
+          }
+        },
+        "Initialize_providerJson": {
+          "runAfter": {
+            "Initialize_gitConnectionState": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "26a91e3d-4f21-4e18-aad8-d543bbb6d1a0"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "providerJson",
+                "type": "string",
+                "value": "{}"
+              }
+            ]
+          }
+        },
+        "Initialize_credentialsJson": {
+          "runAfter": {
+            "Initialize_providerJson": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "a549c19c-327a-4b4f-9642-7f54c738057a"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "credentialsJson",
+                "type": "string",
+                "value": "{}"
+              }
+            ]
+          }
+        },
+        "Initialize_errorMessage": {
+          "runAfter": {
+            "Initialize_credentialsJson": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1a9f2067-d7e6-45d9-ab6f-f0a0ca3c8ba6"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "errorMessage",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Get_git_connection": {
+          "runAfter": {
+            "Initialize_errorMessage": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "730027a3-a172-4237-86c0-64a924af2adb"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{variables('workspaceId')}/git/connection",
+            "headers": {
+              "Authorization": "Bearer @{variables('accessToken')}",
+              "Accept": "application/json"
+            }
+          }
+        },
+        "Condition": {
+          "actions": {
+            "Set_variable_gitConnectionState": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "997a6c20-eaaf-4d73-a815-22ca1446e73c"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "gitConnectionState",
+                "value": "@{coalesce(body('Get_git_connection')?['gitConnectionState'], 'Unknown')}"
+              }
+            },
+            "Set_variable_providerJson": {
+              "runAfter": {
+                "Set_variable_gitConnectionState": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "262f51ec-c13b-4768-b2fb-1fa1e7b9af12"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "providerJson",
+                "value": "@{string(coalesce(body('Get_git_connection')?['gitProviderDetails'], json('{}')))}"
+              }
+            },
+            "Set_variable_credentialsJson": {
+              "runAfter": {
+                "Set_variable_providerJson": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "f672825b-b583-46b8-a472-e9c84ee012a9"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "credentialsJson",
+                "value": "@{string(coalesce(body('Get_git_connection')?['gitCredentials'], json('{}')))}"
+              }
+            }
+          },
+          "runAfter": {
+            "Get_git_connection": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Set_variable_gitConnectionState_err": {
+                "runAfter": {},
+                "metadata": {
+                  "operationMetadataId": "98061969-81c3-4811-a282-63e9238a5d94"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "gitConnectionState",
+                  "value": "Error"
+                }
+              },
+              "Set_variable_errorMessage": {
+                "runAfter": {
+                  "Set_variable_gitConnectionState_err": [
+                    "Succeeded"
+                  ]
+                },
+                "metadata": {
+                  "operationMetadataId": "73478e49-54e5-4491-a305-521d72809a10"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "errorMessage",
+                  "value": "@{concat('HTTP ', string(outputs('Get_git_connection')['statusCode']), ': ', string(coalesce(body('Get_git_connection')?['message'], body('Get_git_connection')?['errorCode'], 'Unknown error')))}"
+                }
+              }
+            }
+          },
+          "expression": {
+            "equals": [
+              "@outputs('Get_git_connection')['statusCode']",
+              200
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "ec6ff1fe-b4bc-49bb-8b9b-4c630f7ec282"
+          },
+          "type": "If"
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Condition": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5c6c864f-19a9-44c6-b616-9204b4a2f395"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "gitconnectionstate": "@variables('gitConnectionState')",
+              "isconnected": "@{not(or(equals(variables('gitConnectionState'),'NotConnected'), equals(variables('gitConnectionState'),'Error')))}",
+              "gitproviderdetails": "@variables('providerJson')",
+              "gitcredentials": "@variables('credentialsJson')",
+              "errormessage": "@variables('errorMessage')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "gitconnectionstate": {
+                  "title": "gitConnectionState",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "isconnected": {
+                  "title": "isConnected",
+                  "x-ms-dynamically-added": true,
+                  "type": "boolean"
+                },
+                "gitproviderdetails": {
+                  "title": "gitProviderDetails",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "gitcredentials": {
+                  "title": "gitCredentials",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "errormessage": {
+                  "title": "errorMessage",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

@@ -1,0 +1,283 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "d356e160-180e-4283-a443-4f688bcb1999"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {},
+              "required": []
+            }
+          }
+        }
+      },
+      "actions": {
+        "Run_a_Child_Flow": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "1e1bf1bf-6096-4a8a-901d-eaa72665fe8a"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_access_token": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "9b82934e-6042-4e65-b392-5635b361cbbc"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "accessToken",
+                "type": "string",
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
+              }
+            ]
+          }
+        },
+        "Initialize_connections": {
+          "runAfter": {
+            "Initialize_access_token": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "e19a7cc4-3a86-47a7-81db-27995a8f2c8f"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "connections",
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "Initialize_cont": {
+          "runAfter": {
+            "Initialize_connections": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "c8917da5-2e87-44ac-80ef-3797917f36bd"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "cont",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Initialize_isDone": {
+          "runAfter": {
+            "Initialize_cont": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "da28ec26-bd50-4c2a-83b1-a4a6af2d7361"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "isDone",
+                "type": "boolean",
+                "value": false
+              }
+            ]
+          }
+        },
+        "Do_until": {
+          "actions": {
+            "Get_connections": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "1480fda9-679e-4371-b1dd-3eac0e49503c"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "@{concat('https://api.fabric.microsoft.com/v1/connections', if(empty(variables('cont')), '', concat('?continuationToken=', encodeUriComponent(variables('cont')))))}",
+                "headers": {
+                  "Authorization": "Bearer @{variables('accessToken')}",
+                  "Accept": "application/json"
+                }
+              }
+            },
+            "Set_variable_connections": {
+              "runAfter": {
+                "Merge_connections": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "19e23649-5996-415e-8be5-fdd72b4cb6d1"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "connections",
+                "value": "@outputs('Merge_connections')"
+              }
+            },
+            "Set_variable__cont": {
+              "runAfter": {
+                "Set_variable_connections": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "a997279d-25df-44bd-8864-2a9a9aa3a824"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "cont",
+                "value": "@{coalesce(body('Get_connections')?['continuationToken'], '')}"
+              }
+            },
+            "Set_variable_isDone": {
+              "runAfter": {
+                "Set_variable__cont": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "702545d6-270c-4846-a40a-d9347494bf6d"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "isDone",
+                "value": "@empty(variables('cont'))"
+              }
+            },
+            "Merge_connections": {
+              "runAfter": {
+                "Get_connections": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5a546ea8-efd9-4682-8aa1-368e130e5542"
+              },
+              "type": "Compose",
+              "inputs": "@union(variables('connections'), coalesce(body('Get_connections')?['value'], json('[]')))"
+            }
+          },
+          "runAfter": {
+            "Initialize_isDone": [
+              "Succeeded"
+            ]
+          },
+          "expression": "@equals(variables('isDone'), true)",
+          "limit": {
+            "count": 10,
+            "timeout": "PT5M"
+          },
+          "metadata": {
+            "operationMetadataId": "787ce855-c3d4-462b-a7ab-7f3bb4c61374"
+          },
+          "type": "Until"
+        },
+        "Filter_array": {
+          "runAfter": {
+            "Do_until": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "42ccfcfb-eeaa-4245-b0fa-eb31f5ef2fea"
+          },
+          "type": "Query",
+          "inputs": {
+            "from": "@variables('connections')",
+            "where": "@equals(item()?['connectionDetails']?['type'], 'AzureDevOpsSourceControl')"
+          }
+        },
+        "Select": {
+          "runAfter": {
+            "Filter_array": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "dd41138e-cc66-4595-82be-e3a00c9007c4"
+          },
+          "type": "Select",
+          "inputs": {
+            "from": "@body('Filter_array')",
+            "select": {
+              "id": "@item()?['id']",
+              "displayName": "@item()?['displayName']",
+              "path": "@item()?['connectionDetails']?['path']"
+            }
+          }
+        },
+        "Respond_to_a_Power_App_or_flow_2": {
+          "runAfter": {
+            "Select": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "03644393-d583-4e07-9724-ba9d5f7c8ea7"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "connections": "@{string(body('Select'))}",
+              "count": "@{length(body('Filter_array'))}"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connections": {
+                  "title": "connections",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "count": {
+                  "title": "count",
+                  "x-ms-dynamically-added": true,
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

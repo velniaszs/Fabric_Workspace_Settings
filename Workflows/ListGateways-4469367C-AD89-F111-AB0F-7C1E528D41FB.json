@@ -1,13 +1,14 @@
 {
   "properties": {
     "connectionReferences": {
-      "shared_webcontents": {
+      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac": {
         "runtimeSource": "invoker",
         "connection": {
-          "connectionReferenceLogicalName": "crbab_sharedwebcontents_0b635"
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02"
         },
         "api": {
-          "name": "shared_webcontents"
+          "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+          "logicalName": "ab_gateway-5flst-5fapp-5fcon"
         }
       }
     },
@@ -71,8 +72,7 @@
             "variables": [
               {
                 "name": "cont",
-                "type": "string",
-                "value": "``"
+                "type": "string"
               }
             ]
           }
@@ -111,7 +111,7 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "cont",
-                "value": "@{coalesce(body('Invoke_an_HTTP_request_2')?['continuationToken'], '')}"
+                "value": "@{coalesce(body('list_gateways')?['continuationToken'], '')}"
               }
             },
             "Set_variable_2": {
@@ -154,11 +154,11 @@
                 "operationMetadataId": "6a16e1ed-de69-4e8e-ac42-0ed55581e38c"
               },
               "type": "Compose",
-              "inputs": "@union(variables('gwArray'), coalesce(body('Invoke_an_HTTP_request_2')?['value'], json('[]')))"
+              "inputs": "@union(variables('gwArray'), coalesce(body('list_gateways')?['value'], json('[]')))"
             },
             "Increment_variable": {
               "runAfter": {
-                "Invoke_an_HTTP_request_2": [
+                "list_gateways": [
                   "Succeeded"
                 ]
               },
@@ -171,24 +171,20 @@
                 "value": 1
               }
             },
-            "Invoke_an_HTTP_request_2": {
+            "list_gateways": {
               "runAfter": {},
               "metadata": {
-                "operationMetadataId": "d0654a96-1572-427c-af0f-a00b3a01594d"
+                "operationMetadataId": "ef555584-2489-4c23-8d1a-639b29ef12b7"
               },
               "type": "OpenApiConnection",
               "inputs": {
                 "host": {
-                  "connectionName": "shared_webcontents",
-                  "operationId": "InvokeHttp",
-                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_webcontents"
+                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+                  "operationId": "ListGateways",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"
                 },
                 "parameters": {
-                  "request/method": "GET",
-                  "request/url": "@concat('https://api.fabric.microsoft.com/v1/gateways', if(empty(variables('cont')), '', concat('?continuationToken=', encodeUriComponent(variables('cont')))))",
-                  "request/headers": {
-                    "Accept": "application/json"
-                  }
+                  "continuationToken": "@variables('cont')"
                 },
                 "authentication": "@parameters('$authentication')"
               }
