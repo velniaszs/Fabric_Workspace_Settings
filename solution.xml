@@ -1,11 +1,11 @@
-<ImportExportXml version="9.2.26071.167" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26071.167" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26071.00167">
+<ImportExportXml version="9.2.26071.167" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26071.167" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26072.00144">
   <SolutionManifest>
     <UniqueName>WorkspaceSol</UniqueName>
     <LocalizedNames>
       <LocalizedName description="WorkspaceSol" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.0.0.6</Version>
+    <Version>1.0.0.8</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>Arunas</UniqueName>

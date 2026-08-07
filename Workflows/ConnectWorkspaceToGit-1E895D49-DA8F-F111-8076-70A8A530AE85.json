@@ -364,11 +364,6 @@
                         },
                         "body": {
                           "remoteCommitHash": "@{body('Initialize_connection')?['remoteCommitHash']}",
-                          "workspaceHead": "@{body('Initialize_connection')?['workspaceHead']}",
-                          "conflictResolution": {
-                            "conflictResolutionType": "Workspace",
-                            "conflictResolutionPolicy": "PreferRemote"
-                          },
                           "options": {
                             "allowOverrideItems": true
                           }
@@ -484,7 +479,7 @@
                   "expression": {
                     "equals": [
                       "@body('Run_PollFabricOperation')?['status']",
-                      "Succeeded "
+                      "Succeeded"
                     ]
                   },
                   "metadata": {

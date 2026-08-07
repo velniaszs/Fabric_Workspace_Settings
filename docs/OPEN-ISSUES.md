@@ -1,6 +1,6 @@
 # Open Issues
 
-Living list of unresolved items. Companion to [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/FLOWS.md](docs/FLOWS.md).
+Living list of unresolved items. Companion to [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FLOWS.md](docs/FLOWS.md) and [docs/PREREQUISITES.md](docs/PREREQUISITES.md).
 
 Changes required to the already-built flows are tracked as **C1–C11** in [docs/FLOWS.md](docs/FLOWS.md).
 
@@ -13,7 +13,7 @@ Last reviewed: 2026-08-06
 | # | Issue | Status |
 |---|---|---|
 | **1.1** | `ConnectWorkspaceToGit` Switch selected on strategy, not `requiredAction` | ✅ Fixed & exported |
-| **1.2** | `workspaceHead` sent as `""` when null | 🟡 Correctness only — accepted by the API |
+| **1.2** | `workspaceHead` sent as `""` when null | ✅ Fixed & exported |
 | **1.3** | `ListGateways` `cont` initialised to backticks | ✅ Fixed & exported |
 | **1.4** | `ListGateways` 5-page cap | ➖ By design; truncation is silent |
 | **1.5** | Stale `shared_webcontents` connection reference | ✅ Fixed & exported |
@@ -21,13 +21,13 @@ Last reviewed: 2026-08-06
 | **1.7** | No `crbab_Workspaces` authorization check anywhere | ⏸ Deferred — **blocks sharing the app** |
 | **1.8** | `updateFromGit` sent empty `remoteCommitHash` | ✅ Resolved via 1.1 |
 | **1.9** | `initializeConnection` may return 202 with empty body | 🔴 Open — silent no-op |
-| **1.10** | `conflictResolutionPolicy` hardcoded to `PreferRemote` | 🟡 Open — low impact |
+| **1.10** | `conflictResolution` hardcoded to `PreferRemote` | 🔴 Decided — remove it |
 | **1.11** | Connect requires the repo folder to already exist | ➖ By design — stated in the wizard |
-| **1.12** | Poll success check compares against `"Succeeded "` (trailing space) | 🔴 Open — every run reports `Failed` |
+| **1.12** | Poll success check compares against `"Succeeded "` (trailing space) | ✅ Fixed & exported |
 | **1.13** | `updateFromGit` failed — item references a OneLake table absent from the target workspace | ➖ Root-caused — platform limitation, not a flow defect |
-| **2** | Secrets in repo, `.gitignore` deleted, rotation outstanding | 🔴 Open |
+| **2** | Secrets — repo and history verified clean; rotation is the customer's | ➖ Closed on our side |
 | **3.1** | Broker SPN not enabled for Fabric APIs | ✅ Resolved |
-| **3.2** | Broker SPN workspace Admin across ~4000 workspaces | 🔴 Open — largest operational dependency |
+| **3.2** | Broker SPN workspace Admin across ~4000 workspaces | ✅ Resolved — group membership + automated provisioning |
 | **3.3** | Broker SPN object ID (reference) | ℹ Reference |
 | **4.1** | Dec 1 2026 Git restriction | ➖ Accepted risk, out of scope |
 | **5.1** | Is SPN-B needed? | ➖ Decided — dropped |
@@ -36,7 +36,7 @@ Last reviewed: 2026-08-06
 | **5.4** | `PATCH myGitCredentials` redundant? | 🟡 Open — test then remove |
 | **6.1** | 429 / throttling | ➖ Decided; defaults verified in place |
 | **6.2** | Do-until timeouts report success | 🟡 Open — `PollFabricOperation` |
-| **7** | End-to-end test scenario | 🟡 Partially executed |
+| **7** | End-to-end test scenario | 🟡 Core sync path passing; steps 1–4, 7–8 untested |
 | **8.1** | Connection references arrive unbound on import | 🟡 Open |
 | **8.2** | Run-only settings do not survive import | 🟡 Open |
 | **8.3** | Hardcoded tenant / client IDs; `ab_TenantId` unused | 🔴 Open |
@@ -46,7 +46,7 @@ Last reviewed: 2026-08-06
 
 Legend: ✅ done · ➖ decided/accepted · 🟡 open, non-blocking · 🔴 open, needs action · ⏸ deliberately deferred · ℹ reference
 
-**Do first:** §2 secrets (`.gitignore` restored, rotation), then 1.6 broker SPN consolidation.
+**Do first:** 1.6 broker SPN consolidation, then §2 secret rotation.
 
 ---
 
@@ -68,7 +68,7 @@ strategy = PreferRemote
 
 The strategy governs how Fabric *resolves* initialization. `requiredAction` is Fabric telling you which direction to sync afterwards. They are different things and must not be conflated.
 
-### 1.2 `workspaceHead` sent as `""` when null — CORRECTNESS ONLY
+### 1.2 `workspaceHead` sent as `""` when null — FIXED & EXPORTED
 
 Both sync branches interpolate `workspaceHead` into the request body:
 
@@ -106,7 +106,9 @@ The call returned **202**, and the long-running operation then failed — but fo
 
 So this is a correctness defect, not a functional one. `""` is still not a valid SHA and the tolerance is undocumented, so it should not be relied on.
 
-**Fix — delete the property from `Update_from_git`.** It is optional in `updateFromGit` and only provides optimistic concurrency; the flow calls initialize seconds earlier and is the sole writer.
+**Fixed 2026-08-07, verified in the export.** The property was deleted from the `Update_from_git` body — it is optional in `updateFromGit` and only provides optimistic concurrency, and the flow calls initialize seconds earlier as the sole writer.
+
+The `CommitToGit` branch still sends it, which is correct: that branch only fires when the workspace has items, so `workspaceHead` is always populated there.
 
 Test: empty workspace → connect to a folder with committed Fabric items → expect `requiredAction: UpdateFromGit`, then read `workspaceHead` in the initialize output and the rendered `Update_from_git` inputs. If it is null there, drop the braces on that one line.
 
@@ -129,7 +131,7 @@ Per the spec, `remoteCommitHash` is **required** and `workspaceHead` is **option
 
 So this was bug 1.1 surfacing: the Switch selected the branch from the **initialization strategy** instead of from `requiredAction`. The strategy tells Fabric how to resolve initialization; Fabric then reports which direction to sync. Only `requiredAction` may drive the Switch.
 
-Remaining, carried into 1.10: `conflictResolutionPolicy` is still hardcoded in the update branch. `remoteCommitHash` stays mapped from `Initialize_connection` — it is populated whenever that branch is legitimately reached.
+Remaining, carried into 1.10: `conflictResolution` is still hardcoded in the update branch, and is now slated for removal. `remoteCommitHash` stays mapped from `Initialize_connection` — it is populated whenever that branch is legitimately reached.
 
 ### 1.9 `initializeConnection` may return 202 with an empty body
 
@@ -139,11 +141,29 @@ The API documents both `200` (with `InitializeGitConnectionResponse`) and `202 A
 
 Handle the 202: poll the operation via `PollFabricOperation`, then fetch the result before branching.
 
-### 1.10 `conflictResolutionPolicy` hardcoded in the update branch
+### 1.10 `conflictResolution` hardcoded — DECIDED: remove it
 
-`Update_from_git` always sends `conflictResolutionPolicy: PreferRemote`, regardless of the strategy the user selected in the wizard.
+`Update_from_git` sends a fixed `conflictResolutionPolicy: PreferRemote` plus `options.allowOverrideItems: true`, regardless of what the user chose in the wizard.
 
-Low impact — `UpdateFromGit` is only required when the workspace side is empty, so conflicts are unlikely. But if it is ever reached with content on both sides it silently overrides the user's choice. Map it from the strategy input, or document that update always prefers remote.
+**Decision 2026-08-07: delete both from the request body** (FLOWS.md C12). The app should not make a destructive choice on the owner's behalf. Per the API reference, omitting them makes Fabric refuse to start rather than overwrite:
+
+| Property | Documented behaviour when omitted |
+|---|---|
+| `conflictResolution` | *"If items are in conflict and a conflict resolution is not specified, the update operation will not start."* |
+| `options.allowOverrideItems` | *"When incoming items are present and the allow override items is not specified or is provided as false, the update operation will not start."* Default `false`. |
+
+The happy path is unaffected: `UpdateFromGit` after a first connect normally targets an empty workspace, where there is nothing to conflict with and no incoming items to override. Only the ambiguous cases change, and those get handed to the owner — who can resolve them in the Fabric UI, with visibility of the actual items, since the workspace is connected by then and *Update from Git* only needs Contributor.
+
+**Open question — which failure path does a refusal take?** Unknown, and it decides whether anything else is needed:
+
+- **202 then a failed operation** (what 1.13 did). Already handled — `Run_PollFabricOperation` returns `status: Failed`, the Condition sets `outcome: Failed` with the poll's message, and the Response runs normally. Nothing to build.
+- **Synchronous 4xx.** The HTTP action fails, the Switch fails, `Has_operation` (`runAfter: act_on_requiredAction [Succeeded]`) is skipped, and `Respond_to_a_Power_App_or_flow` (`runAfter: Is_not_connected [Succeeded]`) never runs — so the app gets a bare flow failure with no `outcome` and no `message`. This is C13.
+
+The documented synchronous error codes for `updateFromGit` are `WorkspaceHeadMismatch`, `MissingDependency`, `PotentialDuplicateDisplayNameAndType`, `DependencyDeletionFailed`, `InsufficientPrivileges` and friends — **no conflict code among them** — and 1.13 showed validation happening inside the LRO. That points at the first path, but it is not confirmed. **Test before building C13.**
+
+**Either way, the outcome should not read `Failed`.** Connect and initialize both succeeded, so the workspace *is* connected. Reporting `Failed` invites a retry, which then returns `AlreadyConnected` and reads like a broken app. A `ConnectedSyncPending` outcome directing the owner to *Source control* in the Fabric UI is worth adding regardless of which path the refusal takes.
+
+**Accepted trade-off.** The wizard already asks for a strategy, so a user who picks `PreferRemote` with content on both sides has stated an intent the app will now decline to act on. Narrowing that is deliberate: never overwrite on a guess.
 
 ### 1.11 `connect` requires the target folder to already exist — BY DESIGN
 
@@ -169,7 +189,7 @@ Rules the user must satisfy:
 
 **Resolution:** state these rules as description text on the folder field of the wizard page. No flow change.
 
-### 1.12 Poll success check compares against `"Succeeded "` — every run reports Failed
+### 1.12 Poll success check compared against `"Succeeded "` — FIXED & EXPORTED
 
 In `ConnectWorkspaceToGit`, the `Condition` inside `Has_operation` evaluates:
 
@@ -179,9 +199,9 @@ In `ConnectWorkspaceToGit`, the `Condition` inside `Has_operation` evaluates:
 
 The literal carries a **trailing space**, so it can never match. The `else` branch always runs and `outcome` is always set to `Failed` with the poll's `errormessage`, regardless of what actually happened.
 
-Found 2026-08-07 while diagnosing 1.13, where it happened to give the correct answer by accident. Until it is fixed, no run outcome from this flow can be trusted in either direction.
+Found 2026-08-07 while diagnosing 1.13, where it happened to give the correct answer by accident. Until it was fixed, no run outcome from this flow could be trusted in either direction.
 
-Fix: delete the trailing space, then re-export.
+**Fixed 2026-08-07, verified in the export.**
 
 ### 1.13 `updateFromGit` into an empty workspace fails on items with OneLake dependencies — ROOT-CAUSED
 
@@ -238,7 +258,7 @@ Actions:
 1. Repoint the eight networking flows to `sp_fabric_powerapp`. Preferred method: delete the inline `Initialize_variable clientSecret` + token HTTP block from each and call `GetFabricToken` as a child flow instead — one identity, one place to change, and it removes eight copies of the secret.
 2. Grant `sp_fabric_powerapp` whatever the networking endpoints need, and nothing more. Establish exactly which permissions those are before granting — the point of the switch is lost if it ends up with the same breadth as `sp_fabric_monit`.
 3. Add `sp_fabric_powerapp` to the *Service principals can use Fabric APIs* security group (see 3.1).
-4. Grant `sp_fabric_powerapp` workspace **Admin** on managed workspaces (see 3.2).
+4. Confirm `sp_fabric_powerapp` is in the security group that workspace provisioning grants **Admin** to (see 3.2).
 5. Use `sp_fabric_powerapp`'s **object ID** — not `sp_fabric_monit`'s — in `RegisterGitConnection`. Granting the wrong principal produces a connect failure that looks like a Fabric bug.
 6. Retest `Workflows/list gateways spn.ps1` with the new identity; its current Unauthorized result was against a different SPN.
 
@@ -264,12 +284,21 @@ The canvas app filtering the workspace list is **not** authorization — it is a
 
 ---
 
-## 2. Security — unresolved
+## 2. Security — repo clean; rotation is the customer's
 
-- **`.gitignore` has been deleted.** A `git add .` would commit everything below.
-- Plaintext secrets in `Workflows/list gateways spn.ps1`, `Workflows/test rest.ps1`, and `internal_power_app.txt`.
-- Secrets for `gateway_lister_app` and `sp_fabric_powerapp` need **rotating** — they have been exposed in chat and in files. `sp_fabric_monit`'s secret appears in the exported flows too and should be rotated even though it is being retired from this solution.
-- Flows carry the SPN secret via an `Initialize_variable clientSecret`. **Decision 2026-08-06: leave as is for now**; migrate to a Key Vault-backed secret environment variable in a later pass. This is deferred, not resolved — the secret still sits in the flow definition and therefore in the exported solution.
+**Verified 2026-08-07:**
+
+- `.gitignore` **is present** and excludes `*.ps1`, `.vscode/`, `tests/`.
+- No `.ps1` or `.txt` file is tracked. `internal_power_app.txt` lives outside the repo.
+- All nine flow JSONs carry `"clientSecret"` with `"value": " "` — scrubbed, no live secret in the working tree.
+- `git log -S` across all branches finds **no commit** containing any of the three secrets. History is clean.
+
+Remaining:
+
+- **Secret rotation is the customer's responsibility** — out of scope for this work. Decision 2026-08-07.
+- Flows carry the secret via an `Initialize_variable clientSecret`. **Decision 2026-08-06: leave as is for now**; migrate to a Key Vault-backed secret environment variable in a later pass. Deferred, not resolved — the secret still sits in the flow definition and therefore in any export taken from a working environment.
+- The scrubbed `" "` values mean every flow needs its secret re-entered before it will run in a freshly imported environment. Belongs in the post-import checklist (8.4).
+- `*.ps1` being ignored means the helper scripts referenced in ARCHITECTURE §9, including `get-operation.ps1`, are **not in the repo**. Either force-add the ones that contain no credentials (`git add -f`) or accept that they are local-only and note it.
 
 ---
 
@@ -299,13 +328,13 @@ The empty `roles` claim is expected: Fabric does not grant API access through En
 
 Reproduce with `Workflows/diag-401.ps1`. **This configuration is per-tenant and must be repeated in every environment** — see 8.4.
 
-### 3.2 Broker SPN workspace Admin coverage
+### 3.2 Broker SPN workspace Admin coverage — RESOLVED
 
-`sp_fabric_powerapp` must hold **Admin** on every managed workspace.
+`sp_fabric_powerapp` must hold **Admin** on every managed workspace — connect, disconnect and sync all require it.
 
-Satisfied for the test workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97` \u2014 `ConnectWorkspaceToGit` gets past `Check_existing`, which it could not do without a workspace role.
+**Resolved 2026-08-07.** The broker SP is a member of a security group, and workspace provisioning is automated to grant that group the Admin role on every new workspace. No per-workspace manual step, and new workspaces are covered as they are created.
 
-**Still open for the other ~4000.** Unclear how Admin is granted at that scale and how it is maintained for newly created workspaces. This is the single largest unplanned operational dependency in the design: the app is useless on any workspace where the broker is not Admin, and there is currently no process that guarantees it.
+Carried into PREREQUISITES §C as an environment-level dependency rather than a task: a new tenant needs the equivalent provisioning automation before the app works there.
 
 ### 3.3 Broker SPN object ID
 
@@ -390,23 +419,28 @@ Any Do-until that exits via its own iteration/timeout limit reports success. Eve
 
 ---
 
-## 7. Test scenario — partially executed
+## 7. Test scenario — core path passing
 
-Workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97`, one **Notebook** named `TestSync`. Repo `skscontoso/fabric/fabricrepo2`, branch `main` (**must be empty**), directory `test`.
+Workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97`, one **Notebook** named `TestSync`. Repo `skscontoso/fabric/fabricrepo2`, branch `main`, directory `test`.
 
-Steps 5 and 6 have been exercised while diagnosing 1.1 and 1.2. The remaining steps are untested.
+**2026-08-07: both sync directions now pass end to end**, after fixing 1.1, 1.2 and 1.12.
+
+- `CommitToGit` — workspace with items → existing empty repo folder. `requiredAction: CommitToGit`, operation `Succeeded`, items present in ADO.
+- `UpdateFromGit` — empty workspace `ab_demo_git` → folder holding committed items. `requiredAction: UpdateFromGit`, operation `Succeeded` once the folder excluded the item with the unresolvable OneLake dependency (1.13).
+
+Steps 1–4, 7 and 8 remain untested.
 
 1. As the owner (Contributor) in the Fabric UI, confirm **connect is unavailable** — proves the app is necessary.
 2. Confirm the owner *can* see Git status and commit/update controls once connected — proves the scope reduction is right.
 3. Owner creates the ADO connection; confirm they are **Owner** on it. Record the ID and check `GET /v1/connections/{id}` → `connectionDetails.path` to settle the URL format.
 4. Delegated call adds SPN-A as `User`; verify via `GET .../roleAssignments`.
-5. Run `ConnectWorkspaceToGit` with strategy `PreferWorkspace`. Expect `requiredAction: CommitToGit` → Switch matches (**only after fixing 1.1**) → 202 → poll to `Succeeded`.
+5. Run `ConnectWorkspaceToGit` with strategy `PreferWorkspace`. Expect `requiredAction: CommitToGit` → 202 → poll to `Succeeded`. ✅ **Passing 2026-08-07.**
 6. Verify in ADO:
    ```
    test/TestSync.Notebook/.platform
    test/TestSync.Notebook/notebook-content.py
    ```
-   Empty `test/` plus a success outcome means 1.1 is still live.
+   ✅ **Verified.** A success outcome with an empty `test/` would have meant 1.1 was still live.
 7. Edit the notebook in ADO, then as the **owner** use the Fabric UI's *Update from Git*. Success confirms commit/update stay out of scope. Failure means they return.
 8. With the PATCH step disabled, call `GET .../git/myGitCredentials` after `connect` — see 5.4.
 
@@ -456,7 +490,7 @@ Must cover, at minimum:
 - re-apply **Run only users** on every app-facing flow (8.2)
 - supply environment variable values for tenant, client ID and secret (8.3)
 - create the Entra group (`fabric_power_app_grp` equivalent) with the broker SPN as a member, and enable **"Service principals can call Fabric public APIs"** scoped to it — see 3.1. Nothing works without this and the failure is a bare 401
-- grant the broker SPN workspace **Admin** on the managed workspaces in that environment (3.2)
+- confirm workspace provisioning in that environment grants the broker SPN's security group workspace **Admin** (3.2)
 - share the connector, app and security role with the target environment's group team (ARCHITECTURE §6)
 
 ---

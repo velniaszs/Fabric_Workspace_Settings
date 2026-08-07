@@ -38,7 +38,11 @@
       },
       "actions": {
         "Initialize_variable": {
-          "runAfter": {},
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
           "metadata": {
             "operationMetadataId": "c7b33d7d-78f7-4392-9f50-e528f20b9aa2"
           },
@@ -46,63 +50,16 @@
           "inputs": {
             "variables": [
               {
-                "name": "clientSecret",
+                "name": "accessToken",
                 "type": "string",
-                "value": " "
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
               }
             ]
-          }
-        },
-        "HTTP": {
-          "runAfter": {
-            "Initialize_variable": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "c04f0d05-1275-43e9-9fe3-bff6d96c717f"
-          },
-          "type": "Http",
-          "inputs": {
-            "method": "POST",
-            "uri": "https://login.microsoftonline.com/9e929790-272d-4977-a2ab-301443c11ece/oauth2/v2.0/token",
-            "headers": {
-              "Content-Type": "application/x-www-form-urlencoded"
-            },
-            "body": "grant_type=client_credentials&client_id=b5c04c9c-0588-418f-8f60-2d83d38cb635&client_secret=@{variables('clientSecret')}&scope=https://api.fabric.microsoft.com/.default"
-          }
-        },
-        "Parse_JSON": {
-          "runAfter": {
-            "HTTP": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "0addb1d8-9888-4f1d-8f21-28a2fc7c01cb"
-          },
-          "type": "ParseJson",
-          "inputs": {
-            "content": "@body('HTTP')",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "token_type": {
-                  "type": "string"
-                },
-                "expires_in": {
-                  "type": "integer"
-                },
-                "access_token": {
-                  "type": "string"
-                }
-              }
-            }
           }
         },
         "HTTP_2": {
           "runAfter": {
-            "Parse_JSON": [
+            "Initialize_variable": [
               "Succeeded"
             ]
           },
@@ -114,7 +71,7 @@
             "method": "GET",
             "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/connections",
             "headers": {
-              "Authorization": "Bearer @{body('Parse_JSON')?['access_token']}",
+              "Authorization": "Bearer @{variables('accessToken')}",
               "Accept": "application/json"
             }
           }
@@ -152,10 +109,22 @@
               }
             }
           }
+        },
+        "Run_a_Child_Flow": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "57d82afd-3230-45dc-88a9-c2b73f40654b"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
         }
       }
     },
-    "templateName": null
+    "templateName": ""
   },
   "schemaVersion": "1.0.0.0"
 }

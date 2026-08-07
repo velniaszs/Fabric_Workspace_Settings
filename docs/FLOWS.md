@@ -31,7 +31,7 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 | 2 | PollFabricOperation | Yes | **Changes required** — post-loop terminal assertion (C3) |
 | 3 | ListGitConnections | Yes | **Superseded** — runs as SPN-A; the picker must be delegated (C4) |
 | 4 | GetWorkspaceGitState | Yes | Keep, but demote to internal guard only (C5) |
-| 5 | ConnectWorkspaceToGit | Yes | Switch bug fixed & exported (v1.0.0.6); `workspaceHead`, 202 handling, authorization and audit still open (C7–C9) |
+| 5 | ConnectWorkspaceToGit | Yes | Both sync directions passing end to end 2026-08-07; 202 handling, conflict-resolution removal, authorization and audit still open (C7c–C9, C12–C13) |
 | 6 | DisconnectWorkspaceGit | No | To build |
 | 7 | ~~GetGitSyncStatus~~ | — | **Descoped** — Contributors see status in the UI |
 | 8 | ~~CommitWorkspaceToGit~~ | — | **Descoped** — Contributors can commit in the UI |
@@ -134,15 +134,17 @@ Flows 1–5 exist and are exported. Each item below is a required edit, not a su
 | **C4** | ListGitConnections | Retire, or rebuild as `ListMyConnections` on the delegated custom connector. | It lists SPN-A's connections; the picker must list the caller's |
 | **C5** | GetWorkspaceGitState | Demote from app-facing to internal guard. Keep the flow, drop the screen. | Contributors already see connection details in the Fabric UI |
 | ~~**C6**~~ | ConnectWorkspaceToGit | ~~`act_on_requiredAction` case values were `PreferWorkspace` / `PreferRemote`.~~ **Done & exported 2026-08-06.** | Nothing synced while the flow reported success. §1.1 |
-| **C7** | ConnectWorkspaceToGit | **Delete** `workspaceHead` from the `Update_from_git` body. It is optional, and interpolation renders a null as `""`. | Correctness; the API accepts `""`. §1.2 |
+| ~~**C7**~~ | ConnectWorkspaceToGit | ~~`workspaceHead` rendered as `""` in the `Update_from_git` body.~~ **Deleted, exported and retested 2026-08-07.** | §1.2 |
 | ~~**C7b**~~ | ConnectWorkspaceToGit | ~~empty `remoteCommitHash`~~ — resolved by C6. | §1.8 |
 | **C7c** | ConnectWorkspaceToGit | Handle a **202** from `initializeConnection` — poll before reading `requiredAction`. | On 202 the body is empty, so every field resolves blank and the flow silently no-ops. §1.9 |
-| **C7d** | ConnectWorkspaceToGit | The `Has_operation` condition compares status to `"Succeeded "` — remove the trailing space. | Never matches, so `outcome` is always `Failed`. §1.12 |
+| ~~**C7d**~~ | ConnectWorkspaceToGit | ~~`Has_operation` condition compared status to `"Succeeded "`.~~ **Fixed and exported 2026-08-07.** | §1.12 |
 | **C7e** | PollFabricOperation | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage`. | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item. §1.13 |
 | **C8** | ConnectWorkspaceToGit | Add the `crbab_Workspaces` ownership check before any write, and move the trigger to the Dataverse request-row pattern. **Deferred 2026-08-06 — to be built later.** | The PowerApp V2 trigger cannot prove caller identity — the caller parameter is forgeable. Until this exists the flow will act on any workspace ID it is handed |
 | **C9** | ConnectWorkspaceToGit | Write an audit row to `crbab_GitAuditLog` (table not yet created). | No record of who connected what |
 | **C10** | All HTTP + child-flow actions | Confirm the retry policy is not **None**; raise retry counts on Fabric calls. | 429 at 4000 workspaces. §6.1 |
 | **C11** | ConnectWorkspaceToGit | Test whether the `PATCH myGitCredentials` step is redundant; delete it if so, otherwise set run-after to tolerate failure. | §5.4 |
+| **C12** | ConnectWorkspaceToGit | Delete `conflictResolution` **and** `options` from the `Update_from_git` body. **Decision 2026-08-07.** | The app should never make a destructive choice on the owner's behalf. Omitting both means Fabric refuses to start a conflicting update, and the owner resolves it in the Fabric UI with full visibility. §1.10 |
+| **C13** | ConnectWorkspaceToGit | Add a `ConnectedSyncPending` outcome for a refused sync. **Only if** testing shows a refusal returns a synchronous 4xx: also make the Response reachable on failure, since a failed HTTP action currently skips it. | A 202-then-failed operation is already handled by the poll path (proved by §1.13). A sync 4xx is not — it aborts before `Respond_to_a_Power_App_or_flow`. Which path a conflict takes is untested. §1.10 |
 
 ---
 
