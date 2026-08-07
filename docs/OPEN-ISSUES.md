@@ -8,43 +8,224 @@ Last reviewed: 2026-08-06
 
 ---
 
+## Summary
+
+| # | Issue | Status |
+|---|---|---|
+| **1.1** | `ConnectWorkspaceToGit` Switch selected on strategy, not `requiredAction` | ✅ Fixed & exported |
+| **1.2** | `workspaceHead` sent as `""` when null | 🟡 Correctness only — accepted by the API |
+| **1.3** | `ListGateways` `cont` initialised to backticks | ✅ Fixed & exported |
+| **1.4** | `ListGateways` 5-page cap | ➖ By design; truncation is silent |
+| **1.5** | Stale `shared_webcontents` connection reference | ✅ Fixed & exported |
+| **1.6** | Two broker SPNs; standardise on `sp_fabric_powerapp` | 🔴 Open |
+| **1.7** | No `crbab_Workspaces` authorization check anywhere | ⏸ Deferred — **blocks sharing the app** |
+| **1.8** | `updateFromGit` sent empty `remoteCommitHash` | ✅ Resolved via 1.1 |
+| **1.9** | `initializeConnection` may return 202 with empty body | 🔴 Open — silent no-op |
+| **1.10** | `conflictResolutionPolicy` hardcoded to `PreferRemote` | 🟡 Open — low impact |
+| **1.11** | Connect requires the repo folder to already exist | ➖ By design — stated in the wizard |
+| **1.12** | Poll success check compares against `"Succeeded "` (trailing space) | 🔴 Open — every run reports `Failed` |
+| **1.13** | `updateFromGit` failed — item references a OneLake table absent from the target workspace | ➖ Root-caused — platform limitation, not a flow defect |
+| **2** | Secrets in repo, `.gitignore` deleted, rotation outstanding | 🔴 Open |
+| **3.1** | Broker SPN not enabled for Fabric APIs | ✅ Resolved |
+| **3.2** | Broker SPN workspace Admin across ~4000 workspaces | 🔴 Open — largest operational dependency |
+| **3.3** | Broker SPN object ID (reference) | ℹ Reference |
+| **4.1** | Dec 1 2026 Git restriction | ➖ Accepted risk, out of scope |
+| **5.1** | Is SPN-B needed? | ➖ Decided — dropped |
+| **5.2** | Credential type inside the owner's connection | 🔴 Open |
+| **5.3** | Expired connection credentials go unnoticed | 🟡 Open |
+| **5.4** | `PATCH myGitCredentials` redundant? | 🟡 Open — test then remove |
+| **6.1** | 429 / throttling | ➖ Decided; defaults verified in place |
+| **6.2** | Do-until timeouts report success | 🟡 Open — `PollFabricOperation` |
+| **7** | End-to-end test scenario | 🟡 Partially executed |
+| **8.1** | Connection references arrive unbound on import | 🟡 Open |
+| **8.2** | Run-only settings do not survive import | 🟡 Open |
+| **8.3** | Hardcoded tenant / client IDs; `ab_TenantId` unused | 🔴 Open |
+| **8.4** | Post-import checklist | ⏸ Deferred |
+| **9** | Custom connector scopes + operations | 🔴 Open — must be **one pass** |
+| **10** | Flows, tables and screens not yet built | 🔴 Open |
+
+Legend: ✅ done · ➖ decided/accepted · 🟡 open, non-blocking · 🔴 open, needs action · ⏸ deliberately deferred · ℹ reference
+
+**Do first:** §2 secrets (`.gitignore` restored, rotation), then 1.6 broker SPN consolidation.
+
+---
+
 ## 1. Bugs — fix first
 
-### 1.1 `ConnectWorkspaceToGit` Switch never matches (critical)
+### 1.1 `ConnectWorkspaceToGit` Switch never matches (critical) — FIXED & EXPORTED
 
-In [Workflows/ConnectWorkspaceToGit-1E895D49-DA8F-F111-8076-70A8A530AE85.json](Workflows/ConnectWorkspaceToGit-1E895D49-DA8F-F111-8076-70A8A530AE85.json), the `act_on_requiredAction` Switch evaluates:
+**Fixed 2026-08-06, verified in the export.** `act_on_requiredAction` switches on `@body('Initialize_connection')?['requiredAction']` with case values `CommitToGit` and `UpdateFromGit`. Solution version `1.0.0.6`.
+
+How it presented, kept because the failure mode is silent and could recur:
 
 ```
-@body('Initialize_connection')?['requiredAction']
+strategy = PreferRemote
+  → Switch matched Case_2 ("PreferRemote")   ← selecting on strategy, not requiredAction
+  → POST .../git/updateFromGit
+  → remoteCommitHash = ""   (remote branch empty)
+  → Fabric had returned requiredAction = CommitToGit
 ```
 
-but its case values are `PreferWorkspace` and `PreferRemote` — those are `initializationStrategy` inputs, not `requiredAction` outputs. `requiredAction` returns `CommitToGit`, `UpdateFromGit` or `None`.
+The strategy governs how Fabric *resolves* initialization. `requiredAction` is Fabric telling you which direction to sync afterwards. They are different things and must not be conflated.
 
-Result: no case ever matches, every run falls to `default`, `outcome` is set to `Connected`, and **no content is ever synced** — while the flow reports success.
+### 1.2 `workspaceHead` sent as `""` when null — CORRECTNESS ONLY
 
-Fix in the designer: change the case values to `CommitToGit` and `UpdateFromGit`. The action bodies inside each branch are already correct.
+Both sync branches interpolate `workspaceHead` into the request body:
 
-### 1.2 `CommitToGit` sends null `workspaceHead`
+```json
+"workspaceHead": "@{body('Initialize_connection')?['workspaceHead']}"
+```
 
-Same flow. The `CommitToGit` branch always sends `workspaceHead` from the initialize response, but that branch fires precisely when the remote branch is **empty**, where `workspaceHead` is null. The property should be omitted, not sent as null.
+`@{ }` is string interpolation, so a null renders as `""` — the property is always present and never omitted. `"@expr"` without braces would preserve a real JSON `null`, which the spec explicitly permits.
 
-Power Automate can't conditionally omit a property inline — build the body in a Compose and pass `@outputs('Compose')`.
+**Test 2026-08-07 — commit branch is safe.** Disconnected a workspace containing items, reconnected to an existing but empty repo folder. `initializeConnection` returned:
 
-Confirm against a real empty branch first; the API may tolerate it.
+```json
+{
+  "requiredAction": "CommitToGit",
+  "workspaceHead": "b8e29bbfd18e4d5f3e01dcf7c4dc2c65665f6023",
+  "remoteCommitHash": null
+}
+```
 
-### 1.3 `ListGateways` — `cont` initialised to backticks
+`workspaceHead` reflects the **workspace**, not the branch, and is populated whenever the workspace has items. `requiredAction: CommitToGit` only occurs when the workspace has content, so that branch can never receive a null. No change needed there.
 
-Around line 79 of [Workflows/ListGateways-4469367C-AD89-F111-AB0F-7C1E528D41FB.json](Workflows/ListGateways-4469367C-AD89-F111-AB0F-7C1E528D41FB.json), `cont` is initialised to two literal backtick characters rather than empty, producing `?continuationToken=%60%60` on the first iteration.
+**Test 2026-08-07 — update branch confirmed, impact is cosmetic.** New empty workspace (`ab_demo_git`, `18e8e8e8-f0f8-4196-9462-60a7989076ce`) connected to a folder containing committed Fabric items. `initializeConnection` returned:
 
-### 1.4 `ListGateways` — 5-page cap
+```json
+{ "requiredAction": "UpdateFromGit", "workspaceHead": null, "remoteCommitHash": "72000a6c…" }
+```
 
-The Do-until exit condition includes `greaterOrEquals(variables('pageCount'), 5)`, silently truncating results at five pages. A Do-until that exits on its own limit reports success.
+and `Update_from_git` sent:
 
-### 1.5 Stale connection reference
+```json
+{ "remoteCommitHash": "72000a6c…", "workspaceHead": "", … }
+```
 
-`crbab_sharedwebcontents_0b635` (connector `shared_webcontents`) is at line 3829 of `customizations.xml`. The `.msapp` was unpacked and verified to contain **zero** references to it — the dependency is stale.
+The call returned **202**, and the long-running operation then failed — but for an unrelated reason (1.13, an item referencing a missing OneLake table). The operation reached model validation, which means `""` passed request validation and the API accepted it.
 
-Fix: re-save `ListGateways` without the `InvokeHttp` action, delete the connection reference in the maker portal, re-publish the app, re-export. Do not hand-edit `customizations.xml`.
+So this is a correctness defect, not a functional one. `""` is still not a valid SHA and the tolerance is undocumented, so it should not be relied on.
+
+**Fix — delete the property from `Update_from_git`.** It is optional in `updateFromGit` and only provides optimistic concurrency; the flow calls initialize seconds earlier and is the sole writer.
+
+Test: empty workspace → connect to a folder with committed Fabric items → expect `requiredAction: UpdateFromGit`, then read `workspaceHead` in the initialize output and the rendered `Update_from_git` inputs. If it is null there, drop the braces on that one line.
+
+### 1.8 `updateFromGit` sends an empty `remoteCommitHash` — RESOLVED VIA 1.1
+
+Observed 2026-08-06. Root cause was 1.1, not a missing field mapping — fixing the Switch resolved it.
+
+```json
+{
+  "remoteCommitHash": "",
+  "workspaceHead": "06bb1ba53db1003e159ae6fdea0919a77914d50a",
+  "conflictResolution": { "conflictResolutionType": "Workspace", "conflictResolutionPolicy": "PreferRemote" },
+  "options": { "allowOverrideItems": true }
+}
+```
+
+Per the spec, `remoteCommitHash` is **required** and `workspaceHead` is **optional** — the body has the requiredness backwards.
+
+**Root cause is not a missing mapping.** `initializeConnection` returns `remoteCommitHash` only when the remote branch has commits. An empty value alongside a populated `workspaceHead` means the workspace has content and the **remote branch is empty**, in which case `requiredAction` is `CommitToGit`. Calling `updateFromGit` there is meaningless — there is nothing to update from.
+
+So this was bug 1.1 surfacing: the Switch selected the branch from the **initialization strategy** instead of from `requiredAction`. The strategy tells Fabric how to resolve initialization; Fabric then reports which direction to sync. Only `requiredAction` may drive the Switch.
+
+Remaining, carried into 1.10: `conflictResolutionPolicy` is still hardcoded in the update branch. `remoteCommitHash` stays mapped from `Initialize_connection` — it is populated whenever that branch is legitimately reached.
+
+### 1.9 `initializeConnection` may return 202 with an empty body
+
+The API documents both `200` (with `InitializeGitConnectionResponse`) and `202 Accepted` (long-running, `Location` + `x-ms-operation-id`, **no body**).
+
+`ConnectWorkspaceToGit` assumes 200 and reads `requiredAction`, `workspaceHead` and `remoteCommitHash` straight off the response. On a 202 all three resolve to empty, the Switch falls through to `default`, and the flow reports `Connected` having synced nothing — the same silent failure as 1.1, from a different direction.
+
+Handle the 202: poll the operation via `PollFabricOperation`, then fetch the result before branching.
+
+### 1.10 `conflictResolutionPolicy` hardcoded in the update branch
+
+`Update_from_git` always sends `conflictResolutionPolicy: PreferRemote`, regardless of the strategy the user selected in the wizard.
+
+Low impact — `UpdateFromGit` is only required when the workspace side is empty, so conflicts are unlikely. But if it is ever reached with content on both sides it silently overrides the user's choice. Map it from the strategy input, or document that update always prefers remote.
+
+### 1.11 `connect` requires the target folder to already exist — BY DESIGN
+
+Not a defect. A platform restriction the app inherits, accepted 2026-08-07.
+
+Connecting with `directoryName: "test-nullhead"` — a folder not present in `fabricrepo2` on `main` — fails at the `Connect` call:
+
+```json
+{
+  "errorCode": "GitProviderResourceNotFound",
+  "message": "The requested operation can't be completed because the Git provider resource could not be found using the provided Git connection details.",
+  "isRetriable": false
+}
+```
+
+The portal handles this with a *Create and sync* prompt. The REST API has no equivalent flag in `AzureDevOpsDetails`, so a missing folder is an error.
+
+Rules the user must satisfy:
+
+- The folder must already exist in the selected branch.
+- Folder names are **case-sensitive** against what is in the branch.
+- The folder must not contain subdirectories unless at least one is a Fabric item directory. A folder holding a single plain file (e.g. `README.md`) is fine.
+
+**Resolution:** state these rules as description text on the folder field of the wizard page. No flow change.
+
+### 1.12 Poll success check compares against `"Succeeded "` — every run reports Failed
+
+In `ConnectWorkspaceToGit`, the `Condition` inside `Has_operation` evaluates:
+
+```
+@body('Run_PollFabricOperation')?['status']  equals  "Succeeded "
+```
+
+The literal carries a **trailing space**, so it can never match. The `else` branch always runs and `outcome` is always set to `Failed` with the poll's `errormessage`, regardless of what actually happened.
+
+Found 2026-08-07 while diagnosing 1.13, where it happened to give the correct answer by accident. Until it is fixed, no run outcome from this flow can be trusted in either direction.
+
+Fix: delete the trailing space, then re-export.
+
+### 1.13 `updateFromGit` into an empty workspace fails on items with OneLake dependencies — ROOT-CAUSED
+
+Test 2026-08-07, empty workspace `ab_demo_git` updating from a folder containing committed items. `Update_from_git` returned 202; the operation then failed. `GET /v1/operations/{id}` gave the real cause:
+
+```json
+{
+  "errorCode": "GitSyncFailed",
+  "message": "Failed to sync between Git and the workspace",
+  "moreDetails": [{
+    "errorCode": "ModelValidationError",
+    "message": "[DataSourceSchemaFetchFailed] Failed to fetch schema for data source 'publicholidays'. Cannot resolve OneLake table reference for relative path 'publicholidays'.",
+    "relatedResource": { "resourceType": "GraphIndex", "resourceId": "ac744682-…" }
+  }]
+}
+```
+
+A graph query set holds a **relative** OneLake reference to a table `publicholidays`. Relative paths resolve within the same workspace. The table exists in the source workspace `ab_demo_5` but not in the empty target, so model validation fails.
+
+Not a flow defect. Three consequences that do matter:
+
+- **Git stores metadata, not data.** A workspace whose items reference OneLake tables cannot be reconstructed into an empty workspace from Git alone. At 4000 workspaces this will be routine whenever a fresh workspace is pointed at a populated folder.
+- **`updateFromGit` is all-or-nothing.** One unresolvable item failed the entire operation. `allowOverrideItems` does not help — this is model validation, not conflict resolution.
+- **The generic message is useless to an end user.** `GitSyncFailed` / *"Failed to sync between Git and the workspace"* says nothing. `error.moreDetails` names the item and the reason, so `PollFabricOperation` must surface it (C7e).
+
+Use `Workflows/get-operation.ps1` to retrieve this detail for any operation ID.
+
+### 1.3 `ListGateways` — `cont` initialised to backticks — FIXED
+
+**Verified fixed 2026-08-06.** `Initialize_variable_2` now declares `cont` as a string with **no `value` property**, so it starts empty and iteration 1 sends `continuationToken=` rather than `%60%60`.
+
+### 1.4 `ListGateways` — 5-page cap — BY DESIGN
+
+**Decision 2026-08-06: works as designed.** The Do-until exit expression is still:
+
+```
+@or(equals(variables('more'), false), greaterOrEquals(variables('pageCount'), 5))
+```
+
+Accepted as a deliberate bound. Residual, unaddressed: when the cap is what stops the loop, the flow returns **success with a silently truncated list** — neither the flow nor the app can tell that apart from a complete result. If gateway counts ever approach five pages, either surface a "more results exist" flag from `more`, or raise the cap. Not actioned.
+
+### 1.5 Stale connection reference — FIXED
+
+**Verified fixed 2026-08-06.** `customizations.xml` contains **zero** matches for `sharedwebcontents` / `shared_webcontents`. A single connection reference remains, `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02`, pointing at the custom connector — which is correct.
 
 ### 1.6 Two different broker service principals (FLOWS.md C1)
 
@@ -94,40 +275,37 @@ The canvas app filtering the workspace list is **not** authorization — it is a
 
 ## 3. Blocking prerequisites
 
-### 3.1 Broker SPN not enabled for Fabric APIs — CONFIRMED, blocking
+### 3.1 Broker SPN not enabled for Fabric APIs — RESOLVED
 
-**Confirmed 2026-08-06.** `ConnectWorkspaceToGit` fails at `Check_existing` with `401 Unauthorized` / *"The caller is not authenticated to access this resource"*. Reproduced outside Power Automate with `Workflows/diag-401.ps1`, using the exact credentials from `GetFabricToken`:
+**Resolved 2026-08-06.** `ConnectWorkspaceToGit` now runs past `Check_existing`; the 401 is gone.
+
+What fixed it:
+
+1. Entra security group **`fabric_power_app_grp`** created, with the **`sp_fabric_powerapp` service principal** added as a member.
+2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group.
+
+Diagnosis that led there, kept because the same symptom will recur in every new environment:
 
 | | |
 |---|---|
-| Token request | **succeeds** |
+| Token request | succeeded |
 | `aud` | `https://api.fabric.microsoft.com` |
-| `appid` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` (`sp_fabric_powerapp`) |
-| `tid` | `9e929790-272d-4977-a2ab-301443c11ece` |
+| `appid` | `a385fde9-…` (`sp_fabric_powerapp`) |
 | `idtyp` | `app` |
-| `roles` | *(none)* |
-| `GET /v1/workspaces/{id}/git/connection` | **401 Unauthorized** |
+| `roles` | *(none)* — **normal, not the fault** |
+| Fabric call | `401 Unauthorized` |
 
-The flow wiring is correct — the token is valid and correctly scoped. Fabric is rejecting the service principal.
+The empty `roles` claim is expected: Fabric does not grant API access through Entra application permissions. `401` means the SPN cannot call Fabric at all; `403` would mean it can, but lacks a role on the object.
 
-**`roles` being empty is not the fault.** Fabric does not grant API access through Entra application permissions; an app-only Fabric token legitimately carries no roles. Adding application permissions in the app registration will not fix this.
-
-**401 vs 403 is the tell.** 403 would mean authenticated but lacking a role on the object. 401 means the SPN is not permitted to call Fabric APIs at all — the tenant setting.
-
-Fix:
-
-1. Add the `sp_fabric_powerapp` **service principal** to an Entra security group.
-2. Fabric Admin portal → Tenant settings → Developer settings → **Service principals can use Fabric APIs** → enable, scoped to that group.
-3. Wait for propagation (~15 min), re-run `diag-401.ps1`.
-4. A **403** at this point is progress — it means authentication now succeeds and only the workspace role is missing. Go to 3.2.
-
-This blocks the entire test scenario in §7, including the 1.1 Switch bug, because `Check_existing` gates every downstream action.
+Reproduce with `Workflows/diag-401.ps1`. **This configuration is per-tenant and must be repeated in every environment** — see 8.4.
 
 ### 3.2 Broker SPN workspace Admin coverage
 
-`sp_fabric_powerapp` must hold **Admin** on every managed workspace. Unclear how this is granted for existing workspaces and maintained for new ones.
+`sp_fabric_powerapp` must hold **Admin** on every managed workspace.
 
-For testing, grant it Admin on `e9de0b2d-0cc1-42ed-9395-28da86acfd97` — `GET .../git/connection` should then return **200** with `NotConnected`.
+Satisfied for the test workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97` \u2014 `ConnectWorkspaceToGit` gets past `Check_existing`, which it could not do without a workspace role.
+
+**Still open for the other ~4000.** Unclear how Admin is granted at that scale and how it is maintained for newly created workspaces. This is the single largest unplanned operational dependency in the design: the app is useless on any workspace where the broker is not Admin, and there is currently no process that guarantees it.
 
 ### 3.3 Broker SPN object ID
 
@@ -195,24 +373,28 @@ No explicit throttling handling in any flow. Fabric returns `Retry-After`.
 
 **Decision 2026-08-06: add retries now.**
 
-Power Automate HTTP actions have a built-in retry policy (default: exponential, 4 retries) covering 429 and 5xx. Action required:
+Power Automate HTTP actions have a built-in retry policy (default: exponential, 4 retries) covering 429 and 5xx.
 
-- Confirm the policy is not set to **None** on any HTTP action.
-- Raise the retry count on the Fabric calls.
-- Child-flow (`Workflow` type) actions have their own retry settings — check those too.
+**Verified 2026-08-06:** no `retryPolicy` block appears in any file under `Workflows/`, so every HTTP and child-flow action is on the **default** policy. Nothing is set to `None`. The exposure is smaller than first assumed.
+
+Remaining actions:
+
+- Raise the retry count on the Fabric calls above the default 4 if testing shows it is needed.
 - `PollFabricOperation`'s Do-until must tolerate a 429 from `/v1/operations/{id}` without treating it as a terminal state.
 
 Only build custom `Retry-After` handling if testing shows the built-in policy is insufficient.
 
 ### 6.2 Do-until timeouts report success
 
-Any Do-until that exits via its own iteration/timeout limit reports success. Every loop needs a post-loop condition asserting the real terminal state. Applies to `PollFabricOperation` and `ListGateways`.
+Any Do-until that exits via its own iteration/timeout limit reports success. Every loop needs a post-loop condition asserting the real terminal state. Applies to `PollFabricOperation` and — accepted rather than fixed — `ListGateways` (see 1.4).
 
 ---
 
-## 7. Test scenario — not yet executed
+## 7. Test scenario — partially executed
 
 Workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97`, one **Notebook** named `TestSync`. Repo `skscontoso/fabric/fabricrepo2`, branch `main` (**must be empty**), directory `test`.
+
+Steps 5 and 6 have been exercised while diagnosing 1.1 and 1.2. The remaining steps are untested.
 
 1. As the owner (Contributor) in the Fabric UI, confirm **connect is unavailable** — proves the app is necessary.
 2. Confirm the owner *can* see Git status and commit/update controls once connected — proves the scope reduction is right.
@@ -273,7 +455,8 @@ Must cover, at minimum:
 - map every connection reference to a connection in the target environment (8.1)
 - re-apply **Run only users** on every app-facing flow (8.2)
 - supply environment variable values for tenant, client ID and secret (8.3)
-- verify the broker SPN holds the tenant setting and workspace Admin in that environment (§3)
+- create the Entra group (`fabric_power_app_grp` equivalent) with the broker SPN as a member, and enable **"Service principals can call Fabric public APIs"** scoped to it — see 3.1. Nothing works without this and the failure is a bare 401
+- grant the broker SPN workspace **Admin** on the managed workspaces in that environment (3.2)
 - share the connector, app and security role with the target environment's group team (ARCHITECTURE §6)
 
 ---

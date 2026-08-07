@@ -307,7 +307,7 @@
               },
               "cases": {
                 "Case": {
-                  "case": "PreferWorkspace",
+                  "case": "CommitToGit",
                   "actions": {
                     "CommitToGit": {
                       "runAfter": {},
@@ -347,7 +347,7 @@
                   }
                 },
                 "Case_2": {
-                  "case": "PreferRemote",
+                  "case": "UpdateFromGit",
                   "actions": {
                     "Update_from_git": {
                       "runAfter": {},

@@ -45,10 +45,16 @@ The Fabric broker. App-only client credentials. Workspace Admin on all managed w
 
 Keep SPN-A's grants to the minimum the flows actually need: workspace Admin on managed workspaces, plus whatever the networking endpoints require. Do not add tenant-scoped application permissions.
 
-Fabric REST access for an SPN is *not* granted by Entra application permissions. It requires:
+Fabric REST access for an SPN is *not* granted by Entra application permissions. **Confirmed by testing on 2026-08-06** — a token with an empty `roles` claim is normal and works fine, while adding application permissions in the app registration does nothing. Access requires both of:
 
-1. Admin portal → Developer settings → **Service principals can use Fabric APIs**, scoped to a security group containing SPN-A
-2. A Fabric-side role on the target object (workspace role, gateway role, connection role)
+1. **Entra security group** `fabric_power_app_grp`, with the `sp_fabric_powerapp` **service principal** as a member
+2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group
+
+plus a Fabric-side role on the target object (workspace role, gateway role, connection role).
+
+This is a **hard prerequisite for every app-only flow**, and it is environment-specific — the group and the tenant setting must be recreated in every tenant the solution is deployed to. Symptom when missing: `401 Unauthorized`, *"The caller is not authenticated to access this resource"*, on every Fabric call. A `403` means this part is satisfied and only the object-level role is missing.
+
+`Workflows/diag-401.ps1` reproduces the check outside Power Automate and is the fastest way to tell the two apart.
 
 ### Git identity
 
@@ -118,9 +124,11 @@ Read flows may stay on PowerApp V2, but the request table should exist before wr
 
 ---
 
-## 5. Custom connector — `gateway_llister_app_con`
+## 5. Custom connector — `gateway_lst_app_con`
 
-Note the double L in the name. Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
+Schema name `ab_gateway-5flst-5fapp-5fcon` (note the `ab_` prefix, not `crbab_`). Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
+
+Connection reference: `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02`.
 
 | Field | Value |
 |---|---|
@@ -193,9 +201,24 @@ Run-only connection settings do **not** survive solution import. Re-apply after 
 
 - `gitConnectionState`: `NotConnected` | `Connected` | `ConnectedAndInitialized`
 - `requiredAction`: `CommitToGit` | `UpdateFromGit` | `None`
-- `workspaceHead` is null on an empty branch — **omit the property, do not send null**
+- `workspaceHead` reflects the **workspace**, not the branch. Populated whenever the workspace holds items — including on a first-ever connect to an empty folder. **Null on a workspace that has never synced and holds nothing**, which is the `UpdateFromGit` case. `remoteCommitHash` is the one that is null when the remote is empty. Both verified 2026-08-07.
+- **`directoryName` must already exist in the branch.** The portal offers a *Create and sync* prompt when the folder is missing; the REST API has no equivalent and returns `GitProviderResourceNotFound`. Case-sensitive. The folder must also contain no subdirectories unless at least one is a Fabric item directory.
+- **Sync operations are all-or-nothing and validate item models.** An item with a relative OneLake reference to a table absent from the target workspace fails the entire operation with `GitSyncFailed`; the real cause is in `error.moreDetails` from `GET /v1/operations/{id}`.
 - `GET /v1/gateways/{id}/roleAssignments` needs `ConnectionCreator` or higher; roles are `Admin`, `ConnectionCreatorWithResharing`, `ConnectionCreator`; principals are `User` or `Group`
 - **There is no update/PATCH for a Git connection.** Changing branch or directory = disconnect + connect + initialize.
+
+### Sync request bodies — which fields are actually required
+
+| API | Required | Optional |
+|---|---|---|
+| `commitToGit` | `mode` | `workspaceHead`, `comment`, `items` |
+| `updateFromGit` | **`remoteCommitHash`** | `workspaceHead`, `conflictResolution`, `options` |
+
+`workspaceHead` is optional in both and *"may be null only after Initialize Connection"*. Sending a stale one returns `WorkspaceHeadMismatch`.
+
+**`initializeConnection` returns `remoteCommitHash` only when the remote branch has commits.** Empty `remoteCommitHash` + populated `workspaceHead` means the remote is empty and `requiredAction` will be `CommitToGit`. Never branch on the initialization strategy — the strategy tells Fabric how to resolve initialization; `requiredAction` tells you which direction to sync.
+
+`initializeConnection` can also return **202 with no body**, in which case none of the three fields exist and the operation must be polled first.
 
 ### Required workspace role per Git operation
 
@@ -274,6 +297,7 @@ The trailing slash on the repo URL matters.
 | `list gateways spn.ps1` | App-only client credentials | Token succeeds, gateway call returns **Unauthorized** — needs the tenant setting plus a gateway role |
 | `list gateways delegated.ps1` | Device code flow | **Dead end.** Device code is public-client only; a confidential client always gets `AADSTS7000218`, and passing `client_secret` does not help |
 | `test rest.ps1` | Ad-hoc | Contains a plaintext secret |
+| `get-operation.ps1` | `GET /v1/operations/{id}` for a Fabric LRO; expands `error.moreDetails`, which names the item behind a wrapper code such as `GitSyncFailed`. Reads the secret from a local notes file by label and never prints it | Working |
 
 ---
 
@@ -292,7 +316,7 @@ The two that gate everything else:
 
 1. Restore `.gitignore`; purge and rotate secrets
 2. Fix the `ConnectWorkspaceToGit` Switch (FLOWS.md **C6**) — highest value, smallest edit
-3. Repoint the eight networking flows onto `sp_fabric_powerapp` (**C1**) and confirm the tenant setting *Service principals can use Fabric APIs* covers it
+3. Repoint the eight networking flows onto `sp_fabric_powerapp` (**C1**), and add it to `fabric_power_app_grp` coverage checks
 4. Move tenant ID, client ID and secret to environment variables (**C2**) — multi-environment deployment is confirmed
 5. Update the custom connector in **one pass**: add `Connection.ReadWrite.All`, add the three connection operations, then delete and recreate the connection (OPEN-ISSUES §9)
 6. Create the `Fabric Workspace Owner` security role and wire up the group team, connector share and app share (§6)
@@ -301,4 +325,4 @@ The two that gate everything else:
 9. Build `ListMyConnections`, `RegisterGitConnection`, `DisconnectWorkspaceGit`
 10. Move write flows onto the Dataverse request-row trigger
 11. Add the Git wizard screens to the canvas app
-12. Fix the `ListGateways` defects and the stale `crbab_sharedwebcontents_0b635` reference
+12. Decide whether the `ListGateways` 5-page cap needs a "more results" indicator (OPEN-ISSUES §1.4)

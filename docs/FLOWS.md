@@ -6,6 +6,21 @@ Flow numbering (1–9) refers to the Git-integration build order. The eight `*Ru
 
 ---
 
+## Prerequisite for every app-only flow
+
+No flow that authenticates as a service principal will work until both of these exist in the target tenant:
+
+1. Entra security group **`fabric_power_app_grp`** containing the **`sp_fabric_powerapp` service principal**
+2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group
+
+Confirmed working 2026-08-06. Before this was configured, every Fabric call returned `401 Unauthorized` — *"The caller is not authenticated to access this resource"*.
+
+This is **not** granted by Entra application permissions. An app-only Fabric token with an empty `roles` claim is normal.
+
+This must be repeated per environment. It is on the post-import checklist (OPEN-ISSUES §8.4). Diagnose with `Workflows/diag-401.ps1`: 401 = the setting above is missing; 403 = the setting is fine and an object-level role is missing.
+
+---
+
 ## Status
 
 Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed: workspace **Contributors can already commit, update and view status in the Fabric UI**. Only connect, disconnect and connection-setting changes need Admin, so only those need brokering.
@@ -16,7 +31,7 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 | 2 | PollFabricOperation | Yes | **Changes required** — post-loop terminal assertion (C3) |
 | 3 | ListGitConnections | Yes | **Superseded** — runs as SPN-A; the picker must be delegated (C4) |
 | 4 | GetWorkspaceGitState | Yes | Keep, but demote to internal guard only (C5) |
-| 5 | ConnectWorkspaceToGit | Yes | **Changes required** — critical Switch bug, no authorization, no audit (C6–C9) |
+| 5 | ConnectWorkspaceToGit | Yes | Switch bug fixed & exported (v1.0.0.6); `workspaceHead`, 202 handling, authorization and audit still open (C7–C9) |
 | 6 | DisconnectWorkspaceGit | No | To build |
 | 7 | ~~GetGitSyncStatus~~ | — | **Descoped** — Contributors see status in the UI |
 | 8 | ~~CommitWorkspaceToGit~~ | — | **Descoped** — Contributors can commit in the UI |
@@ -99,7 +114,7 @@ The only flow with substantial logic.
 5. **Initialize** — `POST .../git/initializeConnection` with the strategy. Response carries `requiredAction`, `remoteCommitHash`, `workspaceHead`.
 6. **Follow `requiredAction`** — Switch: `CommitToGit` pushes up, `UpdateFromGit` pulls down, `None` is done. Both return `202` → poll via flow 2.
 
-Step 6 is where naive implementations break: initialize returns 200 but the workspace is **not** synced until the required action runs. **The built Switch does not work** — see C6.
+Step 6 is where naive implementations break: initialize returns 200 but the workspace is **not** synced until the required action runs. The Switch that drives this was broken until 2026-08-06 — see OPEN-ISSUES §1.1.
 
 **Missing:** the authorization check against `crbab_Workspaces` (C8) and the audit row (C9). Neither exists in the exported JSON.
 
@@ -118,8 +133,12 @@ Flows 1–5 exist and are exported. Each item below is a required edit, not a su
 | **C3** | PollFabricOperation | Add a post-loop condition asserting a real terminal status. A Do-until that exits on its own iteration limit reports **success**. | Silent false-positive on every long operation |
 | **C4** | ListGitConnections | Retire, or rebuild as `ListMyConnections` on the delegated custom connector. | It lists SPN-A's connections; the picker must list the caller's |
 | **C5** | GetWorkspaceGitState | Demote from app-facing to internal guard. Keep the flow, drop the screen. | Contributors already see connection details in the Fabric UI |
-| **C6** | ConnectWorkspaceToGit | **Critical.** `act_on_requiredAction` switches on `requiredAction` but its cases are `PreferWorkspace` / `PreferRemote`. Change them to `CommitToGit` / `UpdateFromGit`. | No case ever matches → nothing syncs → flow reports success. See OPEN-ISSUES §1.1 |
-| **C7** | ConnectWorkspaceToGit | Build the `commitToGit` body in a Compose so `workspaceHead` can be **omitted** when null. | That branch fires when the remote branch is empty, where `workspaceHead` is null. §1.2 |
+| ~~**C6**~~ | ConnectWorkspaceToGit | ~~`act_on_requiredAction` case values were `PreferWorkspace` / `PreferRemote`.~~ **Done & exported 2026-08-06.** | Nothing synced while the flow reported success. §1.1 |
+| **C7** | ConnectWorkspaceToGit | **Delete** `workspaceHead` from the `Update_from_git` body. It is optional, and interpolation renders a null as `""`. | Correctness; the API accepts `""`. §1.2 |
+| ~~**C7b**~~ | ConnectWorkspaceToGit | ~~empty `remoteCommitHash`~~ — resolved by C6. | §1.8 |
+| **C7c** | ConnectWorkspaceToGit | Handle a **202** from `initializeConnection` — poll before reading `requiredAction`. | On 202 the body is empty, so every field resolves blank and the flow silently no-ops. §1.9 |
+| **C7d** | ConnectWorkspaceToGit | The `Has_operation` condition compares status to `"Succeeded "` — remove the trailing space. | Never matches, so `outcome` is always `Failed`. §1.12 |
+| **C7e** | PollFabricOperation | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage`. | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item. §1.13 |
 | **C8** | ConnectWorkspaceToGit | Add the `crbab_Workspaces` ownership check before any write, and move the trigger to the Dataverse request-row pattern. **Deferred 2026-08-06 — to be built later.** | The PowerApp V2 trigger cannot prove caller identity — the caller parameter is forgeable. Until this exists the flow will act on any workspace ID it is handed |
 | **C9** | ConnectWorkspaceToGit | Write an audit row to `crbab_GitAuditLog` (table not yet created). | No record of who connected what |
 | **C10** | All HTTP + child-flow actions | Confirm the retry policy is not **None**; raise retry counts on Fabric calls. | 429 at 4000 workspaces. §6.1 |
@@ -201,15 +220,12 @@ Runs on the **final** wizard step, immediately before `ConnectWorkspaceToGit`, s
 | | |
 |---|---|
 | Trigger | PowerApp V2, no inputs |
-| Calls | `GET /v1/gateways` via **custom connector** `gateway_llister_app_con` |
+| Calls | `GET /v1/gateways` via **custom connector** `gateway_lst_app_con` |
 | Returns | `GatewaysJson` |
 
-The only flow running in **delegated** (per-user) context. Everything else uses SPN-A.
+The only flow running in **delegated** (per-user) context. Everything else uses the broker SPN.
 
-Two known defects:
-
-- `cont` is initialised to two backtick characters instead of empty, so iteration 1 sends a bogus `continuationToken`
-- the Do-until exit condition includes `pageCount >= 5`, silently truncating at five pages
+The backtick `cont` initialisation and the stale `shared_webcontents` connection reference were both fixed and verified on 2026-08-06. The 5-page cap remains by design — see OPEN-ISSUES §1.4.
 
 ---
 
@@ -226,6 +242,12 @@ Two known defects:
 **Don't reference loop-internal actions from outside.** Capture values into variables inside the loop instead.
 
 **Renaming an action breaks every expression referencing it.** Rename immediately after adding, before wiring anything.
+
+**The Git folder must already exist in the branch.** `connect` returns `GitProviderResourceNotFound` for a missing folder — the portal's *Create and sync* prompt has no API equivalent. Names are case-sensitive. See OPEN-ISSUES §1.11.
+
+**Git carries metadata, not data.** Updating an empty workspace from a populated folder fails if any item holds a relative OneLake reference to a table that does not exist in the target. The operation is all-or-nothing — one bad item fails the whole sync. See OPEN-ISSUES §1.13.
+
+**`GitSyncFailed` is a wrapper.** The usable cause is in `error.moreDetails` from `GET /v1/operations/{id}`. Use `Workflows/get-operation.ps1`.
 
 **429 handling.** Fabric returns `Retry-After`. Honour it — at 4000 workspaces this will happen.
 
