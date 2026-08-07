@@ -22,10 +22,11 @@ Last reviewed: 2026-08-07
 | **E1** | Solution imported | Power Platform | System Administrator | Per environment |
 | **E2** | Connection references bound to real connections | Power Platform | System Administrator | Per environment |
 | **E3** | Environment variable values supplied | Power Platform | System Administrator | 🔴 Not wired up yet |
-| **E4** | Client secrets re-entered in every flow | Power Automate | Flow owner | Per environment |
+| **E4** | Client secret re-entered in `GetFabricToken` | Power Automate | Flow owner | Per environment |
 | **E5** | Run-only users configured per flow | Power Automate | Flow owner | Per environment |
 | **E6** | Security role `Fabric Workspace Owner` created and assigned to a group team | Power Platform | System Administrator | 🔴 Open |
 | **E7** | Connector and canvas app shared with the group | Power Platform | Maker | Per environment |
+| **E8** | Connector tenant ID corrected for the target tenant | Power Platform | Maker | 🔴 Hardcoded |
 | **F1** | Owner creates their ADO connection and grants the broker `User` on it | Fabric / the app | Workspace owner | ➖ Self-service, per workspace |
 
 Legend: ✅ done in the current tenant · 🟡 assumed or unverified · 🔴 open, needs action · ➖ recurring, not a one-off
@@ -40,21 +41,37 @@ Legend: ✅ done in the current tenant · 🟡 assumed or unverified · 🔴 ope
 
 App-only client credentials. Needs a client secret. **No Azure DevOps rights.**
 
-**Do not add Fabric application permissions.** Fabric does not grant REST access through Entra application permissions — a broker token legitimately shows `roles: (none)` and works fine. Access comes from A3 + B1 plus an object-level role (C1). Adding application permissions achieves nothing and widens the identity for no benefit.
+**Do not add Fabric application permissions.** Fabric does not grant REST access through Entra application permissions — a broker token legitimately shows `roles: (none)` and works fine. Access comes from A3 + B1 plus an object-level role on the target workspace or connection. Adding application permissions achieves nothing and widens the identity for no benefit.
 
-> The object ID, not the client ID, is what `RegisterGitConnection` passes as `principal.id`. Confusing the two produces a role assignment that grants nothing, and connect then fails as though the connection were never shared.
+> The object ID, not the client ID, is what `AddConnectionRoleAssignment` passes as `principal.id`. Confusing the two produces a role assignment that grants nothing, and connect then fails as though the connection were never shared.
 
 ### A2 — Delegated app registration
 
 `gateway_lister_app` — client ID `1c221a2d-9a70-48cc-81b8-e68dfba7afbd`. Backs the custom connector; runs as the signed-in user.
 
-Delegated scopes, published by the **Power BI Service** Entra app (not by a Fabric app):
+Delegated scopes are published by the **Power BI Service** Entra app (`00000009-0000-0000-c000-000000000000`), not by a Fabric app. Add them under **API permissions → Add a permission → Power BI Service → Delegated permissions**.
 
-- `Gateway.Read.All`
-- `Connection.ReadWrite.All` — not yet added, see OPEN-ISSUES §9
-- `offline_access`
+These scopes are **user-consentable** — `Gateway.Read.All` and `Connection.ReadWrite.All` both show *Admin consent required: No*, so each user consents at connection creation. Only the `Tenant.*` family needs an administrator. Granting admin consent tenant-wide is optional and suppresses the per-user prompt.
 
-**Grant every scope this connector will ever need in one pass.** Adding one later forces every user to delete and recreate their connection.
+| Scope | Needed by | State |
+|---|---|---|
+| `Gateway.Read.All` | `ListGateways` | ✅ Added |
+| `Connection.ReadWrite.All` | `ListMyConnections`, `AddConnectionRoleAssignment` | ✅ Added, consented 2026-08-07 |
+| `offline_access` | token refresh | ✅ Added |
+
+Per the API reference: `GET /connections` accepts `Connection.Read.All` **or** `Connection.ReadWrite.All`; `POST /connections/{id}/roleAssignments` requires `Connection.ReadWrite.All`. One scope therefore covers every connection operation the app needs — do not add both.
+
+**The connector carries its own copy of this list.** The scope on the connector's *Security* tab is a single space-delimited string and must match:
+
+```
+Gateway.Read.All Connection.ReadWrite.All offline_access
+```
+
+The two are edited separately and neither validates the other. If the connector asks for a scope the app registration does not publish, the connector saves without complaint and the failure appears later, at **connection creation**, as `AADSTS65001` or an invalid-scope error — which reads like a connector bug and is not one. **Always change the app registration first.**
+
+> Editing the OAuth section of the connector's Security tab blanks the client secret and will not save without it. Have the `gateway_lister_app` secret to hand; it lives outside the repo.
+
+**Grant every scope this connector will ever need in one pass.** Adding one later is expensive in a way that is easy to underestimate: consent is stored in Entra as an `oauth2PermissionGrant` keyed on (user, app, resource), and it **outlives the connection**. Deleting and recreating the connection silently reuses the old grant and issues the same narrow token — no prompt, no error, and a `403 InsufficientScopes` at the first call. The grant has to be revoked first, for every existing user, before any of them can reconsent. Procedure and commands: OPEN-ISSUES §9.3. Adding an *operation* later costs nothing.
 
 **Redirect URI.** Supplied by the custom connector itself — the maker portal issues a redirect URL when the connector is created, and that value is pasted back onto this app registration. No redirect URI needs planning in advance.
 
@@ -131,11 +148,13 @@ A connection reference is a pointer; the **connection** holds the credentials an
 
 ### E3 — Supply environment variable values
 
-`ab_TenantId` exists but is **referenced by nothing** — it was created and never wired up. Until the flows use it, tenant and client IDs remain hardcoded in nine flows and must be hand-edited after every import. See OPEN-ISSUES §8.3.
+`ab_TenantId` exists but is **referenced by nothing** — it was created and never wired up. Until `GetFabricToken` uses it, the tenant and client IDs stay hardcoded and must be hand-edited after every import. See OPEN-ISSUES §8.3.
 
-### E4 — Re-enter client secrets
+### E4 — Re-enter the client secret
 
-Solution exports scrub secrets: every flow ships with `"clientSecret"` set to `" "`. **Each flow must have its secret re-entered by hand or it will not run.** Nine flows today.
+Solution exports scrub secrets: the flow ships with `"clientSecret"` set to `" "`. **It must be re-entered by hand or nothing runs.**
+
+Only `GetFabricToken` holds a secret — every other flow calls it as a child flow. Before 2026-08-07 this was nine separate copies.
 
 ### E5 — Configure run-only users
 
@@ -160,6 +179,14 @@ In order:
 
 Share the **connector** and the **canvas app** with the group.
 
+### E8 — Correct the connector's tenant ID
+
+The custom connector's connection parameters hardcode `TenantId` — currently `9e929790-272d-4977-a2ab-301443c11ece` — and that value **is** carried by the solution export. Imported into another tenant it will point at this one, and every connection attempt fails at sign-in.
+
+After import: connector → **Security** → set **Tenant ID** to the target tenant, re-enter the client secret, **Update connector**, then delete and recreate the connection.
+
+Unlike E3, this is not an environment variable and cannot be supplied at import time.
+
 ---
 
 ## F. Per workspace owner — self-service
@@ -181,14 +208,17 @@ Run in order. Each step isolates the prerequisite above it.
 
 1. **Broker can reach Fabric at all** — `Workflows/diag-401.ps1`. A `401` means A3 or B1; a `403` means the broker has no role on the workspace.
 2. **Broker has a workspace role** — `GET /v1/workspaces/{id}/git/connection` should return `200` with `gitConnectionState: NotConnected`, not `403`. Note it returns 200 rather than 404 when disconnected.
-3. **Owner's connection is shared with the broker** — `GET /v1/connections/{id}/roleAssignments` should list the broker's object ID.
-4. **Folder exists** — browse the branch in ADO before running connect.
-5. **End to end** — run `ConnectWorkspaceToGit` and confirm the operation reaches `Succeeded`. Use `Workflows/get-operation.ps1 -OperationId <guid>` on failure; `GitSyncFailed` is a wrapper and the real cause is in `error.moreDetails`.
+3. **Delegated scopes reached the connection** — from the connector's **Test** tab, signed in as yourself, call `ListConnections`. A `403` carrying `x-ms-public-api-error-code: InsufficientScopes` means the consent predates `Connection.ReadWrite.All`; revoke the Entra grant, then recreate the connection (A2, OPEN-ISSUES §9.3). Confirm the fix by reading the grant back rather than by retrying — responses carry `x-ms-apihub-cached-response`, so a repeated identical `403` may be cache. Do this before building anything on top of it; the same failure inside a flow is far harder to read.
+4. **Owner's connection is shared with the broker** — `GET /v1/connections/{id}/roleAssignments` should list the broker's object ID.
+5. **Folder exists** — browse the branch in ADO before running connect.
+6. **End to end** — run `ConnectWorkspaceToGit` and confirm the operation reaches `Succeeded`. Use `Workflows/get-operation.ps1 -OperationId <guid>` on failure; `GitSyncFailed` is a wrapper and the real cause is in `error.moreDetails`.
 
 ---
 
 ## Known gaps
 
+- **A2** is granted and consented for the test user only. `user6` and `user8` still hold pre-change grants carrying `Gateway.Read.All` alone and must be revoked before they can use flows 7 or 8 (OPEN-ISSUES §9.3).
 - **B2** has not been explicitly verified.
 - **E3** cannot be completed until the flows reference environment variables.
+- **E8** has no supported per-environment mechanism; it is a manual edit on every import.
 - Secret rotation is the customer's responsibility (OPEN-ISSUES §2). Note that rotating a secret means redoing **E4** in every environment.

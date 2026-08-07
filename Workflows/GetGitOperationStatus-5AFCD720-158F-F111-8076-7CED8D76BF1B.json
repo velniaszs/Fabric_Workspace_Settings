@@ -1,0 +1,250 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "43e9fb9f-623e-4d99-9a22-e58887de0e61"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "operationId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "Condition": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1e09dde5-93fa-41bb-ae51-a56fc8d649c4"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "status": "@{if(equals(coalesce(outputs('Get_operation_state')?['statusCode'], 0), 200), coalesce(body('Get_operation_state')?['status'], 'Unknown'), 'Unavailable')}",
+              "errorcode": "@{coalesce(body('Get_operation_state')?['error']?['errorCode'], '')}",
+              "errormessage": "@{coalesce(body('Get_operation_state')?['error']?['message'], '')}",
+              "errordetails": "@{string(coalesce(body('Get_operation_state')?['error']?['moreDetails'], json('[]')))}",
+              "percentcomplete": "@{coalesce(body('Get_operation_state')?['percentComplete'], 0)}",
+              "requiredaction": "@{variables('requiredAction')}",
+              "remotecommithash": "@{variables('remoteCommitHash')}"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "title": "status",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "errorcode": {
+                  "title": "errorCode",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "errormessage": {
+                  "title": "errorMessage",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "errordetails": {
+                  "title": "errordetails",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "percentcomplete": {
+                  "title": "percentcomplete",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "requiredaction": {
+                  "title": "requiredaction",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "remotecommithash": {
+                  "title": "remotecommithash",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "Run_a_Child_Flow": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "6148b76d-514b-433d-84be-91c61e94b3b4"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_variable_requiredAction": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "53e518ff-4d3c-4d84-826b-a75600219363"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "requiredAction",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Initialize_variable_remoteCommitHash": {
+          "runAfter": {
+            "Initialize_variable_requiredAction": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "495629d1-ed92-4109-bcd0-ab5141840faa"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "remoteCommitHash",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Get_operation_state": {
+          "runAfter": {
+            "Initialize_variable_remoteCommitHash": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "fc16d423-46bc-4e9a-be28-4826d8bcbd18"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://api.fabric.microsoft.com/v1/operations/@{triggerBody()['text']}",
+            "headers": {
+              "Authorization": "Bearer @{body('Run_a_Child_Flow')?['access_token']}",
+              "Accept": "application/json"
+            },
+            "retryPolicy": {
+              "type": "exponential",
+              "count": 4,
+              "interval": "PT10S"
+            }
+          }
+        },
+        "Condition": {
+          "actions": {
+            "Get_operation_result": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "19fba255-3cc8-4d14-9780-dc36950c3e0c"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "GET",
+                "uri": "https://api.fabric.microsoft.com/v1/operations/@{triggerBody()['text']}/result",
+                "headers": {
+                  "Authorization": "Bearer @{body('Run_a_Child_Flow')?['access_token']}",
+                  "Accept": "application/json"
+                }
+              }
+            },
+            "Set_variable": {
+              "runAfter": {
+                "Get_operation_result": [
+                  "Succeeded",
+                  "Failed"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "5dffa5bc-658c-4f7e-b6de-632c4936e346"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "requiredAction",
+                "value": "@{coalesce(body('Get_operation_result')?['requiredAction'], '')}"
+              }
+            },
+            "Set_variable_2": {
+              "runAfter": {
+                "Set_variable": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "4ca738ee-7a30-4871-8e07-edefa73fd4e8"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "remoteCommitHash",
+                "value": "@{coalesce(body('Get_operation_result')?['remoteCommitHash'], '')}"
+              }
+            }
+          },
+          "runAfter": {
+            "Get_operation_state": [
+              "Succeeded",
+              "Failed",
+              "TimedOut"
+            ]
+          },
+          "expression": {
+            "equals": [
+              "@coalesce(body('Get_operation_state')?['status'], '')",
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "35ac70a4-2d88-453c-b2b7-cc49600da136"
+          },
+          "type": "If"
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

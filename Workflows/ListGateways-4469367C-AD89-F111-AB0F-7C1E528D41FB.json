@@ -4,7 +4,7 @@
       "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac": {
         "runtimeSource": "invoker",
         "connection": {
-          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02"
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e4bca"
         },
         "api": {
           "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
@@ -146,7 +146,7 @@
             },
             "MergePages": {
               "runAfter": {
-                "Increment_variable": [
+                "list_gateways": [
                   "Succeeded"
                 ]
               },
@@ -157,11 +157,7 @@
               "inputs": "@union(variables('gwArray'), coalesce(body('list_gateways')?['value'], json('[]')))"
             },
             "Increment_variable": {
-              "runAfter": {
-                "list_gateways": [
-                  "Succeeded"
-                ]
-              },
+              "runAfter": {},
               "metadata": {
                 "operationMetadataId": "9f60e682-c7c7-4c50-a431-82d641498bc9"
               },
@@ -172,9 +168,13 @@
               }
             },
             "list_gateways": {
-              "runAfter": {},
+              "runAfter": {
+                "Increment_variable": [
+                  "Succeeded"
+                ]
+              },
               "metadata": {
-                "operationMetadataId": "ef555584-2489-4c23-8d1a-639b29ef12b7"
+                "operationMetadataId": "ab21f5a7-97ab-495d-8c8d-3e5a154beac5"
               },
               "type": "OpenApiConnection",
               "inputs": {

@@ -1,0 +1,11 @@
+<environmentvariabledefinition schemaname="ab_BrokerClientId">
+  <defaultvalue>a385fde9-1d6a-4e7f-8336-dc7feba5a4bc</defaultvalue>
+  <displayname default="BrokerClientId">
+    <label description="BrokerClientId" languagecode="1033" />
+  </displayname>
+  <introducedversion>1.0.0.8</introducedversion>
+  <iscustomizable>1</iscustomizable>
+  <isrequired>0</isrequired>
+  <secretstore>0</secretstore>
+  <type>100000000</type>
+</environmentvariabledefinition>

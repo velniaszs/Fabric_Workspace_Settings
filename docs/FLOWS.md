@@ -2,22 +2,9 @@
 
 All flows live in `Workflows/` as unpacked solution JSON. Do not hand-edit these files — edit in the maker portal and re-export.
 
-Flow numbering (1–9) refers to the Git-integration build order. The eight `*Rules` / `*Policy` / `*Setting` flows predate it and serve the networking screens of the app.
+Flow numbering (1–8) refers to the Git-integration build order. The eight `*Rules` / `*Policy` / `*Setting` flows predate it and serve the networking screens of the app.
 
----
-
-## Prerequisite for every app-only flow
-
-No flow that authenticates as a service principal will work until both of these exist in the target tenant:
-
-1. Entra security group **`fabric_power_app_grp`** containing the **`sp_fabric_powerapp` service principal**
-2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group
-
-Confirmed working 2026-08-06. Before this was configured, every Fabric call returned `401 Unauthorized` — *"The caller is not authenticated to access this resource"*.
-
-This is **not** granted by Entra application permissions. An app-only Fabric token with an empty `roles` claim is normal.
-
-This must be repeated per environment. It is on the post-import checklist (OPEN-ISSUES §8.4). Diagnose with `Workflows/diag-401.ps1`: 401 = the setting above is missing; 403 = the setting is fine and an object-level role is missing.
+> **No flow that authenticates as a service principal works until the tenant prerequisites are in place.** See [docs/PREREQUISITES.md](docs/PREREQUISITES.md) — A3 and B1 in particular. Symptom when missing: a bare `401` on every Fabric call.
 
 ---
 
@@ -27,21 +14,19 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 
 | # | Flow | Built | State |
 |---|---|---|---|
-| 1 | GetFabricToken | Yes | **Changes required** — wrong SPN, hardcoded tenant/client (C1, C2) |
-| 2 | PollFabricOperation | Yes | **Changes required** — post-loop terminal assertion (C3) |
-| 3 | ListGitConnections | Yes | **Superseded** — runs as SPN-A; the picker must be delegated (C4) |
-| 4 | GetWorkspaceGitState | Yes | Keep, but demote to internal guard only (C5) |
-| 5 | ConnectWorkspaceToGit | Yes | Both sync directions passing end to end 2026-08-07; 202 handling, conflict-resolution removal, authorization and audit still open (C7c–C9, C12–C13) |
-| 6 | DisconnectWorkspaceGit | No | To build |
-| 7 | ~~GetGitSyncStatus~~ | — | **Descoped** — Contributors see status in the UI |
-| 8 | ~~CommitWorkspaceToGit~~ | — | **Descoped** — Contributors can commit in the UI |
-| 9 | ~~UpdateWorkspaceFromGit~~ | — | **Descoped** — Contributors can update in the UI |
-| 10 | ListMyConnections | No | To build — delegated |
-| 11 | RegisterGitConnection | No | To build — delegated |
+| 1 | GetFabricToken | Yes | **Changes required** — hardcoded tenant/client ID (F1.1) |
+| 2 | GetGitOperationStatus | Yes | Rewritten in place from `PollFabricOperation` 2026-08-07 — **not yet exported or verified** (F2.2, F2.4) |
+| 3 | ListGitConnections | Yes | **Delete** once flow 7 ships — runs as SPN-A, so it returns the broker's connections, not the caller's (F3.1) |
+| 4 | GetWorkspaceGitState | Yes | Keep, but demote to internal guard only (F4.1) |
+| 5 | ConnectWorkspaceToGit | Yes | Both sync directions passing end to end 2026-08-07. **Being restructured** into stage 1 — connect + probe, then stop (OPEN-ISSUES §10.6) |
+| 6 | DisconnectWorkspaceFromGit | No | To build — renamed for symmetry with flow 5 |
+| 7 | ListMyConnections | No | To build — delegated |
+| 8 | AddConnectionRoleAssignment | No | To build — delegated, synchronous, no polling |
+| 9 | SyncWorkspaceWithGit | No | To build — stage 2, performs `commitToGit` / `updateFromGit` |
 
-Also descoped: `ChangeGitConnectionSettings`. There is **no update/PATCH API for a Git connection** — changing branch or directory is disconnect + reconnect, which the existing two flows already cover.
+**Descoped:** `GetGitSyncStatus`, `CommitWorkspaceToGit`, `UpdateWorkspaceFromGit` — Contributors already do all three in the Fabric UI. Also `ChangeGitConnectionSettings`: there is **no update/PATCH API for a Git connection**, so changing branch or directory is disconnect + reconnect, which the existing two flows already cover.
 
-The `commitToGit` and `updateFromGit` **calls** stay inside `ConnectWorkspaceToGit`. Descoping removed them as standalone user-facing flows only; `initializeConnection` still requires one of them to actually move content.
+The `commitToGit` and `updateFromGit` **calls** survive as flow 9. Descoping removed them as standalone user-facing flows only; `initializeConnection` still requires one of them to actually move content.
 
 ---
 
@@ -60,17 +45,33 @@ Child flow. Central place to acquire an SPN-A token so the client-credentials bl
 
 Secret currently comes from an environment variable. Migrate to Key Vault before production.
 
-### 2. PollFabricOperation
+### 2. GetGitOperationStatus
 
-Child flow. Fabric long-running operations return `202` plus an `x-ms-operation-id` header; this polls until terminal.
+A read. The app asks what state an operation is in; this answers and changes nothing.
 
 | | |
 |---|---|
-| Trigger inputs | `operationId`, `accessToken` |
-| Calls | `GET /v1/operations/{operationId}` |
-| Returns | `status`, `errorCode`, `errorMessage`, `attempts` |
+| Trigger | **Power Apps (V2)**, input `operationId` |
+| Called by | the canvas app's Refresh button |
+| Calls | `GetFabricToken` (child), `GET /v1/operations/{id}`, `GET /v1/operations/{id}/result` |
+| Returns | `status`, `percentcomplete`, `errorcode`, `errormessage`, `errordetails`, `requiredaction`, `remotecommithash` |
 
-Terminal states are `Succeeded` and `Failed`. A Do-until that exits on its own limit reports **success**, so the post-loop condition must distinguish a real terminal status from a timeout.
+Rewritten in place from `PollFabricOperation` on 2026-08-07 — renamed rather than rebuilt, so the flow GUID and connection references survive.
+
+**One pass, no loop.**
+
+1. `GetFabricToken` — it fetches its own token. `accessToken` is deliberately *not* a trigger input: passing one would put an SPN credential with tenant-wide Fabric rights inside the canvas app, recoverable by anyone who can open it.
+2. `GET /v1/operations/{operationId}`, with an explicit exponential retry policy — this is the one call the UI hits repeatedly.
+3. `Succeeded` → `GET /v1/operations/{id}/result` as well, tolerating a 404. Not every Fabric operation has a result.
+4. Return state, error detail and, when present, `requiredAction` / `remoteCommitHash`.
+
+**Why `/result` is there.** For `commitToGit` and `updateFromGit` it 404s and is ignored — success or failure is the whole answer. It exists for the one case stage 1 cannot answer synchronously: when `initializeConnection` returns **202**, the body is empty and `/result` is the only source of `requiredAction` and `remoteCommitHash`. That is F5.5, and without it a 202 on initialize is a dead end — workspace connected, nothing synced, no flow knowing which way to sync.
+
+**The trigger is `PowerAppV2`, so this cannot be a child flow.** Child flows must use *Manually trigger a flow*. `ConnectWorkspaceToGit`'s `Run_PollFabricOperation` action was deleted 2026-08-07 for exactly this reason. `GetFabricToken` stays a child flow — a parent may have any trigger, so this flow calling it is fine.
+
+**It does not advance anything.** No state machine, no writes, no starting the next sync call — it reports what Fabric says and nothing more. If the status comes back with a `requiredaction`, it is the **app** that decides to call `SyncWorkspaceWithGit`.
+
+**No sweeper, and nothing waits.** Decided 2026-08-07: an operation nobody looks at is not chased. Fabric completes the sync regardless; the only cost is that no local record shows it finished. See §10.5 in OPEN-ISSUES.
 
 ### 3. ListGitConnections
 
@@ -82,7 +83,7 @@ Terminal states are `Succeeded` and `Failed`. A Do-until that exits on its own l
 
 Filters to Azure DevOps Source Control connections. Uses the `cont` / `more` / Compose-merge pagination pattern (see Gotchas).
 
-> **Superseded.** This runs as SPN-A, so it returns connections *SPN-A* can see — not the caller's. The wizard picker must show the owner's own connections, which requires a delegated call. See `ListMyConnections` below and change **C4**.
+> **Superseded.** This runs as SPN-A, so it returns connections *SPN-A* can see — not the caller's. The wizard picker must show the owner's own connections, which requires a delegated call. See `ListMyConnections` below and change **F3.1**.
 
 ### 4. GetWorkspaceGitState
 
@@ -94,7 +95,7 @@ Filters to Azure DevOps Source Control connections. Uses the `cont` / `more` / C
 
 `gitConnectionState` is one of `NotConnected`, `Connected`, `ConnectedAndInitialized`. A disconnected workspace returns **200 with `NotConnected`**, not a 404.
 
-> Contributors can view Git connection details in the Fabric UI, so this is no longer needed as a user-facing screen. Keep it as the pre-flight guard for connect and disconnect. See **C5**.
+> Contributors can view Git connection details in the Fabric UI, so this is no longer needed as a user-facing screen. Keep it as the pre-flight guard for connect and disconnect. See **F4.1**.
 
 ### 5. ConnectWorkspaceToGit
 
@@ -116,53 +117,46 @@ The only flow with substantial logic.
 
 Step 6 is where naive implementations break: initialize returns 200 but the workspace is **not** synced until the required action runs. The Switch that drives this was broken until 2026-08-06 — see OPEN-ISSUES §1.1.
 
-**Missing:** the authorization check against `crbab_Workspaces` (C8) and the audit row (C9). Neither exists in the exported JSON.
+**Missing:** the authorization check against `crbab_Workspaces` (F5.9) and the audit row (F5.10). Neither exists in the exported JSON.
 
-The wizard supplies `organizationName` / `projectName` / `repositoryName` derived from `GET /v1/connections/{id}` → `connectionDetails.path`, so the user does not paste a URL. The trigger signature is unchanged.
+The wizard supplies `organizationName` / `projectName` / `repositoryName` derived from `GET /v1/connections/{id}` → `connectionDetails.path`, so the user does not paste a URL.
+
+> **Being restructured into stage 1 — connect and probe only.** From OPEN-ISSUES §10.2 and §10.6:
+>
+> - **Trigger stays Power Apps (V2)** — the wizard calls it and gets an answer straight back. What changes is the signature: the app creates the audit row first and passes **`auditRowId`**, and the flow reads its parameters from that row instead of from eight positional inputs.
+> - **Authorization comes from the row, not the caller.** `_createdby_value` is stamped by Dataverse, so it cannot be forged the way a passed-in email could. Check it against `crbab_Workspaces` and fail closed (F5.9).
+> - **Step 5 becomes a probe** — `initializationStrategy: None`, never a strategy chosen in advance. The owner cannot answer "prefer remote or workspace?" before anyone knows whether both sides have content.
+> - **Step 6 leaves this flow.** The `act_on_requiredAction` Switch, `CommitToGit`, `Update_from_git` and their operation-ID variables all move to flow 9. This flow reports what the probe found and stops.
+>
+> Returns `outcome`, `message`, `messageDetails`, and the `requiredAction` the app needs to call flow 9 with — or `NeedsChoice` when both sides have content and only the owner can break the tie.
+>
+> The name stays accurate: `connect` is this flow's first call, and no other flow makes it.
 
 ---
 
 ## Changes required to the built flows
 
-Flows 1–5 exist and are exported. Each item below is a required edit, not a suggestion. Full context in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md).
-
-| ID | Flow | Change | Why |
-|---|---|---|---|
-| **C1** | 8 networking flows | They authenticate as `sp_fabric_monit` (`b5c04c9c-…`). Repoint them to `sp_fabric_powerapp` (`a385fde9-…`), which `GetFabricToken` already uses. Simplest route: replace the inline token block in each with a child call to `GetFabricToken`. | `sp_fabric_monit` holds `Tenant.Read/ReadWrite.All`. An app used by 4000 owners must not run on a tenant-wide identity. **Decision 2026-08-06** |
-| **C2** | GetFabricToken + all 8 networking flows | Tenant ID `9e929790-…` is hardcoded in the token URI and the client ID is hardcoded in the request body. Move both to **environment variables**. `ab_TenantId` already exists in `environmentvariabledefinitions/` and is currently **unused**. | Multi-environment deployment is confirmed; hardcoded values require hand-editing every flow after each import |
-| **C3** | PollFabricOperation | Add a post-loop condition asserting a real terminal status. A Do-until that exits on its own iteration limit reports **success**. | Silent false-positive on every long operation |
-| **C4** | ListGitConnections | Retire, or rebuild as `ListMyConnections` on the delegated custom connector. | It lists SPN-A's connections; the picker must list the caller's |
-| **C5** | GetWorkspaceGitState | Demote from app-facing to internal guard. Keep the flow, drop the screen. | Contributors already see connection details in the Fabric UI |
-| ~~**C6**~~ | ConnectWorkspaceToGit | ~~`act_on_requiredAction` case values were `PreferWorkspace` / `PreferRemote`.~~ **Done & exported 2026-08-06.** | Nothing synced while the flow reported success. §1.1 |
-| ~~**C7**~~ | ConnectWorkspaceToGit | ~~`workspaceHead` rendered as `""` in the `Update_from_git` body.~~ **Deleted, exported and retested 2026-08-07.** | §1.2 |
-| ~~**C7b**~~ | ConnectWorkspaceToGit | ~~empty `remoteCommitHash`~~ — resolved by C6. | §1.8 |
-| **C7c** | ConnectWorkspaceToGit | Handle a **202** from `initializeConnection` — poll before reading `requiredAction`. | On 202 the body is empty, so every field resolves blank and the flow silently no-ops. §1.9 |
-| ~~**C7d**~~ | ConnectWorkspaceToGit | ~~`Has_operation` condition compared status to `"Succeeded "`.~~ **Fixed and exported 2026-08-07.** | §1.12 |
-| **C7e** | PollFabricOperation | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage`. | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item. §1.13 |
-| **C8** | ConnectWorkspaceToGit | Add the `crbab_Workspaces` ownership check before any write, and move the trigger to the Dataverse request-row pattern. **Deferred 2026-08-06 — to be built later.** | The PowerApp V2 trigger cannot prove caller identity — the caller parameter is forgeable. Until this exists the flow will act on any workspace ID it is handed |
-| **C9** | ConnectWorkspaceToGit | Write an audit row to `crbab_GitAuditLog` (table not yet created). | No record of who connected what |
-| **C10** | All HTTP + child-flow actions | Confirm the retry policy is not **None**; raise retry counts on Fabric calls. | 429 at 4000 workspaces. §6.1 |
-| **C11** | ConnectWorkspaceToGit | Test whether the `PATCH myGitCredentials` step is redundant; delete it if so, otherwise set run-after to tolerate failure. | §5.4 |
-| **C12** | ConnectWorkspaceToGit | Delete `conflictResolution` **and** `options` from the `Update_from_git` body. **Decision 2026-08-07.** | The app should never make a destructive choice on the owner's behalf. Omitting both means Fabric refuses to start a conflicting update, and the owner resolves it in the Fabric UI with full visibility. §1.10 |
-| **C13** | ConnectWorkspaceToGit | Add a `ConnectedSyncPending` outcome for a refused sync. **Only if** testing shows a refusal returns a synchronous 4xx: also make the Response reachable on failure, since a failed HTTP action currently skips it. | A 202-then-failed operation is already handled by the poll path (proved by §1.13). A sync 4xx is not — it aborts before `Respond_to_a_Power_App_or_flow`. Which path a conflict takes is untested. §1.10 |
+Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md) — one register for the whole project, not a second list. The flow numbers there match the Status table above.
 
 ---
 
 ## Flows still to build
 
-### 6. DisconnectWorkspaceGit
+### 6. DisconnectWorkspaceFromGit
 
 | | |
 |---|---|
-| Trigger inputs | `workspaceId` |
+| Trigger | **Power Apps (V2)**, input `auditRowId` |
 | Calls | `POST /v1/workspaces/{id}/git/disconnect` |
 | Returns | `outcome`, `message` |
 
-Synchronous — returns `200`, no polling. Authorize against `crbab_Workspaces` first and write an audit row. Guard on `gitConnectionState` being `NotConnected` so a repeat call returns a clean message rather than an error.
+Synchronous — returns `200`, no polling. Same pattern as flow 5: the app creates the audit row, the flow reads `_createdby_value` from it and authorizes against `crbab_Workspaces` before calling Fabric. Guard on `gitConnectionState` being `NotConnected` so a repeat call returns a clean message rather than an error.
+
+Renamed from `DisconnectWorkspaceGit` for symmetry with `ConnectWorkspaceToGit`; the old name read as if "Git" were the object being disconnected.
 
 Also the only route to a **branch or directory change**, since no update API exists. The app must warn that disconnect + reconnect re-runs initialization.
 
-### 10. ListMyConnections — delegated
+### 7. ListMyConnections — delegated
 
 | | |
 |---|---|
@@ -176,17 +170,19 @@ Surface `displayName`, `id` and `connectionDetails.path` so the wizard can show 
 
 Requires the connector to carry `Connection.Read.All` (or `Connection.ReadWrite.All`) — see OPEN-ISSUES §9.
 
-### 11. RegisterGitConnection — delegated
+### 8. AddConnectionRoleAssignment — delegated
 
 | | |
 |---|---|
 | Trigger inputs | `connectionId` |
-| Calls | `POST /v1/connections/{connectionId}/roleAssignments` via the **custom connector** |
+| Calls | `GET /v1/connections/{connectionId}/roleAssignments`, then `POST` the same path if needed, both via the **custom connector** |
 | Returns | `outcome`, `message` |
 
 Grants SPN-A the `User` role on the owner's connection so the broker can reference it by ID.
 
-Body:
+**Check before granting.** `GET` the role assignments first and look for an entry whose `principal.id` equals SPN-A's object ID. If one exists, skip the `POST` and return `outcome = AlreadyGranted`. The `POST` is documented to return **201 Created**; the docs do not say what a duplicate grant returns, and the wizard is re-runnable, so this is not a hypothetical path. Checking is cheaper than discovering the answer in production.
+
+Body of the `POST`:
 
 ```json
 {
@@ -195,11 +191,33 @@ Body:
 }
 ```
 
+**No polling.** The API documents only `201`, `429` and error codes — there is no `202`, no `x-ms-operation-id` and no long-running operation. When the call returns, the grant is in effect. This flow stays synchronous and stays out of the request-table pattern (OPEN-ISSUES §10.2).
+
 **This must be delegated.** The API requires the caller to hold `UserWithReshare` or higher on the connection, or Admin on the bound gateway — an SPN cannot self-grant. The owner is Owner on the connection they created, so the delegated call succeeds.
 
 Self-authorizing by construction: the caller can only grant on connections they already control, so no `crbab_Workspaces` check is needed and a PowerApp V2 trigger is acceptable.
 
-Runs on the **final** wizard step, immediately before `ConnectWorkspaceToGit`, so an abandoned wizard leaves no stray grants. Make it idempotent — a repeat grant must not fail the run.
+Runs on the **final** wizard step, immediately before the write flow is called, so an abandoned wizard leaves no stray grants.
+
+### 9. SyncWorkspaceWithGit
+
+Stage 2. Always called after `ConnectWorkspaceToGit` succeeds — stage 1 connects and reports, stage 2 moves the content.
+
+| | |
+|---|---|
+| Trigger | **Power Apps (V2)** — `auditRowId`, `requiredAction`, `initializationStrategy` (empty unless the owner had to choose) |
+| Calls | `initializeConnection` with the chosen strategy **only** when stage 1 returned `NeedsChoice`, then `commitToGit` or `updateFromGit` |
+| Returns | `outcome`, `message`, `messageDetails`, `operationId` |
+
+Inherits `act_on_requiredAction`, `CommitToGit` and `Update_from_git` from flow 5 — moved, not rewritten.
+
+**It does not wait.** The sync returns 202; write `operationId` to the audit row and return. Fabric finishes on its own, and the owner watches with flow 2 if they care.
+
+A separate flow rather than a branch in flow 5, because the workspace is **already connected** by the time it runs — calling `connect` again would fail.
+
+Same authorization pattern: read `_createdby_value` from the audit row, check it against `crbab_Workspaces`, fail closed.
+
+> **`SweepGitRequests` was considered and dropped 2026-08-07.** A background sweeper only earns its keep when a queued request can be stranded. Nothing queues here, and Fabric completes the sync whether or not anyone is watching. Recorded so the idea is not reinvented.
 
 ---
 
@@ -239,7 +257,7 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 
 **Do-until cannot express OR in the UI.** Switch to advanced mode: `@or(equals(...), equals(...))`, or set a boolean `isDone` flag inside the loop.
 
-**Do-until timeouts report success.** Always add a post-loop condition checking the real terminal state.
+**Do-until timeouts report success.** Always add a post-loop condition checking the real terminal state. `ListGateways` is the only flow with a loop left.
 
 **Don't reference loop-internal actions from outside.** Capture values into variables inside the loop instead.
 
@@ -253,7 +271,7 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 
 **429 handling.** Fabric returns `Retry-After`. Honour it — at 4000 workspaces this will happen.
 
-**Hardcoded tenant and client IDs.** Every token-acquiring flow embeds the tenant GUID in the URI and the client ID in the body. These are per-environment values and must become environment variables before the first deployment to a second environment. See C2.
+**Hardcoded tenant and client IDs.** `GetFabricToken` embeds the tenant GUID in the URI and the client ID in the body. These are per-environment values and must become environment variables before the first deployment to a second environment. See F1.1.
 
 **One broker identity.** All app-only calls run as `sp_fabric_powerapp`. `sp_fabric_monit` is a monitoring identity with tenant-wide read/write and must not be used by these flows.
 **There is no update API for a Git connection.** Changing branch or directory means `git/disconnect` then `git/connect` and a fresh `initializeConnection`.

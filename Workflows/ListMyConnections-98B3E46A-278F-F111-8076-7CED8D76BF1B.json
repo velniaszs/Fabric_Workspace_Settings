@@ -1,10 +1,25 @@
 {
   "properties": {
-    "connectionReferences": {},
+    "connectionReferences": {
+      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e4bca"
+        },
+        "api": {
+          "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+          "logicalName": "ab_gateway-5flst-5fapp-5fcon"
+        }
+      }
+    },
     "definition": {
       "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
       "contentVersion": "1.0.0.0",
       "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
         "$authentication": {
           "defaultValue": {},
           "type": "SecureObject"
@@ -27,44 +42,8 @@
         }
       },
       "actions": {
-        "Run_a_Child_Flow": {
-          "runAfter": {},
-          "metadata": {
-            "operationMetadataId": "1e1bf1bf-6096-4a8a-901d-eaa72665fe8a"
-          },
-          "type": "Workflow",
-          "inputs": {
-            "host": {
-              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
-            }
-          }
-        },
-        "Initialize_access_token": {
-          "runAfter": {
-            "Run_a_Child_Flow": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "9b82934e-6042-4e65-b392-5635b361cbbc"
-          },
-          "type": "InitializeVariable",
-          "inputs": {
-            "variables": [
-              {
-                "name": "accessToken",
-                "type": "string",
-                "value": "@body('Run_a_Child_Flow')?['access_token']"
-              }
-            ]
-          }
-        },
         "Initialize_connections": {
-          "runAfter": {
-            "Initialize_access_token": [
-              "Succeeded"
-            ]
-          },
+          "runAfter": {},
           "metadata": {
             "operationMetadataId": "e19a7cc4-3a86-47a7-81db-27995a8f2c8f"
           },
@@ -119,21 +98,6 @@
         },
         "Do_until": {
           "actions": {
-            "Get_connections": {
-              "runAfter": {},
-              "metadata": {
-                "operationMetadataId": "1480fda9-679e-4371-b1dd-3eac0e49503c"
-              },
-              "type": "Http",
-              "inputs": {
-                "method": "GET",
-                "uri": "@{concat('https://api.fabric.microsoft.com/v1/connections', if(empty(variables('cont')), '', concat('?continuationToken=', encodeUriComponent(variables('cont')))))}",
-                "headers": {
-                  "Authorization": "Bearer @{variables('accessToken')}",
-                  "Accept": "application/json"
-                }
-              }
-            },
             "Set_variable_connections": {
               "runAfter": {
                 "Merge_connections": [
@@ -161,7 +125,7 @@
               "type": "SetVariable",
               "inputs": {
                 "name": "cont",
-                "value": "@{coalesce(body('Get_connections')?['continuationToken'], '')}"
+                "value": "@{coalesce(body('list_my_connections')?['continuationToken'], '')}"
               }
             },
             "Set_variable_isDone": {
@@ -181,7 +145,7 @@
             },
             "Merge_connections": {
               "runAfter": {
-                "Get_connections": [
+                "list_my_connections": [
                   "Succeeded"
                 ]
               },
@@ -189,7 +153,25 @@
                 "operationMetadataId": "5a546ea8-efd9-4682-8aa1-368e130e5542"
               },
               "type": "Compose",
-              "inputs": "@union(variables('connections'), coalesce(body('Get_connections')?['value'], json('[]')))"
+              "inputs": "@union(variables('connections'), coalesce(body('list_my_connections')?['value'], json('[]')))"
+            },
+            "list_my_connections": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "a0c7e1de-f6d1-4779-8e3c-f76d5333ad36"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+                  "operationId": "ListConnections",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"
+                },
+                "parameters": {
+                  "continuationToken": "@variables('cont')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
             }
           },
           "runAfter": {

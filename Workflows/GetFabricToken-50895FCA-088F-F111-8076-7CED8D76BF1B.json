@@ -8,6 +8,20 @@
         "$authentication": {
           "defaultValue": {},
           "type": "SecureObject"
+        },
+        "TenantId (ab_TenantId)": {
+          "defaultValue": "9e929790-272d-4977-a2ab-301443c11ece",
+          "type": "String",
+          "metadata": {
+            "schemaName": "ab_TenantId"
+          }
+        },
+        "BrokerClientId (ab_BrokerClientId)": {
+          "defaultValue": "a385fde9-1d6a-4e7f-8336-dc7feba5a4bc",
+          "type": "String",
+          "metadata": {
+            "schemaName": "ab_BrokerClientId"
+          }
         }
       },
       "triggers": {
@@ -55,11 +69,11 @@
           "type": "Http",
           "inputs": {
             "method": "POST",
-            "uri": "https://login.microsoftonline.com/9e929790-272d-4977-a2ab-301443c11ece/oauth2/v2.0/token",
+            "uri": "https://login.microsoftonline.com/@{parameters('TenantId (ab_TenantId)')}/oauth2/v2.0/token",
             "headers": {
               "Content-Type": "application/x-www-form-urlencoded"
             },
-            "body": "grant_type=client_credentials&client_id=a385fde9-1d6a-4e7f-8336-dc7feba5a4bc&client_secret=@{variables('clientSecret')}&scope=https://api.fabric.microsoft.com/.default"
+            "body": "grant_type=client_credentials&client_id=@{parameters('BrokerClientId (ab_BrokerClientId)')}&client_secret=@{variables('clientSecret')}&scope=https://api.fabric.microsoft.com/.default"
           },
           "runtimeConfiguration": {
             "secureData": {

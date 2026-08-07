@@ -411,22 +411,6 @@
             },
             "Has_operation": {
               "actions": {
-                "Run_PollFabricOperation": {
-                  "runAfter": {},
-                  "metadata": {
-                    "operationMetadataId": "872fb019-db8a-45be-8f74-82b04e8644b7"
-                  },
-                  "type": "Workflow",
-                  "inputs": {
-                    "host": {
-                      "workflowReferenceName": "5afcd720-158f-f111-8076-7ced8d76bf1b"
-                    },
-                    "body": {
-                      "text": "@variables('operationId')",
-                      "text_1": "@variables('accessToken')"
-                    }
-                  }
-                },
                 "Condition": {
                   "actions": {
                     "Set_variable_4": {
@@ -441,11 +425,7 @@
                       }
                     }
                   },
-                  "runAfter": {
-                    "Run_PollFabricOperation": [
-                      "Succeeded"
-                    ]
-                  },
+                  "runAfter": {},
                   "else": {
                     "actions": {
                       "Set_variable_5": {
@@ -471,14 +451,14 @@
                         "type": "SetVariable",
                         "inputs": {
                           "name": "message",
-                          "value": "@body('Run_PollFabricOperation')?['errormessage']"
+                          "value": "@variables('outcome')"
                         }
                       }
                     }
                   },
                   "expression": {
                     "equals": [
-                      "@body('Run_PollFabricOperation')?['status']",
+                      "@variables('outcome')",
                       "Succeeded"
                     ]
                   },
