@@ -208,7 +208,7 @@ Unlike E3, this is not an environment variable and cannot be supplied at import 
 
 Step 2 runs **delegated as the owner**, because an SPN cannot grant itself a role on a connection. It needs `Connection.ReadWrite.All` on the delegated connector (A2).
 
-> Unresolved: whichever credential the owner puts in the connection determines how long it lasts. Personal OAuth breaks when that person leaves; nothing currently monitors for it. See OPEN-ISSUES §5.2 and §5.3.
+> **Decided 2026-08-11:** whichever credential the owner puts in the connection determines how long it lasts, and that choice stays with the owner. A service principal is recommended — personal OAuth breaks when that person leaves — but nothing enforces it and nothing monitors for expiry: a failed sync surfaces to the owner, who is also the person who can fix it. See OPEN-ISSUES §5.2 and §5.3.
 
 ---
 

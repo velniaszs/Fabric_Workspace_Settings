@@ -18,7 +18,7 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 | 2 | GetGitOperationStatus | Yes | Complete — verified in export 2026-08-07 (F2.2, F2.4 closed) |
 | 3 | ListMyConnections | Yes | **Built and tested 2026-08-07**, delegated. Verified in export (F3.1 closed) |
 | 4 | GetWorkspaceGitState | Yes | Complete — app-facing. Decision 2026-08-07: keep as is (F4.1 closed) |
-| 5 | ConnectWorkspaceToGit | Yes | Both sync directions passing end to end 2026-08-07. **Being restructured** into stage 1 — connect + probe, then stop (OPEN-ISSUES §10.6) |
+| 5 | ConnectWorkspaceToGit | Yes | **Restructured and tested 2026-08-11** as stage 1 — connect + probe, then stop. All five paths exercised; verified in export |
 | 6 | DisconnectWorkspaceFromGit | Yes | **Built and tested 2026-08-10**. Both branches exercised — connected and not connected |
 | 7 | AddConnectionRoleAssignment | Yes | **Built and tested 2026-08-10**, delegated. Both condition branches exercised |
 | 8 | SyncWorkspaceWithGit | Yes | **Built and tested 2026-08-11.** All six paths exercised; verified in export |
@@ -110,40 +110,63 @@ It is **not** a guard for the write flows. Flow 5 already performs its own inlin
 
 Trigger stays `PowerAppV2`. No change required.
 
-### 5. ConnectWorkspaceToGit
+### 5. ConnectWorkspaceToGit — stage 1
 
-The only flow with substantial logic.
+Restructured and tested 2026-08-11. Connects the workspace and **probes** for what Fabric wants done, then stops. Flow 8 moves the content.
 
 | | |
 |---|---|
-| Trigger inputs | `workspaceId`, `connectionId`, `organizationName`, `projectName`, `repositoryName`, `branchName`, `directoryName`, `initializationStrategy` |
-| Returns | `outcome`, `message`, `operationId` |
+| Trigger inputs | `workspaceId`, `connectionId`, `organizationName`, `projectName`, `repositoryName`, `branchName`, `directoryName` |
+| Returns | `outcome`, `requiredAction`, `operationId`, `message` |
 
 **As built:**
 
-1. **Token** — child call to `GetFabricToken`.
-2. **Guard** — `GET .../git/connection`; abort if already connected rather than silently re-pointing it.
-3. **Connect** — `POST .../git/connect` with `gitProviderDetails` (`gitProviderType: AzureDevOps`) and `myGitCredentials: { source: "ConfiguredConnection", connectionId }`.
-4. **Set credentials** — `PATCH .../git/myGitCredentials` with the same connection.
-5. **Initialize** — `POST .../git/initializeConnection` with the strategy. Response carries `requiredAction`, `remoteCommitHash`, `workspaceHead`.
-6. **Follow `requiredAction`** — Switch: `CommitToGit` pushes up, `UpdateFromGit` pulls down, `None` is done. Both return `202` → poll via flow 2.
+1. **Token** — child call to `GetFabricToken`, then variables `accessToken`, `outcome` (seeded `Failed`), `message`, `operationId`, `requiredAction` (seeded `None`).
+2. **`Check_existing`** — `GET .../git/connection`. The `Is_not_connected` condition tests `gitConnectionState` against `NotConnected`; the else branch answers `AlreadyConnected` and does nothing, rather than silently re-pointing an existing connection.
+3. **`Connect`** — `POST .../git/connect` with `gitProviderDetails` (`gitProviderType: AzureDevOps`) and `myGitCredentials: { source: "ConfiguredConnection", connectionId }`.
+4. **`Set_credentials`** — `PATCH .../git/myGitCredentials` with the same connection. Probably redundant, since step 3 already carries the same payload, but **kept by decision 2026-08-11** — it has never failed in testing and removing it would mean re-running every stage-1 test to prove nothing regressed. See OPEN-ISSUES §5.4 for the one residual it carries.
+5. **`Initialize_connection`** — `POST .../git/initializeConnection` with the body hardcoded to `{"initializationStrategy": "None"}`.
+6. **`Set_outcome`, `Set_requiredAction`, `Set_message`, `Set_operationId_probe`** — read the probe's answer into the response variables.
 
-Step 6 is where naive implementations break: initialize returns 200 but the workspace is **not** synced until the required action runs. The Switch that drives this was broken until 2026-08-06 — see OPEN-ISSUES §1.1.
+#### The probe
 
-**Missing:** the authorization check against `crbab_Workspaces` (F5.9) and the audit row (F5.10). Neither exists in the exported JSON.
+Step 5 sends `None` deliberately. The owner cannot sensibly answer "prefer remote or prefer workspace?" before anyone knows whether both sides even have content — so the flow asks Fabric first and lets the answer drive the question:
+
+| `outcome` | Meaning | What the app does next |
+|---|---|---|
+| `Connected` | Fabric named a direction, in `requiredAction` | Call flow 8 with that `requiredAction`, no strategy |
+| `NeedsChoice` | Both sides hold items; Fabric refuses to guess | Ask the owner, then call flow 8 with their strategy |
+| `AlreadyConnected` | Nothing was done | Offer disconnect or change settings |
+| `Failed` | `Connect` or the probe errored; raw payload in `message` | Show the error |
+| `Pending` | `202` from initialize | Unreachable while Asynchronous Pattern is On; kept as a guard |
+
+**Asynchronous Pattern stays On for `Initialize_connection` — decided 2026-08-11.** Initialize only records a direction, it does not move data, and it has returned synchronously in every test. Letting the connector absorb a rare 202 is simpler than owning a polling loop inside the 120-second response budget. The cost, if a slow initialize ever happens, is that the owner sees `Connected` / `None` and has to run flow 8 by hand — nothing breaks, but nothing moves either.
+
+`NeedsChoice` is derived from `errorCode: MissingInitializationStrategy`, so `Set_outcome` runs after `Initialize_connection` on **Succeeded or Failed** — a `400` here is a successful probe, not a failure.
+
+**Emptiness decides, not difference.** Fabric returns a direction when exactly one side is empty and demands a strategy when both hold items. It does not compare trees: a workspace and directory with identical content still yield `NeedsChoice`, because a fresh connection has no shared history and either side is a plausible source of truth.
+
+#### Failure handling
+
+`Set_outcome_connectfailed` and `Set_message_connectfailed` hang off `Connect` on **Failed** as a parallel branch, and `Respond` runs after `Is_not_connected` on **Succeeded or Failed**.
+
+Without both of those, a failed `Connect` skipped everything downstream and the flow ended with **no response at all** — the app got a hard error and no message. The most likely real-world failure lands exactly there: `GitProviderResourceNotFound`, returned when `directoryName` doesn't already exist in the repo. Git can't store an empty directory, so a first-time connect needs a folder containing at least a placeholder file.
+
+#### Verified 2026-08-11
+
+| Setup | `outcome` | `requiredAction` |
+|---|---|---|
+| Workspace and directory both populated | `NeedsChoice` | `None` |
+| Run again without disconnecting | `AlreadyConnected` | `None` |
+| Directory that doesn't exist | `Failed` + `GitProviderResourceNotFound` | `None` |
+| Empty workspace, populated directory | `Connected` | `UpdateFromGit` |
+| Populated workspace, empty directory | `Connected` | `CommitToGit` |
+
+All three handoffs to flow 8 were then driven from these results, including a first-ever commit into a directory the broker had never written to.
 
 The wizard supplies `organizationName` / `projectName` / `repositoryName` derived from `GET /v1/connections/{id}` → `connectionDetails.path`, so the user does not paste a URL.
 
-> **Being restructured into stage 1 — connect and probe only.** From OPEN-ISSUES §10.2 and §10.6:
->
-> - **Trigger stays Power Apps (V2)** — the wizard calls it and gets an answer straight back. What changes is the signature: the app creates the audit row first and passes **`auditRowId`**, and the flow reads its parameters from that row instead of from eight positional inputs.
-> - **Authorization comes from the row, not the caller.** `_createdby_value` is stamped by Dataverse, so it cannot be forged the way a passed-in email could. Check it against `crbab_Workspaces` and fail closed (F5.9).
-> - **Step 5 becomes a probe** — `initializationStrategy: None`, never a strategy chosen in advance. The owner cannot answer "prefer remote or workspace?" before anyone knows whether both sides have content.
-> - **Step 6 leaves this flow.** The `act_on_requiredAction` Switch, `CommitToGit`, `Update_from_git` and their operation-ID variables all move to flow 8. This flow reports what the probe found and stops.
->
-> Returns `outcome`, `message`, `messageDetails`, and the `requiredAction` the app needs to call flow 8 with — or `NeedsChoice` when both sides have content and only the owner can break the tie.
->
-> The name stays accurate: `connect` is this flow's first call, and no other flow makes it.
+> **No authorization check yet.** The flow connects any workspace the broker administers, for any caller who can run it. The audit row and the `crbab_Workspaces` check (F5.9, F5.10) are absent from the exported JSON. Deferred by decision, not oversight — see OPEN-ISSUES §10.3.
 
 ---
 
@@ -159,7 +182,7 @@ Built and tested 2026-08-10, both branches. Runs as the broker.
 
 As built:
 
-1. `Run_a_Child_Flow` → `GetFabricToken`, then `Initialize_variable_accessToken` = `@body('Run_a_Child_Flow')?['access_token']`.
+1. `Run_a_Child_Flow` → `GetFabricToken`, then `Initialize_variable` holding `accessToken` = `@body('Run_a_Child_Flow')?['access_token']`.
 2. `Check_existing` — GET the Git connection.
 3. `Condition` — `@equals(coalesce(body('Check_existing')?['gitConnectionState'],''), 'NotConnected')`.
 4. Yes → respond `NotConnected`, nothing to do.
@@ -185,17 +208,19 @@ Built and tested 2026-08-10. Grants SPN-A the `User` role on the owner's connect
 |---|---|
 | Trigger | **Power Apps (V2)**, one text input `connectionId` |
 | Calls | `ListConnectionRoleAssignments`, then `AddConnectionRoleAssignment` if needed, both via the **custom connector**, delegated |
-| Returns | `outcome` — `Granted` or `AlreadyGranted` |
+| Returns | `outcome` — `Granted` or `AlreadyGranted` — plus `message` |
 
 As built:
 
-1. `ListConnectionRoleAssignments` — `fabricConnectionId` from the trigger input, `continuationToken` empty.
+1. `ListConnectionRoleAssignments` — `fabricConnectionId` from the trigger input. No `continuationToken` is sent, so only the first page is examined; see below.
 2. `Filter_array` — from `@outputs('ListConnectionRoleAssignments')?['body/value']`, where `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))`.
 3. `Condition` — `@empty(body('Filter_array'))` equals `true`.
 4. Yes branch → `AddConnectionRoleAssignment` with `id` = the same environment variable, `type` = `ServicePrincipal`, `role` = `User` → respond `Granted`.
 5. No branch → respond `AlreadyGranted`.
 
 **Check before granting.** The `POST` returns **201 Created** and the docs do not say what a duplicate grant returns; the wizard is re-runnable, so this is not a hypothetical path. Both branches were tested against connection `16261289-5d36-4470-b878-2720b3babdfa` by running twice.
+
+**The role-assignment list is not paged through.** Verified in the export 2026-08-11: the call sends no `continuationToken`, so a connection with enough role assignments to spill onto a second page could hide an existing broker grant and trigger a duplicate `POST`. Harmless on today's test connections, which have a handful of assignments each. Worth fixing before a connection shared with a large group goes through the wizard.
 
 The object ID comes from the `ab_BrokerObjectId` environment variable (PREREQUISITES E3). It is **not** `ab_BrokerClientId` — the roleAssignments API wants the service principal's directory object ID, and the client ID is silently wrong rather than rejected.
 

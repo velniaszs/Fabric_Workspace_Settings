@@ -62,7 +62,7 @@ Owners have Azure DevOps access and **create their own** *Azure DevOps – Sourc
 
 A dedicated Git service principal ("SPN-B") was considered and **dropped** — it only existed to supply Git credentials for owners who couldn't reach ADO, which is no longer the case.
 
-Open: whichever credential the owner puts in the connection determines durability. Personal OAuth breaks when that person leaves. See docs/OPEN-ISSUES.md §5.2.
+**Decided 2026-08-11:** whichever credential the owner puts in the connection determines durability, and that is the owner's call, not the app's. Owners create their own connections — with a service principal if they want one that outlives them — and the app only grants the broker access to a connection that already exists. A service principal is the recommendation to pass on as guidance; nothing enforces it, and no API the app calls can even tell what is inside a connection. See docs/OPEN-ISSUES.md §5.2 and §5.3.
 
 Consequence either way: ADO shows the commit as pushed by the connection's identity, not the requester.
 
