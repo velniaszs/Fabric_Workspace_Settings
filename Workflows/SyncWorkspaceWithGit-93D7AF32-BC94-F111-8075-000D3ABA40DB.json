@@ -1,0 +1,523 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "5139088c-db0f-4427-a91f-42f630cdd079"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "workspaceId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_1": {
+                  "title": "requiredAction",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                },
+                "text_2": {
+                  "title": "initializationStrategy",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text",
+                "text_1"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Run_a_Child_Flow": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "6eb3e04e-7f1f-4b1d-995b-9225392bd9a6"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_variable_accessToken": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "26eedfec-fd1e-43b4-b995-5c54a28e610b"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "accessToken",
+                "type": "string",
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
+              }
+            ]
+          }
+        },
+        "Initialize_variable_action": {
+          "runAfter": {
+            "Initialize_variable_accessToken": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "dd184d4d-db9e-4d53-b72f-efe8c003d129"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "action",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Initialize_variable_operationId": {
+          "runAfter": {
+            "Initialize_variable_action": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "5358140a-1382-4030-badb-35ac8c6d0d8d"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "operationId",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Condition_needs_strategy": {
+          "actions": {
+            "Initialize_with_strategy": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "f0a1d709-118d-4199-baa1-a64eeb1c4e93"
+              },
+              "type": "Http",
+              "inputs": {
+                "method": "POST",
+                "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/initializeConnection",
+                "headers": {
+                  "Authorization": "Bearer @{variables('accessToken')}",
+                  "Content-Type": "application/json"
+                },
+                "body": {
+                  "initializationStrategy": "@{triggerBody()['text_2']}"
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Initialize_variable_allowOverride": [
+              "Succeeded"
+            ]
+          },
+          "expression": {
+            "equals": [
+              "@not(empty(coalesce(triggerBody()?['text_2'],'')))",
+              "@true"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "3c018a71-b36a-4a7b-bbd8-b8ab66d115d5"
+          },
+          "type": "If"
+        },
+        "Get_git_status": {
+          "runAfter": {
+            "Condition_needs_strategy": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "d118afd0-134b-4a16-b6ad-c66c61e83436"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/status",
+            "headers": {
+              "Authorization": "Bearer @{variables('accessToken')}",
+              "Accept": "application/json"
+            }
+          }
+        },
+        "act_on_action": {
+          "runAfter": {
+            "Set_action_final": [
+              "Succeeded"
+            ]
+          },
+          "cases": {
+            "CommitToGit": {
+              "case": "CommitToGit",
+              "actions": {
+                "CommitToGit": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "5da28290-9cfc-4b60-ad12-7d64bea643f4"
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/commitToGit",
+                    "headers": {
+                      "Authorization": "Bearer @{variables('accessToken')}",
+                      "Content-Type": "application/json"
+                    },
+                    "body": {
+                      "mode": "All",
+                      "workspaceHead": "@{body('Get_git_status')?['workspaceHead']}",
+                      "comment": "Initial sync from Fabric workspace"
+                    }
+                  },
+                  "operationOptions": "DisableAsyncPattern"
+                },
+                "Set_operationId_commit": {
+                  "runAfter": {
+                    "CommitToGit": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "98714a25-f142-4b84-b601-81d4d7afd777"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "operationId",
+                    "value": "@{coalesce(outputs('CommitToGit')?['headers']?['x-ms-operation-id'], outputs('CommitToGit')?['headers']?['X-Ms-Operation-Id'], last(split(coalesce(outputs('CommitToGit')?['headers']?['Location'],''),'/')), '')}"
+                  }
+                },
+                "Set_outcome_commit": {
+                  "runAfter": {
+                    "Set_operationId_commit": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "bac8e1e0-04cb-43b1-a93c-6e1368b92dd2"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "outcome",
+                    "value": "@{if(equals(outputs('CommitToGit')['statusCode'],202),'Started',\r\n if(less(outputs('CommitToGit')['statusCode'],300),'Completed','Failed'))}"
+                  }
+                },
+                "Set_message_commit": {
+                  "runAfter": {
+                    "Set_outcome_commit": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "7a35c344-c27d-4c31-ae27-14794ac72852"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "message",
+                    "value": "@{if(equals(outputs('CommitToGit')['statusCode'],202),'Commit started.',\r\n if(less(outputs('CommitToGit')['statusCode'],300),'Workspace committed to Git.',string(body('CommitToGit'))))}"
+                  }
+                }
+              }
+            },
+            "UpdateFromGit": {
+              "case": "UpdateFromGit",
+              "actions": {
+                "Update_from_git": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "b81d8df8-9817-40c6-ba5a-988bb44e3b0d"
+                  },
+                  "type": "Http",
+                  "inputs": {
+                    "method": "POST",
+                    "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/updateFromGit",
+                    "headers": {
+                      "Authorization": "Bearer @{variables('accessToken')}",
+                      "Content-Type": "application/json"
+                    },
+                    "body": "@json(concat('{', if(empty(coalesce(body('Get_git_status')?['workspaceHead'],'')), '', concat('\"workspaceHead\":\"', body('Get_git_status')?['workspaceHead'], '\",')), '\"remoteCommitHash\":\"', body('Get_git_status')?['remoteCommitHash'], '\",\"conflictResolution\":{\"conflictResolutionType\":\"Workspace\",\"conflictResolutionPolicy\":\"', if(empty(coalesce(triggerBody()?['text_2'],'')),'PreferRemote',triggerBody()?['text_2']), '\"},\"options\":{\"allowOverrideItems\":', if(variables('allowOverride'),'true','false'), '}}'))"
+                  },
+                  "operationOptions": "DisableAsyncPattern"
+                },
+                "Set_operationId_update": {
+                  "runAfter": {
+                    "Update_from_git": [
+                      "Succeeded",
+                      "Failed"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "ad24ed62-8721-4c47-981c-fde19fd5553d"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "operationId",
+                    "value": "@{coalesce(outputs('Update_from_git')?['headers']?['x-ms-operation-id'], outputs('Update_from_git')?['headers']?['X-Ms-Operation-Id'], last(split(coalesce(outputs('Update_from_git')?['headers']?['Location'],''),'/')), '')}"
+                  }
+                },
+                "Set_outcome_update": {
+                  "runAfter": {
+                    "Set_operationId_update": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "fcafb57b-71bd-46c5-916e-3c3e64f57ac5"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "outcome",
+                    "value": "@{if(equals(outputs('Update_from_git')['statusCode'],202),'Started',if(less(outputs('Update_from_git')['statusCode'],300),'Completed','Failed'))}"
+                  }
+                },
+                "Set_message_update": {
+                  "runAfter": {
+                    "Set_outcome_update": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "738849df-dfe5-4d55-8514-047ddcacc287"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "message",
+                    "value": "@{if(equals(outputs('Update_from_git')['statusCode'],202),'Update started.',if(less(outputs('Update_from_git')['statusCode'],300),'Workspace updated from Git.',string(body('Update_from_git'))))}"
+                  }
+                }
+              }
+            },
+            "InitFailed": {
+              "case": "InitFailed",
+              "actions": {
+                "Set_outcome_initfailed": {
+                  "runAfter": {},
+                  "metadata": {
+                    "operationMetadataId": "0d03afe4-ddcc-4450-a62a-b65ccf7947e8"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "outcome",
+                    "value": "Failed"
+                  }
+                },
+                "Set_message_initfailed": {
+                  "runAfter": {
+                    "Set_outcome_initfailed": [
+                      "Succeeded"
+                    ]
+                  },
+                  "metadata": {
+                    "operationMetadataId": "fe6fbe92-2e7d-42b3-9e46-fe4b3caeb276"
+                  },
+                  "type": "SetVariable",
+                  "inputs": {
+                    "name": "message",
+                    "value": "@{string(body('Initialize_with_strategy'))}"
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "actions": {
+              "set_outcome_nothing": {
+                "runAfter": {},
+                "metadata": {
+                  "operationMetadataId": "ced7810c-7b26-4dbb-9801-635b172ad3c9"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "outcome",
+                  "value": "NothingToDo"
+                }
+              },
+              "Set_message_nothing": {
+                "runAfter": {
+                  "set_outcome_nothing": [
+                    "Succeeded"
+                  ]
+                },
+                "metadata": {
+                  "operationMetadataId": "825705ef-b4bc-49d7-b111-cce707428559"
+                },
+                "type": "SetVariable",
+                "inputs": {
+                  "name": "message",
+                  "value": "Workspace and repository are already in sync."
+                }
+              }
+            }
+          },
+          "expression": "@variables('action')",
+          "metadata": {
+            "operationMetadataId": "dca9cc32-ea9c-4cb9-86d2-228dc28c8388"
+          },
+          "type": "Switch"
+        },
+        "Initialize_variable_outcome": {
+          "runAfter": {
+            "Initialize_variable_operationId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "a97ef438-54db-48ff-af00-acdc83d086cf"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "outcome",
+                "type": "string",
+                "value": "Failed"
+              }
+            ]
+          }
+        },
+        "Initialize_variable_message": {
+          "runAfter": {
+            "Initialize_variable_outcome": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "2f221093-cc20-4cba-9574-731d8840e61e"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "message",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Respond_to_a_Power_App_or_flow": {
+          "runAfter": {
+            "act_on_action": [
+              "Succeeded",
+              "Failed"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "b2c92f0d-d441-4864-a881-01533ec29c51"
+          },
+          "type": "Response",
+          "kind": "PowerApp",
+          "inputs": {
+            "statusCode": 200,
+            "body": {
+              "outcome": "@variables('outcome')",
+              "operationid": "@variables('operationId')",
+              "requiredaction": "@variables('action')",
+              "message": "@variables('message')"
+            },
+            "schema": {
+              "type": "object",
+              "properties": {
+                "outcome": {
+                  "title": "outcome",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "operationid": {
+                  "title": "operationId",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "requiredaction": {
+                  "title": "requiredAction",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                },
+                "message": {
+                  "title": "message",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "Initialize_variable_allowOverride": {
+          "runAfter": {
+            "Initialize_variable_message": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1259903b-8324-4621-9225-75ec12dfa348"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "allowOverride",
+                "type": "boolean",
+                "value": "@equals(triggerBody()?['text_2'],'PreferRemote')"
+              }
+            ]
+          }
+        },
+        "Set_action_final": {
+          "runAfter": {
+            "Get_git_status": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "58980206-847b-4f9f-81a2-c2cbf4b9a842"
+          },
+          "type": "SetVariable",
+          "inputs": {
+            "name": "action",
+            "value": "@{if(empty(coalesce(triggerBody()?['text_2'],'')),coalesce(triggerBody()?['text_1'],'None'),if(equals(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),409),if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit')),if(less(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),300),coalesce(body('Initialize_with_strategy')?['requiredAction'],if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit'))),'InitFailed')))}"
+          }
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

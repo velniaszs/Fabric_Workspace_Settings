@@ -130,7 +130,7 @@ Read flows may stay on PowerApp V2 with no row at all.
 
 Schema name `ab_gateway-5flst-5fapp-5fcon` (note the `ab_` prefix, not `crbab_`). Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
 
-Connection reference: `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02`.
+Connection reference: `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e4bca`.
 
 | Field | Value |
 |---|---|
@@ -325,7 +325,7 @@ Flow-level work is tracked as **F\<flow\>.\<n\>** in the *Issues* table in OPEN-
 5. Create the `Fabric Workspace Owner` security role and wire up the group team, connector share and app share (§6)
 6. Create `crbab_GitAuditLog` and the request table for the write pattern (§3)
 7. Run the end-to-end test scenario (OPEN-ISSUES §7)
-8. Build `ListMyConnections`, `AddConnectionRoleAssignment`, `DisconnectWorkspaceGit`
+8. Build `AddConnectionRoleAssignment`, `DisconnectWorkspaceGit`
 9. Move write flows onto the Dataverse request-row trigger (**F5.9**) — required before the app is shared
 11. Add the Git wizard screens to the canvas app
 12. Decide whether the `ListGateways` 5-page cap needs a "more results" indicator (OPEN-ISSUES §1.4)

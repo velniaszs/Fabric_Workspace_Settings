@@ -1,0 +1,11 @@
+<environmentvariabledefinition schemaname="ab_BrokerObjectId">
+  <defaultvalue>6f70a764-908f-435b-a930-ffcb375577f3</defaultvalue>
+  <displayname default="BrokerObjectId">
+    <label description="BrokerObjectId" languagecode="1033" />
+  </displayname>
+  <introducedversion>1.0.0.9</introducedversion>
+  <iscustomizable>1</iscustomizable>
+  <isrequired>0</isrequired>
+  <secretstore>0</secretstore>
+  <type>100000000</type>
+</environmentvariabledefinition>

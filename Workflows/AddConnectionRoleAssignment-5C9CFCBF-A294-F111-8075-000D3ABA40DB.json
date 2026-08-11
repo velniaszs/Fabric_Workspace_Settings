@@ -1,0 +1,208 @@
+{
+  "properties": {
+    "connectionReferences": {
+      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_8d410"
+        },
+        "api": {
+          "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+          "logicalName": "ab_gateway-5flst-5fapp-5fcon"
+        }
+      }
+    },
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$connections": {
+          "defaultValue": {},
+          "type": "Object"
+        },
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        },
+        "BrokerObjectId (ab_BrokerObjectId)": {
+          "defaultValue": "6f70a764-908f-435b-a930-ffcb375577f3",
+          "type": "String",
+          "metadata": {
+            "schemaName": "ab_BrokerObjectId"
+          }
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "26d3bd2d-0767-4cdc-9707-06e19692a723"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "connectionId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "ListConnectionRoleAssignments": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "c4471f58-19ad-4c7a-9c7a-85780b8346c1"
+          },
+          "type": "OpenApiConnection",
+          "inputs": {
+            "host": {
+              "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+              "operationId": "ListConnectionRoleAssignments",
+              "apiId": ""
+            },
+            "parameters": {
+              "fabricConnectionId": "@triggerBody()['text']"
+            },
+            "authentication": "@parameters('$authentication')"
+          }
+        },
+        "Filter_array": {
+          "runAfter": {
+            "ListConnectionRoleAssignments": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "46f34e90-3b19-48bb-a45f-2ace2068c977"
+          },
+          "type": "Query",
+          "inputs": {
+            "from": "@outputs('ListConnectionRoleAssignments')?['body/value']",
+            "where": "@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))"
+          }
+        },
+        "Condition": {
+          "actions": {
+            "AddConnectionRoleAssignment": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "a5daf64d-019c-4f3b-929d-312a8c17480e"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+                  "operationId": "AddConnectionRoleAssignment",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"
+                },
+                "parameters": {
+                  "fabricConnectionId": "@triggerBody()['text']",
+                  "body/principal/id": "@parameters('BrokerObjectId (ab_BrokerObjectId)')",
+                  "body/principal/type": "ServicePrincipal",
+                  "body/role": "User"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Respond_to_a_Power_App_or_flow": {
+              "runAfter": {
+                "AddConnectionRoleAssignment": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "6560622c-5a5d-403c-b280-618a0ce7834e"
+              },
+              "type": "Response",
+              "kind": "PowerApp",
+              "inputs": {
+                "statusCode": 200,
+                "body": {
+                  "outcome": "Granted",
+                  "message": "Broker granted User on the connection"
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "title": "outcome",
+                      "x-ms-dynamically-added": true,
+                      "type": "string"
+                    },
+                    "message": {
+                      "title": "message",
+                      "x-ms-dynamically-added": true,
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Filter_array": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Respond_to_a_Power_App_or_flow_2": {
+                "runAfter": {},
+                "metadata": {
+                  "operationMetadataId": "6706ead7-a5e5-4a68-8629-a7a47fd5b10f"
+                },
+                "type": "Response",
+                "kind": "PowerApp",
+                "inputs": {
+                  "statusCode": 200,
+                  "body": {
+                    "outcome": "AlreadyGranted",
+                    "message": "Broker already has access"
+                  },
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "outcome": {
+                        "title": "outcome",
+                        "x-ms-dynamically-added": true,
+                        "type": "string"
+                      },
+                      "message": {
+                        "title": "message",
+                        "x-ms-dynamically-added": true,
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expression": {
+            "equals": [
+              "@empty(body('Filter_array'))",
+              "@true"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "942c0663-225a-4744-a7d4-33fb8e105783"
+          },
+          "type": "If"
+        }
+      }
+    },
+    "templateName": ""
+  },
+  "schemaVersion": "1.0.0.0"
+}

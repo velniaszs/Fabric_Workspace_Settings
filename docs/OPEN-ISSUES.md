@@ -16,11 +16,11 @@ Last reviewed: 2026-08-07
 
 | ID | Area | Item | Why | Status |
 |---|---|---|---|---|
-| **F1.1** | GetFabricToken | Move tenant ID and client ID to environment variables; wire up the unused `ab_TenantId` | Hardcoded per-environment values need hand-editing after every import | 🔴 Open · §8.3 |
-| **F2.2** | GetGitOperationStatus | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage` | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item | � Built 2026-08-07, not exported · §1.13 |
-| **F2.4** | GetGitOperationStatus | Drop the `Do_until`, rename the flow, switch the trigger to `PowerAppV2`, call `GetFabricToken` internally, add `GET /operations/{id}/result` | A read the app can call directly; `/result` is the only source of `remoteCommitHash` | � Built 2026-08-07, not exported · §6.2 |
-| **F3.1** | ListGitConnections | Retire, or rebuild as `ListMyConnections` on the delegated connector | It lists the broker's connections; the picker must list the caller's | 🔴 Open · §10 |
-| **F4.1** | GetWorkspaceGitState | Demote from app-facing to internal guard — keep the flow, drop the screen | Contributors already see connection details in the Fabric UI | 🟡 Open · §10 |
+| **F1.1** | GetFabricToken | Move tenant ID and client ID to environment variables; wire up the unused `ab_TenantId` | Hardcoded per-environment values need hand-editing after every import | ✅ Done 2026-08-07, verified in export · §8.3 |
+| **F2.2** | GetGitOperationStatus | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage` | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item | ✅ Done 2026-08-07, verified in export · §1.13 |
+| **F2.4** | GetGitOperationStatus | Drop the `Do_until`, rename the flow, switch the trigger to `PowerAppV2`, call `GetFabricToken` internally, add `GET /operations/{id}/result` | A read the app can call directly; `/result` is the only source of `remoteCommitHash` | ✅ Done 2026-08-07, verified in export · §6.2 |
+| **F3.1** | Flow 3 | Retire, or rebuild as `ListMyConnections` on the delegated connector | It listed the broker's connections; the picker must list the caller's | ✅ Done 2026-08-07 |
+| **F4.1** | GetWorkspaceGitState | ~~Demote from app-facing to internal guard~~ | **Rejected 2026-08-07.** The wizard must read Git state before it can decide what to offer; flow 5 already guards itself inline, so there was nothing to demote it to | ✅ Closed, no change |
 | **F5.5** | ConnectWorkspaceToGit | Handle a **202** from `initializeConnection` — poll before reading `requiredAction` | On 202 the body is empty, every field resolves blank and the flow silently no-ops | 🔴 Open · §1.9 |
 | **F5.6** | ConnectWorkspaceToGit | Delete `options` (`allowOverrideItems: true`) from `Update_from_git`. `conflictResolution` already removed | The app must not consent to overwriting the owner's items | 🔴 Open · §1.10 |
 | **F5.7** | ConnectWorkspaceToGit | Add a `ConnectedSyncPending` outcome. **Only if** a refusal returns a synchronous 4xx: also make the Response reachable on failure | `Failed` is wrong when the workspace is connected; a 4xx aborts before `Respond_to_a_Power_App_or_flow` | 🟡 Open · §1.10 |
@@ -34,7 +34,7 @@ Last reviewed: 2026-08-07
 | **8.2** | ALM | Run-only settings do not survive import | Must be re-applied per flow, per environment, or users hit permission errors | 🟡 Open · §8.2 |
 | **8.4** | ALM | Write the post-import checklist | Needed before the first import into a second environment; needs a named owner | ⏸ Deferred · §8.4 |
 | **9** | Connector | Add scopes and connection operations | Must be **one pass** — a later scope forces every user to recreate their connection | 🔴 Open · §9 |
-| **10** | Build | Flows, tables and screens not yet built | `ListMyConnections`, `AddConnectionRoleAssignment`, `DisconnectWorkspaceFromGit`, `SyncWorkspaceWithGit`, `crbab_GitAuditLog`, wizard | 🔴 Open · §10 |
+| **10** | Build | Flows, tables and screens not yet built | `SyncWorkspaceWithGit`, `crbab_GitAuditLog`, wizard | 🔴 Open · §10 |
 
 **Do first:** F5.6, then F5.5. F5.9 authorization must land before the app is shared with anyone.
 
@@ -262,7 +262,7 @@ Accepted as a deliberate bound. Residual, unaddressed: when the cap is what stop
 
 ### 1.5 Stale connection reference — FIXED
 
-**Verified fixed 2026-08-06.** `customizations.xml` contains **zero** matches for `sharedwebcontents` / `shared_webcontents`. A single connection reference remains, `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_51f02`, pointing at the custom connector — which is correct.
+**Verified fixed 2026-08-06.** `customizations.xml` contains **zero** matches for `sharedwebcontents` / `shared_webcontents`. A single connection reference remains, pointing at the custom connector — which is correct. Its logical name changed to `…_e4bca` on 2026-08-07 when the connection was recreated during the consent fix (§9.3); recreating a connection mints a **new** connection reference, so re-export and confirm every flow moved across rather than assuming it.
 
 ### 1.6 Two different broker service principals (FN.1) — FIXED & EXPORTED
 
@@ -546,11 +546,13 @@ Scope and consent are done as of 2026-08-07; operations remain. The one-pass rul
 - Front-load any other scope this connector will ever need.
 - The app registration and the connector hold **separate copies** of the scope list and neither validates the other. Change the app registration first; a connector asking for an unpublished scope saves cleanly and fails later at connection creation.
 
-### 9.2 Operations
+### 9.2 Operations — added 2026-08-07
 
-`GET /connections`, `GET /connections/{fabricConnectionId}`, `POST /connections/{fabricConnectionId}/roleAssignments`, `GET /connections/{fabricConnectionId}/roleAssignments`.
+`ListConnections`, `GetConnection`, `AddConnectionRoleAssignment`, `ListConnectionRoleAssignments` are all present in the export alongside `ListGateways`.
 
 > **The path parameter cannot be called `connectionId`.** The Swagger validator rejects it — `ConnectionIdParameterNotAllowed`, "A parameter cannot be named as 'connectionId'" — because Power Platform reserves that name for binding an action to its connection. Every Fabric connection API documents the path as `{connectionId}`, so copying from the reference fails. The placeholder name is arbitrary; only the value is substituted, so `{fabricConnectionId}` produces an identical request.
+
+**Leftover: two empty path stubs.** The export still contains `"/connections/{connectionId}": {}` and `"/connections/{connectionId}/roleAssignments": {}` — remnants of the rejected first attempt. Re-running *Import from sample* with the new parameter name added fresh paths but did not remove the old keys. They carry no operations, so the validator passes and nothing breaks today, but they are dead entries that will confuse the next person to read the definition and may re-trip the validator if anything ever populates them. Delete both from the connector's Swagger view when convenient.
 
 The role-assignment `GET` is for idempotency: `AddConnectionRoleAssignment` returns **201** and the docs do not say what happens when the assignment already exists. Reading the list first avoids finding out the hard way on every re-run of the wizard. Adding an *operation* later is safe — only a new **scope** is expensive — but it is cheaper to do it in the same pass.
 
@@ -594,11 +596,11 @@ The Entra portal's *Enterprise applications → Permissions* blade shows the sam
 
 ### 10.1 Flows
 
-- `ListMyConnections` (delegated) — `GET /v1/connections`, filter to `AzureDevOpsSourceControl`, paginate with `continuationToken` (no server-side type filter). **Stays synchronous.**
-- `AddConnectionRoleAssignment` (delegated) — grant SPN-A `User` on the connection; runs on the **final** wizard step, before the write flow is called. Self-authorizing. **Stays synchronous** — the API returns 201 with the role assignment in the body; it is not a long-running operation, so there is no operation ID and nothing to poll.
-- `DisconnectWorkspaceFromGit` (SPN-A) — synchronous against Fabric; authorizes from the audit row like every other write flow.
 - **`SyncWorkspaceWithGit`** — stage 2; performs `commitToGit` / `updateFromGit`, and re-initializes with a strategy first when stage 1 could not decide (§10.6).
 - **`GetGitOperationStatus`** — built 2026-08-07 as flow 2; single-shot, read-only status for the app's Refresh button. See §10.5.
+- **`ListMyConnections`** — built 2026-08-07 as flow 3, delegated. See FLOWS §3.
+- **`AddConnectionRoleAssignment`** — built and tested 2026-08-10 as flow 7, delegated, both branches. See FLOWS §7.
+- **`DisconnectWorkspaceFromGit`** — built and tested 2026-08-10 as flow 6, both branches. Takes `workspaceId` directly; no ownership check yet (§10.3). See FLOWS §6.
 - Canvas app wizard screens, including the progress view and the stage-2 choice screen (§10.6).
 
 ### 10.2 Interactive, not queued — decided 2026-08-07
@@ -684,7 +686,20 @@ Called by the canvas app's Refresh button, and by nothing else. It is a **read**
 
 `initializeConnection` takes `initializationStrategy`, documented as the strategy "when content exists on **both** the remote side and the workspace side." Today the flow passes a strategy chosen in the wizard *before* anyone knows whether it matters. That asks the owner a question they cannot yet answer, and silently overwrites one side when they guess wrong.
 
-`RequiredAction` has exactly three values — `None`, `UpdateFromGit`, `CommitToGit`. **There is no `Conflict` value.** So Fabric reports the unambiguous cases as a `requiredAction`, and the ambiguous one has to arrive as the documented error `MissingInitializationPolicy`. That gives a clean probe.
+`RequiredAction` has exactly three values — `None`, `UpdateFromGit`, `CommitToGit`. **There is no `Conflict` value.** So Fabric reports the unambiguous cases as a `requiredAction`, and the ambiguous one arrives as the error `MissingInitializationStrategy`. That gives a clean probe.
+
+> **Verified 2026-08-10.** `ab_demo_5` (items, none of them in the repo) connected to `fabricrepo2/main/test` (one notebook), `initializationStrategy: None`:
+>
+> ```json
+> {
+>   "requestId": "96ff761e-e578-403e-83bd-a282d15dcbc9",
+>   "errorCode": "MissingInitializationStrategy",
+>   "message": "The requested operation requires an initialization strategy to be specified.",
+>   "isRetriable": false
+> }
+> ```
+>
+> Two findings. The code is `MissingInitializationStrategy`, **not** `MissingInitializationPolicy` as written here before — match on the real string. And `None` is accepted as a legitimate strategy value meaning "not chosen", not rejected as invalid input, so stage 1 can always send the field rather than building the body conditionally.
 
 **Stage 1** — `connect`, then `initializeConnection` with `initializationStrategy: None`:
 
@@ -693,7 +708,7 @@ Called by the canvas app's Refresh button, and by nothing else. It is a **read**
 | `requiredAction: None` | both sides empty, or already in sync | `Succeeded` — no stage 2 needed |
 | `requiredAction: UpdateFromGit` | workspace empty, repo has content | `UpdateFromGit`; sync down, no data can be lost |
 | `requiredAction: CommitToGit` | workspace has content, repo empty | `CommitToGit`; sync up, nothing to overwrite |
-| error `MissingInitializationPolicy` | **both** have content | `NeedsChoice` — ask the owner first |
+| error `MissingInitializationStrategy` | **both** have content | `NeedsChoice` — ask the owner first |
 
 **Stage 2 always runs — `SyncWorkspaceWithGit`.** Stage 1 connects and reports; stage 2 moves the content. For `UpdateFromGit` and `CommitToGit` the app calls it straight through with the `requiredAction` stage 1 returned. For `NeedsChoice` the app first shows what stage 1 found and offers `PreferRemote` (repo wins, workspace items are replaced) or `PreferWorkspace` (workspace wins, repo is overwritten) in the owner's words, not the API's — then passes the answer to the same flow, which re-calls `initializeConnection` with that strategy before syncing.
 
@@ -702,9 +717,19 @@ It is a separate flow, not a branch in `ConnectWorkspaceToGit`, because the work
 Two consequences worth stating plainly:
 
 - **Stage 1 mutates.** `connect` has already succeeded when the probe fails, so an owner who abandons at stage 2 leaves the workspace connected but not initialized. That is exactly `ConnectedSyncPending`, which makes **F5.7 unconditional and central** — not an edge case but a normal resting state with its own UI, offering resume or disconnect.
-- **The repo side cannot be inspected without connecting.** Fabric exposes no "is this directory empty" call. `GET /v1/workspaces/{workspaceId}/items` can tell the wizard whether the *workspace* is empty before anything is touched, but the repo side is only knowable through the probe.
+- **The repo side cannot be inspected without connecting.** Fabric exposes no "is this directory empty" call. `GET /v1/workspaces/{workspaceId}/items` can tell the wizard whether the *workspace* is empty before anything is touched, but the repo side is only knowable through the probe. `git/status` would answer it but requires an already-initialized connection.
 
-**To verify by test:** that both-non-empty with `initializationStrategy: None` really returns `MissingInitializationPolicy`. The error name and the strategy's own documentation both point that way, but no sample shows it. `ab_demo_5` (has items) against `fabricrepo2/test` (has content) is the test.
+**What the choice screen shows.** The workspace side comes from `GET /v1/workspaces/{workspaceId}/items` — a precise, named list. Add it to flow 4, which is already the app-facing read flow and already takes `workspaceId`. The repo side has no API, so the app links out instead, building the URL from values the wizard already holds:
+
+```
+https://dev.azure.com/{org}/{project}/_git/{repo}?path=/{directory}&version=GB{branch}
+```
+
+The conflict itself can be stated as fact rather than possibility, because `MissingInitializationStrategy` proves both sides are non-empty. A **pre**-connect warning can only ever be conditional — "if the target folder already contains items you will be asked to choose" — since the ambiguity is undetectable until `connect` has succeeded.
+
+**Verified 2026-08-10.** The probe behaves as designed for the ambiguous case — see the blockquote above. The three `requiredAction` rows are still inferred from the enum rather than observed; `ab_demo_git` (empty) against a populated folder would confirm `UpdateFromGit`, and an empty folder against a populated workspace would confirm `CommitToGit`.
+
+> **The probe cannot be repeated.** A second `initializeConnection` on the same workspace returns `409 WorkspaceGitConnectionAlreadyInitialized` (verified 2026-08-10). So stage 2 cannot re-derive `requiredAction` by calling it again — it must either accept the value stage 1 relayed through the app, or map the owner's chosen strategy onto the action directly. It also means an identical-content case answers `requiredAction: None` even when a strategy was supplied: choosing a side resolves ambiguity, it does not force a sync.
 
 ### 10.7 Open questions
 
@@ -717,4 +742,4 @@ Two consequences worth stating plainly:
 
 **Also descoped:** `crbab_GitConnection` and `crbab_WorkspaceGitMapping` tables — Fabric owns that state and the GET APIs return it live.
 
-**Superseded:** `ListGitConnections` (built) runs as the broker SPN, so it returns the SPN's connections rather than the caller's. Retire it or rebuild it as `ListMyConnections` on the delegated connector. See F3.1.
+**Resolved 2026-08-07.** The old flow 3 ran as the broker SPN and returned the SPN's connections rather than the caller's. It was renamed in place to `ListMyConnections` and its HTTP action swapped for the delegated connector, keeping its GUID and its pagination logic. See FLOWS §3.

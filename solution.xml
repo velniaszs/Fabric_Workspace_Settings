@@ -1,11 +1,11 @@
-<ImportExportXml version="9.2.26071.167" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26071.167" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26072.00144">
+<ImportExportXml version="9.2.26072.144" SolutionPackageVersion="9.2" languagecode="1033" generatedBy="CrmLive" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" OrganizationVersion="9.2.26072.144" OrganizationSchemaType="Standard" CRMServerServiceabilityVersion="9.2.26072.00144">
   <SolutionManifest>
     <UniqueName>WorkspaceSol</UniqueName>
     <LocalizedNames>
       <LocalizedName description="WorkspaceSol" languagecode="1033" />
     </LocalizedNames>
     <Descriptions />
-    <Version>1.0.0.9</Version>
+    <Version>1.0.0.10</Version>
     <Managed>0</Managed>
     <Publisher>
       <UniqueName>Arunas</UniqueName>
@@ -84,14 +84,18 @@
       <RootComponent type="29" id="{1e895d49-da8f-f111-8076-70a8a530ae85}" behavior="0" />
       <RootComponent type="29" id="{21afad93-eb84-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{39f29f3d-cf8f-f111-8076-7ced8d76cbfd}" behavior="0" />
+      <RootComponent type="29" id="{3fde40bb-ac94-f111-8075-000d3aba40db}" behavior="0" />
       <RootComponent type="29" id="{42395f29-8c89-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{4469367c-ad89-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{50895fca-088f-f111-8076-7ced8d76bf1b}" behavior="0" />
       <RootComponent type="29" id="{54775ced-cd85-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{5afcd720-158f-f111-8076-7ced8d76bf1b}" behavior="0" />
+      <RootComponent type="29" id="{5c9cfcbf-a294-f111-8075-000d3aba40db}" behavior="0" />
       <RootComponent type="29" id="{5ec91b70-4c8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="29" id="{8a588a8d-8e89-f111-ab0f-7c1e528d41fb}" behavior="0" />
+      <RootComponent type="29" id="{93d7af32-bc94-f111-8075-000d3aba40db}" behavior="0" />
       <RootComponent type="29" id="{98b3e46a-278f-f111-8076-7ced8d76bf1b}" behavior="0" />
+      <RootComponent type="29" id="{c32a020e-8894-f111-8075-7ced8d76cbfd}" behavior="0" />
       <RootComponent type="29" id="{f82666cb-4d8a-f111-ab0f-7c1e528d41fb}" behavior="0" />
       <RootComponent type="300" schemaName="crbab_app5_baf10" behavior="0" />
       <RootComponent type="372" id="{6fffdbfa-ad9f-43c3-b186-33ab4ccf8aa1}" schemaName="ab_gateway-5flst-5fapp-5fcon" behavior="0" />

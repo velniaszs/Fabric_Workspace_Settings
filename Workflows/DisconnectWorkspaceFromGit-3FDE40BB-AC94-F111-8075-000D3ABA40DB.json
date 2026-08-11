@@ -1,0 +1,197 @@
+{
+  "properties": {
+    "connectionReferences": {},
+    "definition": {
+      "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+      "contentVersion": "1.0.0.0",
+      "parameters": {
+        "$authentication": {
+          "defaultValue": {},
+          "type": "SecureObject"
+        }
+      },
+      "triggers": {
+        "manual": {
+          "metadata": {
+            "operationMetadataId": "37754fa3-987e-4570-9f8b-7ca7b98c2619"
+          },
+          "type": "Request",
+          "kind": "PowerAppV2",
+          "inputs": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "text": {
+                  "title": "workspaceId",
+                  "type": "string",
+                  "x-ms-dynamically-added": true,
+                  "description": "Please enter your input",
+                  "x-ms-content-hint": "TEXT"
+                }
+              },
+              "required": [
+                "text"
+              ]
+            }
+          }
+        }
+      },
+      "actions": {
+        "Run_a_Child_Flow": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "197aec57-957e-4689-9ec3-8bbaaad758b8"
+          },
+          "type": "Workflow",
+          "inputs": {
+            "host": {
+              "workflowReferenceName": "50895fca-088f-f111-8076-7ced8d76bf1b"
+            }
+          }
+        },
+        "Initialize_variable": {
+          "runAfter": {
+            "Run_a_Child_Flow": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "1d6e820b-754e-4843-a274-f6a01ddced39"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "accessToken",
+                "type": "string",
+                "value": "@body('Run_a_Child_Flow')?['access_token']"
+              }
+            ]
+          }
+        },
+        "Check_existing": {
+          "runAfter": {
+            "Initialize_variable": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "3113533c-9174-4f10-bb19-be5f528f3fde"
+          },
+          "type": "Http",
+          "inputs": {
+            "method": "GET",
+            "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connection",
+            "headers": {
+              "Authorization": "Bearer @{variables('accessToken')}"
+            }
+          }
+        },
+        "Condition": {
+          "actions": {
+            "Respond_to_a_Power_App_or_flow": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "729cbc2e-ec47-4381-9c5a-fca4b19e2bd1"
+              },
+              "type": "Response",
+              "kind": "PowerApp",
+              "inputs": {
+                "statusCode": 200,
+                "body": {
+                  "outcome": "NotConnected",
+                  "message": "Workspace is not connected to Git; nothing to disconnect."
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "outcome": {
+                      "title": "outcome",
+                      "x-ms-dynamically-added": true,
+                      "type": "string"
+                    },
+                    "message": {
+                      "title": "message",
+                      "x-ms-dynamically-added": true,
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "runAfter": {
+            "Check_existing": [
+              "Succeeded"
+            ]
+          },
+          "else": {
+            "actions": {
+              "Disconnect": {
+                "runAfter": {},
+                "metadata": {
+                  "operationMetadataId": "26bd69d1-b808-4b87-a67b-da8c656c03cc"
+                },
+                "type": "Http",
+                "inputs": {
+                  "method": "POST",
+                  "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/disconnect",
+                  "headers": {
+                    "Authorization": "Bearer @{variables('accessToken')}"
+                  }
+                }
+              },
+              "Respond_to_a_Power_App_or_flow_2": {
+                "runAfter": {
+                  "Disconnect": [
+                    "Succeeded",
+                    "Failed"
+                  ]
+                },
+                "metadata": {
+                  "operationMetadataId": "01f58b96-50f8-4c80-b4dc-37453782c6ee"
+                },
+                "type": "Response",
+                "kind": "PowerApp",
+                "inputs": {
+                  "statusCode": 200,
+                  "body": {
+                    "outcome": "@{if(equals(outputs('Disconnect')['statusCode'],200),'Disconnected','Failed')}",
+                    "message": "@{if(equals(outputs('Disconnect')['statusCode'],200),'Workspace disconnected from Git.',string(body('Disconnect')))}"
+                  },
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "outcome": {
+                        "title": "outcome",
+                        "x-ms-dynamically-added": true,
+                        "type": "string"
+                      },
+                      "message": {
+                        "title": "message",
+                        "x-ms-dynamically-added": true,
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "expression": {
+            "equals": [
+              "@equals(coalesce(body('Check_existing')?['gitConnectionState'],''), 'NotConnected')",
+              "@true"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "fa9cbfae-a96f-4ad5-a799-230aaadbf94b"
+          },
+          "type": "If"
+        }
+      }
+    },
+    "templateName": null
+  },
+  "schemaVersion": "1.0.0.0"
+}

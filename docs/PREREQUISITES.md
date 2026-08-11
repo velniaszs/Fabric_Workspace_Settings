@@ -21,7 +21,7 @@ Last reviewed: 2026-08-07
 | **D1** | ADO repo, branch and target folder exist | Azure DevOps | Repo contributor | ➖ Per workspace, owner's job |
 | **E1** | Solution imported | Power Platform | System Administrator | Per environment |
 | **E2** | Connection references bound to real connections | Power Platform | System Administrator | Per environment |
-| **E3** | Environment variable values supplied | Power Platform | System Administrator | 🔴 Not wired up yet |
+| **E3** | Environment variable values supplied | Power Platform | System Administrator | Per environment |
 | **E4** | Client secret re-entered in `GetFabricToken` | Power Automate | Flow owner | Per environment |
 | **E5** | Run-only users configured per flow | Power Automate | Flow owner | Per environment |
 | **E6** | Security role `Fabric Workspace Owner` created and assigned to a group team | Power Platform | System Administrator | 🔴 Open |
@@ -148,7 +148,17 @@ A connection reference is a pointer; the **connection** holds the credentials an
 
 ### E3 — Supply environment variable values
 
-`ab_TenantId` exists but is **referenced by nothing** — it was created and never wired up. Until `GetFabricToken` uses it, the tenant and client IDs stay hardcoded and must be hand-edited after every import. See OPEN-ISSUES §8.3.
+Three, all describing the broker identity:
+
+| Variable | Value in this tenant | Consumed by |
+|---|---|---|
+| `ab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` |
+| `ab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` |
+| `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | `AddConnectionRoleAssignment` (flow 7) |
+
+`BrokerClientId` and `BrokerObjectId` are two different identifiers for the same service principal and are not interchangeable. Entra token requests take the **client (application)** ID; the Fabric roleAssignments API takes the **object** ID of the service principal in the tenant. Getting them the wrong way round fails at runtime, not at import.
+
+Set all three at import. The values above are current-environment defaults carried by the export — they are defaults, not bindings, so an import that skips the prompt silently keeps pointing at this tenant.
 
 ### E4 — Re-enter the client secret
 
@@ -194,7 +204,7 @@ Unlike E3, this is not an environment variable and cannot be supplied at import 
 ### F1 — Connection and role assignment
 
 1. The owner creates their own *Azure DevOps – Source Control* connection in the Fabric UI and is **Owner** on it.
-2. The app grants the broker SPN the `User` role on that connection, passing the broker's **object ID** `6f70a764-908f-435b-a930-ffcb375577f3`.
+2. The app grants the broker SPN the `User` role on that connection, passing the broker's **object ID**, read from the `ab_BrokerObjectId` environment variable (E3) rather than hardcoded.
 
 Step 2 runs **delegated as the owner**, because an SPN cannot grant itself a role on a connection. It needs `Connection.ReadWrite.All` on the delegated connector (A2).
 
@@ -217,8 +227,7 @@ Run in order. Each step isolates the prerequisite above it.
 
 ## Known gaps
 
-- **A2** is granted and consented for the test user only. `user6` and `user8` still hold pre-change grants carrying `Gateway.Read.All` alone and must be revoked before they can use flows 7 or 8 (OPEN-ISSUES §9.3).
+- **A2** is granted and consented for the test user only. `user6` and `user8` still hold pre-change grants carrying `Gateway.Read.All` alone and must be revoked before they can use flows 3 or 7 (OPEN-ISSUES §9.3).
 - **B2** has not been explicitly verified.
-- **E3** cannot be completed until the flows reference environment variables.
 - **E8** has no supported per-environment mechanism; it is a manual edit on every import.
 - Secret rotation is the customer's responsibility (OPEN-ISSUES §2). Note that rotating a secret means redoing **E4** in every environment.
