@@ -69,13 +69,6 @@
                   "x-ms-dynamically-added": true,
                   "description": "Please enter your input",
                   "x-ms-content-hint": "TEXT"
-                },
-                "text_7": {
-                  "title": "initializationStrategy",
-                  "type": "string",
-                  "x-ms-dynamically-added": true,
-                  "description": "Please enter your input",
-                  "x-ms-content-hint": "TEXT"
                 }
               },
               "required": [
@@ -85,8 +78,7 @@
                 "text_3",
                 "text_4",
                 "text_5",
-                "text_6",
-                "text_7"
+                "text_6"
               ]
             }
           }
@@ -106,8 +98,7 @@
             "projectName": "@{triggerBody()?['text_3']}",
             "repositoryName": "@{triggerBody()?['text_4']}",
             "branchName": "@{triggerBody()?['text_5']}",
-            "directoryName": "@{triggerBody()?['text_6']}",
-            "initializationStrategy": "@{triggerBody()?['text_7']}"
+            "directoryName": "@{triggerBody()?['text_6']}"
           }
         },
         "Run_a_Child_Flow": {
@@ -161,7 +152,7 @@
               {
                 "name": "outcome",
                 "type": "string",
-                "value": "Unknown"
+                "value": "Failed"
               }
             ]
           }
@@ -206,7 +197,7 @@
         },
         "Check_existing": {
           "runAfter": {
-            "Initialize_operationId": [
+            "Initialize_requiredAction": [
               "Succeeded"
             ]
           },
@@ -295,224 +286,100 @@
                   "Content-Type": "application/json"
                 },
                 "body": {
-                  "initializationStrategy": "@{triggerBody()['text_7']}"
+                  "initializationStrategy": "None"
                 }
               }
             },
-            "act_on_requiredAction": {
+            "Set_outcome": {
               "runAfter": {
                 "Initialize_connection": [
-                  "Succeeded"
+                  "Succeeded",
+                  "Failed"
                 ]
               },
-              "cases": {
-                "Case": {
-                  "case": "CommitToGit",
-                  "actions": {
-                    "CommitToGit": {
-                      "runAfter": {},
-                      "metadata": {
-                        "operationMetadataId": "90e153d4-d3f2-4854-bcd1-0266ea61088f"
-                      },
-                      "type": "Http",
-                      "inputs": {
-                        "method": "POST",
-                        "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/commitToGit",
-                        "headers": {
-                          "Authorization": "Bearer @{variables('accessToken')}",
-                          "Content-Type": "application/json"
-                        },
-                        "body": {
-                          "mode": "All",
-                          "workspaceHead": "@{body('Initialize_connection')?['workspaceHead']}",
-                          "comment": "Initial sync from Fabric workspace"
-                        }
-                      }
-                    },
-                    "Set_variable_3": {
-                      "runAfter": {
-                        "CommitToGit": [
-                          "Succeeded"
-                        ]
-                      },
-                      "metadata": {
-                        "operationMetadataId": "45fdbcab-03ec-4f54-a755-7c9b7e76b7b4"
-                      },
-                      "type": "SetVariable",
-                      "inputs": {
-                        "name": "operationId",
-                        "value": "@{coalesce(outputs('CommitToGit')?['headers']?['x-ms-operation-id'], outputs('CommitToGit')?['headers']?['X-Ms-Operation-Id'], '')}"
-                      }
-                    }
-                  }
-                },
-                "Case_2": {
-                  "case": "UpdateFromGit",
-                  "actions": {
-                    "Update_from_git": {
-                      "runAfter": {},
-                      "metadata": {
-                        "operationMetadataId": "1c4f0834-6a76-482b-908a-3dc5d8a32c3b"
-                      },
-                      "type": "Http",
-                      "inputs": {
-                        "method": "POST",
-                        "uri": "https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/updateFromGit",
-                        "headers": {
-                          "Authorization": "Bearer @{variables('accessToken')}",
-                          "Content-Type": "application/json"
-                        },
-                        "body": {
-                          "remoteCommitHash": "@{body('Initialize_connection')?['remoteCommitHash']}",
-                          "options": {
-                            "allowOverrideItems": true
-                          }
-                        }
-                      }
-                    },
-                    "Set_variable_2": {
-                      "runAfter": {
-                        "Update_from_git": [
-                          "Succeeded"
-                        ]
-                      },
-                      "metadata": {
-                        "operationMetadataId": "98aaa2c2-2abe-42bc-a940-e3c92a711205"
-                      },
-                      "type": "SetVariable",
-                      "inputs": {
-                        "name": "operationId",
-                        "value": "@{coalesce(outputs('Update_from_git')?['headers']?['x-ms-operation-id'], outputs('Update_from_git')?['headers']?['X-Ms-Operation-Id'], '')}"
-                      }
-                    }
-                  }
-                }
-              },
-              "default": {
-                "actions": {
-                  "Set_variable": {
-                    "runAfter": {},
-                    "metadata": {
-                      "operationMetadataId": "840e6c86-a32b-4460-84ba-51317153316f"
-                    },
-                    "type": "SetVariable",
-                    "inputs": {
-                      "name": "outcome",
-                      "value": "Connected"
-                    }
-                  }
-                }
-              },
-              "expression": "@body('Initialize_connection')?['requiredAction']",
               "metadata": {
-                "operationMetadataId": "59bdfdc0-7907-467d-9f8d-d06d33c35e54"
+                "operationMetadataId": "ecc18132-503d-4a19-9d6b-be14f465c6f7"
               },
-              "type": "Switch"
+              "type": "SetVariable",
+              "inputs": {
+                "name": "outcome",
+                "value": "@{if(equals(coalesce(outputs('Initialize_connection')?['statusCode'],0),202),'Pending',if(less(coalesce(outputs('Initialize_connection')?['statusCode'],0),300),'Connected',if(equals(coalesce(body('Initialize_connection')?['errorCode'],''),'MissingInitializationStrategy'),'NeedsChoice','Failed')))}"
+              }
             },
-            "Has_operation": {
-              "actions": {
-                "Condition": {
-                  "actions": {
-                    "Set_variable_4": {
-                      "runAfter": {},
-                      "metadata": {
-                        "operationMetadataId": "10d33cd5-88c5-4f9e-94d6-93e101204580"
-                      },
-                      "type": "SetVariable",
-                      "inputs": {
-                        "name": "outcome",
-                        "value": "Connected"
-                      }
-                    }
-                  },
-                  "runAfter": {},
-                  "else": {
-                    "actions": {
-                      "Set_variable_5": {
-                        "runAfter": {},
-                        "metadata": {
-                          "operationMetadataId": "a816f105-7667-44f0-8e6a-43ff2218e580"
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                          "name": "outcome",
-                          "value": "Failed"
-                        }
-                      },
-                      "Set_variable_6": {
-                        "runAfter": {
-                          "Set_variable_5": [
-                            "Succeeded"
-                          ]
-                        },
-                        "metadata": {
-                          "operationMetadataId": "06a6635b-7f57-44c5-a8f9-9ae6f663d0e4"
-                        },
-                        "type": "SetVariable",
-                        "inputs": {
-                          "name": "message",
-                          "value": "@variables('outcome')"
-                        }
-                      }
-                    }
-                  },
-                  "expression": {
-                    "equals": [
-                      "@variables('outcome')",
-                      "Succeeded"
-                    ]
-                  },
-                  "metadata": {
-                    "operationMetadataId": "fefabbee-33d2-45e6-8aaa-5512ba7aa377"
-                  },
-                  "type": "If"
-                }
-              },
+            "Set_requiredAction": {
               "runAfter": {
-                "act_on_requiredAction": [
+                "Set_outcome": [
                   "Succeeded"
                 ]
               },
-              "else": {
-                "actions": {
-                  "Set_variable_7": {
-                    "runAfter": {},
-                    "metadata": {
-                      "operationMetadataId": "a57a60a9-f244-429d-9685-3b5e4191d56d"
-                    },
-                    "type": "SetVariable",
-                    "inputs": {
-                      "name": "outcome",
-                      "value": "Connected"
-                    }
-                  },
-                  "Set_variable_8": {
-                    "runAfter": {
-                      "Set_variable_7": [
-                        "Succeeded"
-                      ]
-                    },
-                    "metadata": {
-                      "operationMetadataId": "990cd4de-725b-484b-9d3e-9234e9c5e778"
-                    },
-                    "type": "SetVariable",
-                    "inputs": {
-                      "name": "message",
-                      "value": "Connected and initialized. No sync operation required."
-                    }
-                  }
-                }
+              "metadata": {
+                "operationMetadataId": "4722e749-d846-466c-9dc3-4f51114e3525"
               },
-              "expression": {
-                "equals": [
-                  "@empty(variables('operationId'))",
-                  "@false"
+              "type": "SetVariable",
+              "inputs": {
+                "name": "requiredAction",
+                "value": "@{if(less(coalesce(outputs('Initialize_connection')?['statusCode'],0),300),coalesce(body('Initialize_connection')?['requiredAction'],'None'),'None')}"
+              }
+            },
+            "Set_message": {
+              "runAfter": {
+                "Set_requiredAction": [
+                  "Succeeded"
                 ]
               },
               "metadata": {
-                "operationMetadataId": "d8cbc72c-04c4-4856-a2e7-5f50ab832d43"
+                "operationMetadataId": "9d16cf9d-d4e6-4689-b1a0-92fa0a6285a2"
               },
-              "type": "If"
+              "type": "SetVariable",
+              "inputs": {
+                "name": "message",
+                "value": "@{if(less(coalesce(outputs('Initialize_connection')?['statusCode'],0),300),'Connected and initialized.',if(equals(coalesce(body('Initialize_connection')?['errorCode'],''),'MissingInitializationStrategy'),'Workspace and repository both contain items. Choose which side wins.',string(body('Initialize_connection'))))}"
+              }
+            },
+            "Set_operationId_probe": {
+              "runAfter": {
+                "Set_message": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "b0a3d91d-3781-49df-b1dd-4fc63274fb20"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "operationId",
+                "value": "@{coalesce(outputs('Initialize_connection')?['headers']?['x-ms-operation-id'], outputs('Initialize_connection')?['headers']?['X-Ms-Operation-Id'], last(split(coalesce(outputs('Initialize_connection')?['headers']?['Location'],''),'/')), '')}"
+              }
+            },
+            "Set_outcome_connectfailed": {
+              "runAfter": {
+                "Connect": [
+                  "Failed"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "77c01563-5feb-400c-94e5-efc3151e4ddc"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "outcome",
+                "value": "Failed"
+              }
+            },
+            "Set_message_connectfailed": {
+              "runAfter": {
+                "Set_outcome_connectfailed": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "04be6967-17aa-402d-844e-7deac1925ce3"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "message",
+                "value": "@{string(body('Connect'))}"
+              }
             }
           },
           "runAfter": {
@@ -564,7 +431,8 @@
         "Respond_to_a_Power_App_or_flow": {
           "runAfter": {
             "Is_not_connected": [
-              "Succeeded"
+              "Succeeded",
+              "Failed"
             ]
           },
           "metadata": {
@@ -577,7 +445,8 @@
             "body": {
               "outcome": "@variables('outcome')",
               "message": "@variables('message')",
-              "operationid": "@variables('operationId')"
+              "operationid": "@variables('operationId')",
+              "requiredaction": "@variables('requiredAction')"
             },
             "schema": {
               "type": "object",
@@ -596,9 +465,34 @@
                   "title": "operationId",
                   "x-ms-dynamically-added": true,
                   "type": "string"
+                },
+                "requiredaction": {
+                  "title": "requiredAction",
+                  "x-ms-dynamically-added": true,
+                  "type": "string"
                 }
               }
             }
+          }
+        },
+        "Initialize_requiredAction": {
+          "runAfter": {
+            "Initialize_operationId": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "0de0f933-3487-4e7a-9d97-2e1b6ecbf949"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "requiredAction",
+                "type": "string",
+                "value": "None"
+              }
+            ]
           }
         }
       }

@@ -202,11 +202,7 @@
                       "Authorization": "Bearer @{variables('accessToken')}",
                       "Content-Type": "application/json"
                     },
-                    "body": {
-                      "mode": "All",
-                      "workspaceHead": "@{body('Get_git_status')?['workspaceHead']}",
-                      "comment": "Initial sync from Fabric workspace"
-                    }
+                    "body": "@json(concat('{\"mode\":\"All\",\"comment\":\"Sync from Fabric workspace\"', if(empty(coalesce(body('Get_git_status')?['workspaceHead'],'')), '', concat(',\"workspaceHead\":\"', body('Get_git_status')?['workspaceHead'], '\"')), '}'))"
                   },
                   "operationOptions": "DisableAsyncPattern"
                 },
@@ -503,7 +499,8 @@
         "Set_action_final": {
           "runAfter": {
             "Get_git_status": [
-              "Succeeded"
+              "Succeeded",
+              "Failed"
             ]
           },
           "metadata": {

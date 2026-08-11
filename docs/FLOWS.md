@@ -21,7 +21,7 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 | 5 | ConnectWorkspaceToGit | Yes | Both sync directions passing end to end 2026-08-07. **Being restructured** into stage 1 — connect + probe, then stop (OPEN-ISSUES §10.6) |
 | 6 | DisconnectWorkspaceFromGit | Yes | **Built and tested 2026-08-10**. Both branches exercised — connected and not connected |
 | 7 | AddConnectionRoleAssignment | Yes | **Built and tested 2026-08-10**, delegated. Both condition branches exercised |
-| 8 | SyncWorkspaceWithGit | No | To build — stage 2, performs `commitToGit` / `updateFromGit` |
+| 8 | SyncWorkspaceWithGit | Yes | **Built and tested 2026-08-11.** All six paths exercised; verified in export |
 
 **Descoped:** `GetGitSyncStatus`, `CommitWorkspaceToGit`, `UpdateWorkspaceFromGit` — Contributors already do all three in the Fabric UI. Also `ChangeGitConnectionSettings`: there is **no update/PATCH API for a Git connection**, so changing branch or directory is disconnect + reconnect, which the existing two flows already cover.
 
@@ -209,35 +209,81 @@ Runs on the **final** wizard step, immediately before the write flow is called, 
 
 ---
 
-## Changes required to the built flows
-
-Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md) — one register for the whole project, not a second list. The flow numbers there match the Status table above.
-
----
-
-## Flows still to build
-
 ### 8. SyncWorkspaceWithGit
 
-Stage 2. Always called after `ConnectWorkspaceToGit` succeeds — stage 1 connects and reports, stage 2 moves the content.
+Built and tested 2026-08-11. Stage 2 — moves content once the workspace is already connected. A separate flow rather than a branch in flow 5, because the workspace is connected by the time it runs and calling `connect` again would fail.
 
 | | |
 |---|---|
-| Trigger | **Power Apps (V2)** — `auditRowId`, `requiredAction`, `initializationStrategy` (empty unless the owner had to choose) |
-| Calls | `initializeConnection` with the chosen strategy **only** when stage 1 returned `NeedsChoice`, then `commitToGit` or `updateFromGit` |
-| Returns | `outcome`, `message`, `messageDetails`, `operationId` |
+| Trigger | **Power Apps (V2)** — `text` = `workspaceId`, `text_1` = `requiredAction`, `text_2` = `initializationStrategy` (optional) |
+| Calls | `GetFabricToken` (child), `initializeConnection` (conditional), `git/status`, then `commitToGit` or `updateFromGit` |
+| Returns | `outcome`, `operationid`, `requiredaction`, `message` |
 
-Inherits `act_on_requiredAction`, `CommitToGit` and `Update_from_git` from flow 5 — moved, not rewritten.
+As built:
 
-**It does not wait.** The sync returns `202` with an `x-ms-operation-id` when Fabric queues the work — return the ID and let the owner watch with flow 2 if they care.
+1. `Run_a_Child_Flow` → `GetFabricToken`, then six `Initialize variable` actions: `accessToken`, `action`, `operationId`, `outcome` (seeded `Failed`), `message`, and `allowOverride` — a **boolean**, `@equals(triggerBody()?['text_2'],'PreferRemote')`.
+2. `Condition_needs_strategy` — `@not(empty(coalesce(triggerBody()?['text_2'],'')))`. Yes branch calls `initializeConnection` with the chosen strategy. No branch is empty.
+3. `Get_git_status` — runs after the Condition on **Succeeded or Failed**, because a `409` from initialize is expected and must not stop the flow.
+4. `Set_action_final` — derives the action to take. See the table below.
+5. `act_on_action` — Switch on `@variables('action')` with cases `CommitToGit`, `UpdateFromGit`, `InitFailed`, and a default meaning nothing to do.
+6. `Respond_to_a_Power_App_or_flow` — runs after the Switch on **Succeeded or Failed**.
 
-> **`commitToGit` can also return `200`, verified 2026-08-10.** A small workspace committed inline: status `200`, no operation ID, nothing to poll. So the response must distinguish `Completed` (200) from `Started` (202) rather than assuming every sync is long-running. An empty `operationId` is a legitimate result, not a bug, and the app must not treat it as one.
+**Ordering is load-bearing.** `Get_git_status` must stay after `Condition_needs_strategy`: status requires an initialized connection, so on a `NeedsChoice` workspace it only works once initialize has run.
 
-A separate flow rather than a branch in flow 5, because the workspace is **already connected** by the time it runs — calling `connect` again would fail.
+#### `Set_action_final`
 
-Same authorization pattern: read `_createdby_value` from the audit row, check it against `crbab_Workspaces`, fail closed.
+Fabric's own answer is not always available, so the action is derived rather than read:
+
+| Situation | Result |
+|---|---|
+| No strategy passed | the caller's `requiredAction` |
+| Initialize succeeded, body carries `requiredAction` | that value |
+| Initialize succeeded but body has none (the `202` case) | derived from `git/status` |
+| `409 WorkspaceGitConnectionAlreadyInitialized`, `changes` empty | `None` |
+| `409`, changes pending | strategy decides direction |
+| Any other initialize failure | `InitFailed` |
+
+The `409` rows matter: `initializeConnection` is not idempotent, so any re-run of a connected workspace lands there. Reading `git/status` rather than mapping the strategy blindly is what stops a re-run from firing a pointless sync.
+
+It runs after `Get_git_status` on **Succeeded or Failed**. Status fails when initialize failed and left the connection uninitialized; without the `Failed` branch the Switch and the Response are skipped, and Skipped satisfies neither run-after condition, so the flow would end with no answer at all and the app would see a hard error instead of `outcome: Failed`.
+
+The expression guards every reference with `coalesce(outputs('Initialize_with_strategy')?['statusCode'], 0)`. Logic Apps evaluates function arguments eagerly, so the expression touches that action even on the no-strategy path where it never ran.
+
+#### Request bodies
+
+Both sync bodies are built with `json(concat(...))` as a single expression, because `workspaceHead` must be **present or absent**, never empty:
+
+- `commitToGit` — `mode: All`, a comment, and `workspaceHead` only when `git/status` returned one.
+- `updateFromGit` — `remoteCommitHash`, `conflictResolution` (`Workspace` + the chosen policy, defaulting to `PreferRemote`), `options.allowOverrideItems` from the boolean variable, and `workspaceHead` on the same condition.
+
+#### Asynchronous Pattern
+
+`CommitToGit` and `Update_from_git` carry `"operationOptions": "DisableAsyncPattern"`; `Initialize_with_strategy` deliberately does not.
+
+Both sync APIs always return `202`, so with the default setting the action would poll to completion and swallow the operation ID — and on a large workspace it would blow the 120-second limit on the response to the app. `initializeConnection` does not move data (it reports the required action and the sync APIs do the work), so it is fast enough to resolve inline, and leaving the setting on means the normal `200` path yields `requiredAction` directly.
+
+#### Outcomes
+
+| `outcome` | Meaning |
+|---|---|
+| `Started` | `202` — poll `operationid` with flow 2 |
+| `Completed` | other 2xx — nothing to poll |
+| `NothingToDo` | already in sync |
+| `Failed` | Fabric rejected the call; the raw payload is in `message` |
+
+`Set_operationId_*` and the Response run after **Succeeded or Failed**, so a Fabric error is reported as data rather than failing the run. Verified: a failed sync still returns a response and the run itself shows Succeeded.
+
+Verified paths, 2026-08-11: in-sync no-op; `UpdateFromGit` with `allowOverrideItems` false and true, both unquoted; `NeedsChoice` + `PreferRemote` with changes pending and with none; `PreferWorkspace` → `CommitToGit`; `InitFailed` carrying `MissingInitializationStrategy`; and an operation ID resolved through flow 2 to `Succeeded`.
+
+> **No authorization check yet.** The flow syncs any workspace the broker administers, for any caller who can run it. Deferred by decision — see OPEN-ISSUES §10.3.
 
 > **`SweepGitRequests` was considered and dropped 2026-08-07.** A background sweeper only earns its keep when a queued request can be stranded. Nothing queues here, and Fabric completes the sync whether or not anyone is watching. Recorded so the idea is not reinvented.
+
+---
+
+## Changes required to the built flows
+
+Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md) — one register for the whole project, not a second list. The flow numbers there match the Status table above.
 
 ---
 
@@ -300,6 +346,8 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 **Reading the 202 from a Git sync.** Verified on `updateFromGit` 2026-08-11 with Asynchronous Pattern Off. The operation ID arrives as **`x-ms-operation-id`, lowercase**. `Retry-After: 20` is Fabric's own suggested poll interval — honour it instead of inventing a timer. `Location` points at a regional redirect host (`wabi-west-us3-a-primary-redirect.analysis.windows.net`) with `request-redirected: true`, **not** at `api.fabric.microsoft.com`, so use it only as a source for the trailing ID and always poll `https://api.fabric.microsoft.com/v1/operations/{id}`. The `202` body is the literal `null`, not empty. `Access-Control-Expose-Headers` lists exactly which headers are readable: `RequestId,Location,Retry-After,x-ms-operation-id`.
 
 **`workspaceHead` is required once the workspace has one.** The docs say the value "may be null only after Initialize Connection" — that is a rule about *when omission is legal*, not a hint that the field is optional. Omit it on a synced workspace and `updateFromGit` fails `400 WorkspaceHeadMismatch`. Build the body conditionally: include `workspaceHead` when `git/status` returns one, omit it when it returns null. It also means status must be read in the same run as the sync call — a user acting on a stale status screen will hit this error, so the app should treat it as *refresh and retry*, not as a hard failure.
+
+**A null `workspaceHead` has never actually been observed.** The obvious candidate — a first-ever commit into an empty Git folder — does not produce one. Verified 2026-08-11: `ab_demo_5` connected to a fresh `test2` directory holding nothing but a placeholder file, initialized, and the resulting `commitToGit` body still carried `workspaceHead: 2b2c58771e44d370039e6446f6f924783dd4c1c4`. `initializeConnection` derives the head from the workspace's own state; what is or isn't on the remote doesn't affect it. Keep the conditional body as a guard against the documented null, but don't expect the omit branch to run, and don't spend time trying to reproduce it.
 
 **`initializeConnection` is not idempotent.** A second call returns `409 WorkspaceGitConnectionAlreadyInitialized` — verified 2026-08-10. Any flow that initializes must tolerate the 409 and carry on rather than treating it as failure, otherwise a retry after an unrelated error can never get past it. On 409 the strategy maps straight to the action: `PreferRemote` → `UpdateFromGit`, `PreferWorkspace` → `CommitToGit`.
 

@@ -34,7 +34,7 @@ Last reviewed: 2026-08-07
 | **8.2** | ALM | Run-only settings do not survive import | Must be re-applied per flow, per environment, or users hit permission errors | 🟡 Open · §8.2 |
 | **8.4** | ALM | Write the post-import checklist | Needed before the first import into a second environment; needs a named owner | ⏸ Deferred · §8.4 |
 | **9** | Connector | Add scopes and connection operations | Must be **one pass** — a later scope forces every user to recreate their connection | 🔴 Open · §9 |
-| **10** | Build | Flows, tables and screens not yet built | `SyncWorkspaceWithGit`, `crbab_GitAuditLog`, wizard | 🔴 Open · §10 |
+| **10** | Build | Flows, tables and screens not yet built | `crbab_GitAuditLog`, wizard, flow 5 stage-1 restructure | 🔴 Open · §10 |
 
 **Do first:** F5.6, then F5.5. F5.9 authorization must land before the app is shared with anyone.
 
@@ -596,7 +596,7 @@ The Entra portal's *Enterprise applications → Permissions* blade shows the sam
 
 ### 10.1 Flows
 
-- **`SyncWorkspaceWithGit`** — stage 2; performs `commitToGit` / `updateFromGit`, and re-initializes with a strategy first when stage 1 could not decide (§10.6).
+- **`SyncWorkspaceWithGit`** — built and tested 2026-08-11 as flow 8. Stage 2; performs `commitToGit` / `updateFromGit`, and initializes with a strategy first when stage 1 could not decide (§10.6). All six paths verified. See FLOWS §8.
 - **`GetGitOperationStatus`** — built 2026-08-07 as flow 2; single-shot, read-only status for the app's Refresh button. See §10.5.
 - **`ListMyConnections`** — built 2026-08-07 as flow 3, delegated. See FLOWS §3.
 - **`AddConnectionRoleAssignment`** — built and tested 2026-08-10 as flow 7, delegated, both branches. See FLOWS §7.
