@@ -36,7 +36,7 @@ Last reviewed: 2026-08-11
 | **8.4** | ALM | Write the post-import checklist | Needed before the first import into a second environment; needs a named owner | ⏸ Deferred · §8.4 |
 | **9** | Connector | Delete the two empty `{connectionId}` path stubs left by the rejected first attempt | Dead entries that will confuse the next reader; scopes and operations themselves are done | 🟡 Open · §9.2 |
 | **10** | Build | Flows, tables and screens not yet built | `crbab_GitAuditLog`, wizard, flow 4 item list | 🔴 Open · §10 |
-| **11** | Connector | `ListConnectionRoleAssignments` sends no `continuationToken`, so only the first page is checked | An existing broker grant on page 2 would be missed and re-granted | 🟡 Open · FLOWS §7 |
+| **11** | Flow 7 | ~~`ListConnectionRoleAssignments` sends no `continuationToken`~~ | ✅ **Done 2026-08-11.** `Do_until` paging added, mirroring flow 3; connector already supported it. Single-page path re-verified | ✅ Done · FLOWS §7 |
 
 **Do first:** F5.10 and the `crbab_GitAuditLog` table, since the wizard depends on both. F5.9 authorization must land before the app is shared with anyone.
 

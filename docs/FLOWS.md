@@ -57,6 +57,8 @@ A read. The app asks what state an operation is in; this answers and changes not
 
 Rewritten in place from `PollFabricOperation` on 2026-08-07 — renamed rather than rebuilt, so the flow GUID and connection references survive.
 
+> **The canvas app must call this as `PollFabricOperation.Run(...)`.** A rename changes the display name only; the identifier Power Fx binds to is fixed when the flow is created. Using `GetGitOperationStatus` gives *'Run' is an unknown or unsupported function in namespace 'GetGitOperationStatus'*. This is the solution's only such mismatch — a consequence of the same in-place rename that preserved the GUID.
+
 > The trigger input's underlying key is `text`; `operationId` is only the display title, and the flow reads `triggerBody()['text']`. Harmless with a single input. If a second is ever added, rename the keys first — `text`, `text_1`, `text_2` bind positionally and are trivial to cross-wire.
 
 **One pass, no loop.**
@@ -80,7 +82,9 @@ Rewritten in place from `PollFabricOperation` on 2026-08-07 — renamed rather t
 |---|---|
 | Trigger | PowerApp V2, no inputs |
 | Calls | `ListConnections` on the **custom connector**, paginated with `continuationToken` |
-| Returns | `connections`, `count` |
+| Returns | `connections` |
+
+~~`count`~~ was removed on 2026-08-12 — see the schema note under flow 4.
 
 Runs as the signed-in user, so it returns only that user's connections — a handful, not thousands. Filters client-side to `connectionDetails.type == "AzureDevOpsSourceControl"`; there is **no server-side type filter**.
 
@@ -100,9 +104,14 @@ Requires `Connection.ReadWrite.All` on the connector — see OPEN-ISSUES §9.
 |---|---|
 | Trigger inputs | `workspaceId` |
 | Calls | `GET /v1/workspaces/{id}/git/connection` |
-| Returns | `gitConnectionState`, `isConnected`, `gitProviderDetails`, `gitCredentials`, `errorMessage` |
+| Returns | `gitConnectionState`, `gitProviderDetails`, `gitCredentials`, `errorMessage` |
 
 `gitConnectionState` is one of `NotConnected`, `Connected`, `ConnectedAndInitialized`. A disconnected workspace returns **200 with `NotConnected`**, not a 404.
+
+> **`isConnected` removed 2026-08-12 — non-string Respond fields are a trap.**
+> It was declared `boolean` in the response schema but emitted as `"@{not(or(...))}"`. The `@{ }` form is string interpolation, so the flow returned the string `"true"` and Power Apps failed with *JSON parsing error, expected 'boolean' but got 'string'*. Validation applies to the **entire response**, so the app could not read any field of this flow, not just the bad one.
+> The designer wraps a single expression in `@{ }` whenever it is typed into one of these fields, so the defect is easy to reintroduce and hard to fix in place. Both affected fields were derived values, so both were deleted rather than retyped: `isConnected` here and `count` in flow 3. The app compares `gitConnectionState` and uses `CountRows` instead.
+> **Keep every PowerApp Respond field a string.** Emit `string(...)` and coerce on the Power Fx side.
 
 **App-facing, and staying that way.** Decision 2026-08-07, reversing F4.1. The wizard calls this first, before showing anything: a workspace that is already connected needs its current org / project / repo / branch displayed and the offered actions changed — disconnect or change settings rather than connect. The app cannot make that decision without reading the state, and sending the owner to the Fabric UI to look it up defeats the point of the wizard.
 
@@ -202,25 +211,62 @@ Also the only route to a **branch or directory change**, since no update API exi
 
 ### 7. AddConnectionRoleAssignment — delegated
 
-Built and tested 2026-08-10. Grants SPN-A the `User` role on the owner's connection so the broker can reference it by ID.
+Built and tested 2026-08-10; paging and 409 handling added 2026-08-11. Grants SPN-A the `User` role on the owner's connection so the broker can reference it by ID.
 
 | | |
 |---|---|
 | Trigger | **Power Apps (V2)**, one text input `connectionId` |
-| Calls | `ListConnectionRoleAssignments`, then `AddConnectionRoleAssignment` if needed, both via the **custom connector**, delegated |
-| Returns | `outcome` — `Granted` or `AlreadyGranted` — plus `message` |
+| Calls | `ListConnectionRoleAssignments` (paged), then `AddConnectionRoleAssignment` if needed, both via the **custom connector**, delegated |
+| Returns | `outcome` — `Granted`, `AlreadyGranted` or `Failed` — plus `message` |
 
 As built:
 
-1. `ListConnectionRoleAssignments` — `fabricConnectionId` from the trigger input. No `continuationToken` is sent, so only the first page is examined; see below.
-2. `Filter_array` — from `@outputs('ListConnectionRoleAssignments')?['body/value']`, where `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))`.
-3. `Condition` — `@empty(body('Filter_array'))` equals `true`.
-4. Yes branch → `AddConnectionRoleAssignment` with `id` = the same environment variable, `type` = `ServicePrincipal`, `role` = `User` → respond `Granted`.
-5. No branch → respond `AlreadyGranted`.
+1. `Initialize_assignments` (array), `Initialize_cont` (string, no value), `Initialize_isDone` (boolean `false`).
+2. `Do_until` — exits on `@equals(variables('isDone'), true)`, limits count 10 / `PT1M`. Inside, in order: `ListConnectionRoleAssignments` (`fabricConnectionId` from the trigger, `continuationToken` from `variables('cont')`) → `Merge_assignments` → `Set_variable_assignments` → `Set_variable_cont` → `Set_variable_isDone`.
+3. `Filter_array` — from `@variables('assignments')`, where `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))`. **Runs after `Do_until`.**
+4. `Condition` — `@empty(body('Filter_array'))` equals `true`.
+5. Yes branch → `AddConnectionRoleAssignment` with `id` = the same environment variable, `type` = `ServicePrincipal`, `role` = `User`, then respond on **Succeeded or Failed**.
+6. No branch → respond `AlreadyGranted`.
 
-**Check before granting.** The `POST` returns **201 Created** and the docs do not say what a duplicate grant returns; the wizard is re-runnable, so this is not a hypothetical path. Both branches were tested against connection `16261289-5d36-4470-b878-2720b3babdfa` by running twice.
+#### Paging
 
-**The role-assignment list is not paged through.** Verified in the export 2026-08-11: the call sends no `continuationToken`, so a connection with enough role assignments to spill onto a second page could hide an existing broker grant and trigger a duplicate `POST`. Harmless on today's test connections, which have a handful of assignments each. Worth fixing before a connection shared with a large group goes through the wizard.
+The loop mirrors flow 3. The merge is a Compose rather than a direct self-assignment:
+
+```
+union(variables('assignments'), coalesce(body('ListConnectionRoleAssignments')?['value'], json('[]')))
+```
+
+then `Set_variable_cont` takes `coalesce(body('ListConnectionRoleAssignments')?['continuationToken'], '')` and `Set_variable_isDone` takes `empty(variables('cont'))`.
+
+No connector change was needed — `ListConnectionRoleAssignments` already declared `continuationToken` as an optional query parameter and already returned it in the response schema. Only the flow was ignoring it.
+
+The `Until` timeout is `PT1M`, not flow 3's `PT5M`, because this flow responds to a PowerApp and that response has a 120-second budget. A loop allowed to run five minutes would outlive the caller.
+
+> **`Filter_array` must run after `Do_until`, not after `Initialize_isDone`.** Deleting the original un-paged action left `Filter_array` attached to the preceding action, so inserting the loop produced two successors on one predecessor — a parallel branch. `Filter_array` then read `assignments` before the loop had written it, found nothing, and issued a duplicate `POST`. The symptom was a *correct-looking* answer arriving by the wrong route.
+
+#### The duplicate grant — now observed
+
+`POST /v1/connections/{id}/roleAssignments` against an existing grant returns **`409 ConnectionRoleAssignmentAlreadyExists`**, `isRetriable: false`, with the principal's object ID in `moreDetails[0].relatedResource` and the connection ID in the top-level `relatedResource`. Observed 2026-08-11. The API reference does not document this; it was found only because the race above let the call through.
+
+The response therefore runs after `AddConnectionRoleAssignment` on **Succeeded or Failed**, with both fields derived:
+
+```
+@{if(less(coalesce(outputs('AddConnectionRoleAssignment')?['statusCode'],0),300),'Granted',if(equals(coalesce(body('AddConnectionRoleAssignment')?['errorCode'],''),'ConnectionRoleAssignmentAlreadyExists'),'AlreadyGranted','Failed'))}
+```
+
+Before this, a 409 failed the action, skipped the response and ended the run with **no output at all** — the same skip-propagation defect fixed in flow 5. The check-before-granting had simply made the path unreachable, so it went unnoticed.
+
+**Check before granting is still worth keeping** even though 409 is now handled: the wizard is re-runnable, and a listed grant costs one GET instead of a failed write.
+
+#### Verified 2026-08-11
+
+| Setup | `Condition` | Result |
+|---|---|---|
+| Broker already granted on `16261289-5d36-4470-b878-2720b3babdfa` | `false` | `AlreadyGranted`, no `POST` attempted |
+
+Note that `AlreadyGranted` is returned by **both** the else branch and the 409 handler, with identical `message` text, so the outcome alone does not identify which path ran. The `Condition` result in the run history is the only distinguishing signal.
+
+The multi-page path is unverified and cannot be produced with the current test connections, which hold a handful of assignments each. What the test above establishes is that paging did not break the single-page path; correctness beyond one page rests on the pattern being identical to flow 3's.
 
 The object ID comes from the `ab_BrokerObjectId` environment variable (PREREQUISITES E3). It is **not** `ab_BrokerClientId` — the roleAssignments API wants the service principal's directory object ID, and the client ID is silently wrong rather than rejected.
 
@@ -240,7 +286,7 @@ Built and tested 2026-08-11. Stage 2 — moves content once the workspace is alr
 
 | | |
 |---|---|
-| Trigger | **Power Apps (V2)** — `text` = `workspaceId`, `text_1` = `requiredAction`, `text_2` = `initializationStrategy` (optional) |
+| Trigger | **Power Apps (V2)** — `text` = `workspaceId`, `text_1` = `requiredAction`, `text_2` = `initializationStrategy` (**required** since 2026-08-12) |
 | Calls | `GetFabricToken` (child), `initializeConnection` (conditional), `git/status`, then `commitToGit` or `updateFromGit` |
 | Returns | `outcome`, `operationid`, `requiredaction`, `message` |
 
@@ -254,6 +300,10 @@ As built:
 6. `Respond_to_a_Power_App_or_flow` — runs after the Switch on **Succeeded or Failed**.
 
 **Ordering is load-bearing.** `Get_git_status` must stay after `Condition_needs_strategy`: status requires an initialized connection, so on a `NeedsChoice` workspace it only works once initialize has run.
+
+> **`initializationStrategy` was made required on 2026-08-12.**
+> As an optional input it was **silently dropped from the payload** by the calling canvas app — the key was absent from the trigger outputs entirely, `Condition_needs_strategy` evaluated false, and initialization never ran, so the owner's `PreferRemote` choice had no effect. A missing optional input is indistinguishable in run history from one that was never wired, which is what made this expensive to find. Required means a blank now arrives as `text_2: ""` and is visible.
+> Two consequences. Power Fx calls it **positionally** — `Run(workspaceId, requiredAction, strategy)` — instead of via a trailing options record. And the calling app must **remove and re-add the flow** after any trigger change, because Power Apps caches the signature at bind time.
 
 #### `Set_action_final`
 

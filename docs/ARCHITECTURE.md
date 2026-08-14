@@ -242,6 +242,8 @@ This table is why the scope was cut to connect and disconnect.
 
 `POST /v1/connections/{connectionId}/roleAssignments` — the caller must hold **UserWithReshare or higher on the connection, or Admin on the bound gateway**. Scope `Connection.ReadWrite.All`. Supports principal type `ServicePrincipal`. **An SPN cannot self-grant**, which is why `AddConnectionRoleAssignment` runs delegated as the connection's owner.
 
+**A duplicate grant returns `409 ConnectionRoleAssignmentAlreadyExists`**, `isRetriable: false` — observed 2026-08-11, undocumented in the API reference. Treat it as success: the end state is identical to a fresh grant.
+
 `GET /v1/connections/{connectionId}` — the caller must have permission on the connection, or admin on the gateway. Scope `Connection.Read.All` or `Connection.ReadWrite.All`. Returns `connectionDetails: { type, path }`; for ADO Source Control `path` is the repo URL, so org / project / repo are derived rather than typed.
 
 `GET /v1/connections` has **no server-side type filter** — paginate on `continuationToken` and filter client-side.
