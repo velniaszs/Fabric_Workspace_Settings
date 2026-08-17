@@ -1,10 +1,20 @@
 {
   "properties": {
     "connectionReferences": {
-      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac": {
+      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_2": {
         "runtimeSource": "invoker",
         "connection": {
-          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_8d410"
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_36424"
+        },
+        "api": {
+          "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+          "logicalName": "ab_gateway-5flst-5fapp-5fcon"
+        }
+      },
+      "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_1": {
+        "runtimeSource": "invoker",
+        "connection": {
+          "connectionReferenceLogicalName": "ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e7dd2"
         },
         "api": {
           "name": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
@@ -59,39 +69,6 @@
         }
       },
       "actions": {
-        "ListConnectionRoleAssignments": {
-          "runAfter": {},
-          "metadata": {
-            "operationMetadataId": "c4471f58-19ad-4c7a-9c7a-85780b8346c1"
-          },
-          "type": "OpenApiConnection",
-          "inputs": {
-            "host": {
-              "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
-              "operationId": "ListConnectionRoleAssignments",
-              "apiId": ""
-            },
-            "parameters": {
-              "fabricConnectionId": "@triggerBody()['text']"
-            },
-            "authentication": "@parameters('$authentication')"
-          }
-        },
-        "Filter_array": {
-          "runAfter": {
-            "ListConnectionRoleAssignments": [
-              "Succeeded"
-            ]
-          },
-          "metadata": {
-            "operationMetadataId": "46f34e90-3b19-48bb-a45f-2ace2068c977"
-          },
-          "type": "Query",
-          "inputs": {
-            "from": "@outputs('ListConnectionRoleAssignments')?['body/value']",
-            "where": "@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))"
-          }
-        },
         "Condition": {
           "actions": {
             "AddConnectionRoleAssignment": {
@@ -102,7 +79,7 @@
               "type": "OpenApiConnection",
               "inputs": {
                 "host": {
-                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac",
+                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_2",
                   "operationId": "AddConnectionRoleAssignment",
                   "apiId": "/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"
                 },
@@ -199,6 +176,169 @@
             "operationMetadataId": "942c0663-225a-4744-a7d4-33fb8e105783"
           },
           "type": "If"
+        },
+        "Initialize_assignments": {
+          "runAfter": {},
+          "metadata": {
+            "operationMetadataId": "bf9e27e9-972e-4e25-8606-628a12989d80"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "assignments",
+                "type": "array"
+              }
+            ]
+          }
+        },
+        "Initialize_cont": {
+          "runAfter": {
+            "Initialize_assignments": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "6d94e7ff-6a5c-498e-8ce0-0a95b07c55a2"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "cont",
+                "type": "string"
+              }
+            ]
+          }
+        },
+        "Initialize_isDone": {
+          "runAfter": {
+            "Initialize_cont": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "d8e60a2b-2f18-4250-9d00-1500dcd03af9"
+          },
+          "type": "InitializeVariable",
+          "inputs": {
+            "variables": [
+              {
+                "name": "isDone",
+                "type": "boolean",
+                "value": false
+              }
+            ]
+          }
+        },
+        "Do_until": {
+          "actions": {
+            "ListConnectionRoleAssignments": {
+              "runAfter": {},
+              "metadata": {
+                "operationMetadataId": "a018dc9d-bb5b-4dd9-a7e2-1b3f8532fa3b"
+              },
+              "type": "OpenApiConnection",
+              "inputs": {
+                "host": {
+                  "connectionName": "shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_1",
+                  "operationId": "ListConnectionRoleAssignments",
+                  "apiId": "/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac"
+                },
+                "parameters": {
+                  "fabricConnectionId": "@triggerBody()['text']",
+                  "continuationToken": "@variables('cont')"
+                },
+                "authentication": "@parameters('$authentication')"
+              }
+            },
+            "Merge_assignments": {
+              "runAfter": {
+                "ListConnectionRoleAssignments": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "bfb3442a-9ce4-4cdd-b223-11ae644439ac"
+              },
+              "type": "Compose",
+              "inputs": "@union(variables('assignments'), coalesce(body('ListConnectionRoleAssignments')?['value'], json('[]')))"
+            },
+            "Set_variable_assignments": {
+              "runAfter": {
+                "Merge_assignments": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "8a55c104-e54d-4ea9-954c-30513a21d4ae"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "assignments",
+                "value": "@outputs('Merge_assignments')"
+              }
+            },
+            "Set_variable_cont": {
+              "runAfter": {
+                "Set_variable_assignments": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "2ca0bbf9-e1bd-498f-94b3-6d3f3d1f5622"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "cont",
+                "value": "@{coalesce(body('ListConnectionRoleAssignments')?['continuationToken'], '')}"
+              }
+            },
+            "Set_variable_isDone": {
+              "runAfter": {
+                "Set_variable_cont": [
+                  "Succeeded"
+                ]
+              },
+              "metadata": {
+                "operationMetadataId": "f3aa5457-8c26-4060-88d3-3f54a4a068ef"
+              },
+              "type": "SetVariable",
+              "inputs": {
+                "name": "isDone",
+                "value": "@empty(variables('cont'))"
+              }
+            }
+          },
+          "runAfter": {
+            "Initialize_isDone": [
+              "Succeeded"
+            ]
+          },
+          "expression": "@equals(variables('isDone'), true)",
+          "limit": {
+            "count": 10,
+            "timeout": "PT1M"
+          },
+          "metadata": {
+            "operationMetadataId": "8ec40437-47f0-460d-9dc8-025ff4a46e2e"
+          },
+          "type": "Until"
+        },
+        "Filter_array": {
+          "runAfter": {
+            "Do_until": [
+              "Succeeded"
+            ]
+          },
+          "metadata": {
+            "operationMetadataId": "41a09c08-2dfe-4262-8d66-14ecbbaf466f"
+          },
+          "type": "Query",
+          "inputs": {
+            "from": "@variables('assignments')",
+            "where": "@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))"
+          }
         }
       }
     },
