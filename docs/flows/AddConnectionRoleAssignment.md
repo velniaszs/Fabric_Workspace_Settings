@@ -4,7 +4,7 @@ Build instructions for the delegated flow that grants SPN-A the `User` role on a
 
 Verified against `Workflows/AddConnectionRoleAssignment-5C9CFCBF-A294-F111-8075-000D3ABA40DB.json` on 2026-08-17.
 
-Related: `FLOWS.md` §7 (design rationale), `CUSTOM-CONNECTOR.md` (the connector operations this flow calls), `PREREQUISITES.md` (run-only user sharing), `OPEN-ISSUES.md` §9.
+Related: `../FLOWS.md` §7 (design rationale), `../CUSTOM-CONNECTOR.md` (the connector operations this flow calls), `../PREREQUISITES.md` (run-only user sharing), `../OPEN-ISSUES.md` §9.
 
 ---
 
@@ -180,5 +180,5 @@ Output names come back **lowercased** in Power Fx.
 
 ## 8. Known drift from the exported definition
 
-- `FLOWS.md` §7 describes a `Failed` outcome and says the success Respond runs on "**Succeeded or Failed**". The exported definition has `Respond_to_a_Power_App_or_flow` running after `AddConnectionRoleAssignment` on **Succeeded only**, and no `Failed` branch exists. A connector error therefore fails the run with no response, and the app sees a timeout rather than an outcome.
+- `../FLOWS.md` §7 describes a `Failed` outcome and says the success Respond runs on "**Succeeded or Failed**". The exported definition has `Respond_to_a_Power_App_or_flow` running after `AddConnectionRoleAssignment` on **Succeeded only**, and no `Failed` branch exists. A connector error therefore fails the run with no response, and the app sees a timeout rather than an outcome.
 - The export carries **two** connection references for the same connector — `…_e7dd2` used by `ListConnectionRoleAssignments` and `…_36424` used by `AddConnectionRoleAssignment`. Rebuilding by hand normally produces one. This is harmless but means a connection recreation must be checked against both.
