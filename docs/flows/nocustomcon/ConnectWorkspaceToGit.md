@@ -1,6 +1,6 @@
 # Flow — `ConnectWorkspaceToGit`
 
-Build instructions for stage 1 of the connect wizard: it points a Fabric workspace at an Azure DevOps repo, then **probes** Fabric for which way the content should move and stops. `SyncWorkspaceWithGit` is stage 2 and moves the content. Runs as the broker.
+Build  instructions for stage 1 of the connect wizard: it points a Fabric workspace at an Azure DevOps repo, then **probes** Fabric for which way the content should move and stops. `SyncWorkspaceWithGit` is stage 2 and moves the content. Runs as the broker.
 
 Verified against `Workflows/ConnectWorkspaceToGit-1E895D49-DA8F-F111-8076-70A8A530AE85.json` on 2026-08-17.
 
