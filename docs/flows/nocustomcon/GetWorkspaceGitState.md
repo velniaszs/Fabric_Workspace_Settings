@@ -4,7 +4,7 @@ Build instructions for the read-only flow the wizard calls first: it reports whe
 
 Verified against `Workflows/GetWorkspaceGitState-39F29F3D-CF8F-F111-8076-7CED8D76CBFD.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §4 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A3, B1, E3, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §3.1.
+Related: [../../FLOWS.md](../../FLOWS.md) §4 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A3, B1, E3, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §3.1.
 
 ---
 

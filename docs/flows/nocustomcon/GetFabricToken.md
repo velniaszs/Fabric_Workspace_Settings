@@ -4,7 +4,7 @@ Build instructions for the child flow that performs the client-credentials grant
 
 Verified against `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §1 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E3, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §2, §8.3. Callers documented in [GetGitOperationStatus.md](GetGitOperationStatus.md), [GetGitPolicy.md](GetGitPolicy.md), [SetGitPolicy.md](SetGitPolicy.md), [GetWorkspaceGitState.md](GetWorkspaceGitState.md), [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md), [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md).
+Related: [../../FLOWS.md](../../FLOWS.md) §1 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E3, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §2, §8.3. Callers documented in [GetGitOperationStatus.md](GetGitOperationStatus.md), [GetGitPolicy.md](GetGitPolicy.md), [SetGitPolicy.md](SetGitPolicy.md), [GetWorkspaceGitState.md](GetWorkspaceGitState.md), [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md), [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md).
 
 ---
 

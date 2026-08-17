@@ -4,7 +4,7 @@ Build instructions for the write that replaces a workspace's outbound **connecti
 
 Verified against `Workflows/SetOutboundRules-54775CED-CD85-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetOutboundRules.md](GetOutboundRules.md) (the matching read), [SetGatewayRules.md](SetGatewayRules.md) (the same shape on the gateways endpoint, with an error branch), [GetOAPSetting.md](GetOAPSetting.md) (the gate that hides this write path).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetOutboundRules.md](GetOutboundRules.md) (the matching read), [SetGatewayRules.md](SetGatewayRules.md) (the same shape on the gateways endpoint, with an error branch), [GetOAPSetting.md](GetOAPSetting.md) (the gate that hides this write path).
 
 ---
 
@@ -143,7 +143,7 @@ There is **one** Respond, on **Succeeded** only, and no `errormessage`. A reject
 - Renaming the flow does not change the name Power Fx binds to. Trust formula-bar autocomplete over the portal display name.
 - Pass the inputs **positionally**, in trigger order: `SetOutboundRules.Run(workspaceId, rulesJson)`. Do not use a trailing options record.
 - The flow answers a PowerApp, so it must respond within **120 seconds**. One child call and one PUT; the budget is not at risk.
-- The app calls this from `BtnSave.OnSelect`, alongside `GetOutboundRules`. That button sits inside `RulesContainer`, whose `Visible` is `gblFlowResult.oapenabled`, which is what keeps the write path from firing on a workspace where the policy does not apply — see [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md).
+- The app calls this from `BtnSave.OnSelect`, alongside `GetOutboundRules`. That button sits inside `RulesContainer`, whose `Visible` is `gblFlowResult.oapenabled`, which is what keeps the write path from firing on a workspace where the policy does not apply — see [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md).
 
 ---
 

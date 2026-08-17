@@ -4,7 +4,7 @@ Build instructions for the delegated read that returns the signed-in user's mail
 
 Verified against `Workflows/GetMyEmail-C32A020E-8894-F111-8075-7CED8D76CBFD.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (flow inventory — this flow is not listed there), [../PREREQUISITES.md](../PREREQUISITES.md) (E2 connection references, E5 run-only users), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.7, §10.3 (the authorization boundary this flow does **not** implement), [../APP-GIT-TAB.md](../APP-GIT-TAB.md) (the decision to drop it), [ListMyConnections.md](ListMyConnections.md) and [AddConnectionRoleAssignment.md](AddConnectionRoleAssignment.md) (the other delegated flows).
+Related: [../../FLOWS.md](../../FLOWS.md) (flow inventory — this flow is not listed there), [../../PREREQUISITES.md](../../PREREQUISITES.md) (E2 connection references, E5 run-only users), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.7, §10.3 (the authorization boundary this flow does **not** implement), [../../APP-GIT-TAB.md](../../APP-GIT-TAB.md) (the decision to drop it), [../ListMyConnections.md](../ListMyConnections.md) and [../AddConnectionRoleAssignment.md](../AddConnectionRoleAssignment.md) (the other delegated flows).
 
 > **Not used.** `APP-GIT-TAB.md` records the decision of 2026-08-11: the `GitContent` stub controls `git text`, `getEmailButton` and `Label1` are left over from a dropped `GetMyEmail` experiment and are to be deleted. Nothing in the app calls this flow. Do not build it as part of the Git-integration build order. This document exists so the export is accounted for and so the flow can be rebuilt if the identity is ever needed.
 

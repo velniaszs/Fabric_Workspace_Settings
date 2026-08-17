@@ -4,7 +4,7 @@ Build instructions for the broker flow that removes a Fabric workspace's Git con
 
 Verified against `Workflows/DisconnectWorkspaceFromGit-3FDE40BB-AC94-F111-8075-000D3ABA40DB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §6 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A3, B1, E3, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.7, §10.3.
+Related: [../../FLOWS.md](../../FLOWS.md) §6 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A3, B1, E3, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.7, §10.3.
 
 ---
 

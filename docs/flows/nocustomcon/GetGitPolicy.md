@@ -1,17 +1,17 @@
-# Flow — `GetGatewayRules`
+# Flow — `GetGitPolicy`
 
-Build instructions for the read that returns a workspace's outbound **gateway** communication policy — which gateways the workspace is permitted to reach. The canvas app's Outbound tab calls it to populate the gateways block. One of the eight pre-existing networking flows, not part of the Git-integration build order.
+Build instructions for the read that reports a workspace's outbound Git communication policy — whether Fabric permits the workspace to talk to a Git provider at all. Called by the canvas app's Outbound tab to set the Git toggle. One of the eight pre-existing networking flows, not part of the Git-integration build order.
 
-Verified against `Workflows/GetGatewayRules-5EC91B70-4C8A-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
+Verified against `Workflows/GetGitPolicy-42395F29-8C89-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SetGatewayRules.md](SetGatewayRules.md) (the matching write), [ListGateways.md](ListGateways.md) (the delegated flow that names the gateways).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SetGitPolicy.md](SetGitPolicy.md) (the matching write).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` in the export is `{}`. The custom connector is not involved — do not add it.
+- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` in the export is `{}`.
 - The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
 - Authentication is **service principal**, not delegated. The inline `clientSecret` → token `HTTP` → `Parse_JSON` block that this flow used to carry was deleted on 2026-08-07 and replaced by the child-flow call (OPEN-ISSUES §1.6, FN.1). It previously ran as `sp_fabric_monit`, which holds `Tenant.Read.All` / `Tenant.ReadWrite.All`; it now runs as `sp_fabric_powerapp`. Do not reintroduce an inline token block.
 - Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
@@ -24,7 +24,7 @@ Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.
 
   The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
 
-- A `403` here means the broker lacks a role on the workspace; a `401` means PREREQUISITES A3 or B1 is missing. Fabric's error body is generic for both — read the status code, not the message.
+- The networking endpoints have only been exercised as `sp_fabric_powerapp` since the identity switch. A `403` here means the broker lacks a role on the workspace; a `401` means PREREQUISITES A3 or B1 is missing.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
 
@@ -48,7 +48,7 @@ One text input, `x-ms-content-hint: TEXT`, with the designer default description
 
 The underlying key is `text`; `workspaceId` is only the display title. Keep it required — an optional PowerApp V2 input is **dropped from the payload entirely** when blank, the property is absent rather than empty, and the unsafe `triggerBody()['text']` form used here would then throw `InvalidTemplate: property 'text' doesn't exist`.
 
-> The flow takes `workspaceId` at face value. There is no ownership check, so it will read the gateway policy of any workspace the broker administers for any caller who can run it. Same posture as the Git flows — OPEN-ISSUES §10.3.
+> The flow takes `workspaceId` at face value. There is no ownership check, so it will read the policy of any workspace the broker administers for any caller who can run it. Same posture as the Git flows — OPEN-ISSUES §10.3.
 
 ---
 
@@ -89,20 +89,16 @@ Runs after `Initialize_variable` on **Succeeded**.
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/gateways` |
+| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/git` |
 | Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
 | `retryPolicy` | *(absent — default exponential, 4 retries)* |
 | Authentication block | none — bearer token supplied by hand in the header |
 
-The token comes from the `accessToken` variable, which comes from the child flow, which reads `ab_TenantId` and `ab_BrokerClientId` and holds the secret. Nothing sensitive appears in this action beyond the interpolated bearer value at run time.
-
-**Headers are not copied when you duplicate an action.** A missing `Authorization` comes back as `401` with the same generic `RequestFailed` body Fabric uses for semantic rejections — check the header on every new HTTP action before chasing anything else.
-
 The action keeps its designer-generated name `HTTP_2` from before the FN.1 rewrite, when `HTTP` was the token call. Renaming it now would mean rewiring the Respond; it is left alone deliberately.
 
-The whole response body is returned to the app untouched — this flow reads no field of it.
+The response body carries `defaultAction` — the only field this flow uses.
 
 ---
 
@@ -110,25 +106,27 @@ The whole response body is returned to the app untouched — this flow reads no 
 
 `Respond_to_a_Power_App_or_flow` — type `Response`, kind `PowerApp`, `statusCode` 200. Runs after `HTTP_2` on **Succeeded**.
 
-| Output name (as exported) | Title | Type | Value (verbatim) |
+| Output name (as exported) | Title | Type | Value |
 |---|---|---|---|
-| `rulesjson` | `RulesJson` | string | `@{string(body('HTTP_2'))}` |
+| `gitaction` | `GitAction` | string | `@{body('HTTP_2')?['defaultAction']}` |
 
-Keep every Respond field typed **string**. The designer wraps a single expression in `@{ }`, which stringifies it, so a field declared boolean or number returns `"true"` / `"7"` and fails schema validation — and one bad field makes every output of the flow unreadable in the app, not just the bad one. The single field here is correctly string, and the explicit `string(...)` around the body is what makes it honest.
+Keep every Respond field typed **string**. The designer wraps a single expression in `@{ }`, which stringifies it, so a field declared boolean or number returns `"true"` / `"7"` and fails schema validation — and one bad field makes every output of the flow unreadable in the app, not just the bad one. The single field here is correctly string.
 
-Output names come back **lowercased** in Power Fx — bind to `rulesjson`, not `RulesJson`. Parse it app-side with `ParseJSON`.
+There is a live temptation to make this a boolean, because the app renders it as a toggle. Do not. Return the string and compare it in Power Fx. That exact conversion is what broke `isConnected` in `GetWorkspaceGitState` and `count` in `ListMyConnections`.
 
-Unlike `GetOutboundRules`, this flow returns **no `ETag`**, so the matching write has no optimistic-concurrency token to echo. A concurrent edit to the gateway policy is last-writer-wins.
+The safe `?[...]` accessor is used, so a response body without `defaultAction` yields an empty string rather than throwing.
 
-`Respond` runs on **Succeeded** only. A rejected `GET` therefore fails the run with no response, and the app sees a hard error rather than a readable message. That is the pre-existing shape of all eight networking flows; the Git-integration flows use **Succeeded or Failed** with a derived `outcome` and a `message` carrying the raw Fabric payload instead.
+Output names come back **lowercased** in Power Fx — bind to `gitaction`, not `GitAction`. The camel-case form is the display title only.
+
+`Respond` runs on **Succeeded** only. A Fabric error therefore fails the run with no response, and the app sees a hard error rather than a readable message. That is the pre-existing shape of all eight networking flows; the Git-integration flows use **Succeeded or Failed** with a derived `outcome` instead.
 
 ---
 
 ## After building
 
-- Add the flow to the canvas app (left rail → Power Automate → **+ Add flow**). Watch for a suffixed duplicate such as `GetGatewayRules_1` from adding it twice.
+- Add the flow to the canvas app (left rail → Power Automate → **+ Add flow**). Watch for a suffixed duplicate such as `GetGitPolicy_1` from adding it twice.
 - If you change the trigger inputs later, **remove and re-add the flow in the app** — Power Apps caches the signature at bind time.
 - Renaming the flow does not change the name Power Fx binds to. Trust formula-bar autocomplete over the portal display name.
-- Pass the single input positionally: `GetGatewayRules.Run(workspaceId)`. Do not use a trailing options record.
+- Pass the trigger input **positionally**: `GetGitPolicy.Run(workspaceId)`. Do not use a trailing options record.
 - The flow answers a PowerApp, so it must respond within **120 seconds**. One child call and one GET; the budget is not at risk.
-- The app calls this from `Form Screen.OnVisible` guarded by `If(gblFlowResult.oapenabled, ...)`, and again from `BtnSaveGateways.OnSelect` alongside `SetGatewayRules` — see `APP-OUTBOUND-TAB.md`.
+- The app calls this from the Outbound tab's `OnVisible`, **guarded** by `If(gblFlowResult.oapenabled, ...)` — no outbound policy API is called when OAP is off. See `APP-OUTBOUND-TAB.md`.

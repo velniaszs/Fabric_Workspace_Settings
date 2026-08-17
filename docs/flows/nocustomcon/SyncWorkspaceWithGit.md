@@ -4,7 +4,7 @@ Build instructions for stage 2 of the connect wizard: it moves content between a
 
 Verified against `Workflows/SyncWorkspaceWithGit-93D7AF32-BC94-F111-8075-000D3ABA40DB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §8 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A3, B1, D1, E3, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.1, §1.2, §1.8, §1.10, §1.13, §10.3.
+Related: [../../FLOWS.md](../../FLOWS.md) §8 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A3, B1, D1, E3, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.1, §1.2, §1.8, §1.10, §1.13, §10.3.
 
 ---
 

@@ -4,7 +4,7 @@ Build instructions for the write that replaces a workspace's outbound **gateway*
 
 Verified against `Workflows/SetGatewayRules-F82666CB-4D8A-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetGatewayRules.md](GetGatewayRules.md) (the matching read), [ListGateways.md](ListGateways.md) (the delegated flow that names the gateways), [SetGitPolicy.md](SetGitPolicy.md) (the same shape on the Git endpoint).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetGatewayRules.md](GetGatewayRules.md) (the matching read), [../ListGateways.md](../ListGateways.md) (the delegated flow that names the gateways), [SetGitPolicy.md](SetGitPolicy.md) (the same shape on the Git endpoint).
 
 ---
 

@@ -4,7 +4,7 @@ Build instructions for the write that sets a workspace's outbound Git communicat
 
 Verified against `Workflows/SetGitPolicy-8A588A8D-8E89-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetGitPolicy.md](GetGitPolicy.md) (the matching read).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetGitPolicy.md](GetGitPolicy.md) (the matching read).
 
 ---
 

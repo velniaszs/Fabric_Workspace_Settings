@@ -4,7 +4,7 @@ Build instructions for the read that tells the canvas app whether **Outbound Acc
 
 Verified against `Workflows/GetOAPSetting-1875AC61-1884-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (the tab this flow gates), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetOutboundRules.md](GetOutboundRules.md), [GetGatewayRules.md](GetGatewayRules.md), [GetGitPolicy.md](GetGitPolicy.md) (the reads it gates).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (the tab this flow gates), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetOutboundRules.md](GetOutboundRules.md), [GetGatewayRules.md](GetGatewayRules.md), [GetGitPolicy.md](GetGitPolicy.md) (the reads it gates).
 
 ---
 
@@ -172,7 +172,7 @@ Output names come back **lowercased** in Power Fx — bind to `oapenabled`, not 
 
 `Respond` runs on **Succeeded** only. A rejected `GET` therefore fails the run with no response, and the app sees a hard error rather than a readable message. That is the pre-existing shape of most of the eight networking flows.
 
-> `gblFlowResult` is blank until this flow returns, and blank is falsy. Every control gated on `oapenabled` starts hidden and `LblOapOff` starts visible — so the "OAP is disabled" message flashes on every workspace for the duration of this call. Documented, with an optional `gblOapLoaded` fix, in [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md).
+> `gblFlowResult` is blank until this flow returns, and blank is falsy. Every control gated on `oapenabled` starts hidden and `LblOapOff` starts visible — so the "OAP is disabled" message flashes on every workspace for the duration of this call. Documented, with an optional `gblOapLoaded` fix, in [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md).
 
 ---
 

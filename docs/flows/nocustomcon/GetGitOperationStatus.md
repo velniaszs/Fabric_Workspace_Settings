@@ -4,7 +4,7 @@ Build instructions for the single-shot, read-only flow that reports the state of
 
 Verified against `Workflows/GetGitOperationStatus-5AFCD720-158F-F111-8076-7CED8D76BF1B.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §2 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.13, §6.1, §6.2, §10.5, [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md) and [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the flows that produce the operation IDs).
+Related: [../../FLOWS.md](../../FLOWS.md) §2 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.13, §6.1, §6.2, §10.5, [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md) and [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the flows that produce the operation IDs).
 
 ---
 

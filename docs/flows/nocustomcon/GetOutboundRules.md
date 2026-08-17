@@ -4,7 +4,7 @@ Build instructions for the read that returns a workspace's outbound **connection
 
 Verified against `Workflows/GetOutboundRules-21AFAD93-EB84-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) (Networking flows table), [../PREREQUISITES.md](../PREREQUISITES.md) (A1, A3, B1, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.6, §10.3, [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SetOutboundRules.md](SetOutboundRules.md) (the matching write), [GetOAPSetting.md](GetOAPSetting.md) (the gate that decides whether this is called at all), [GetGatewayRules.md](GetGatewayRules.md) (the same shape on the gateways endpoint).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SetOutboundRules.md](SetOutboundRules.md) (the matching write), [GetOAPSetting.md](GetOAPSetting.md) (the gate that decides whether this is called at all), [GetGatewayRules.md](GetGatewayRules.md) (the same shape on the gateways endpoint).
 
 ---
 
@@ -134,7 +134,7 @@ This is the only networking read that returns an `ETag`. `GetGatewayRules`, on t
 - Renaming the flow does not change the name Power Fx binds to. Trust formula-bar autocomplete over the portal display name.
 - Pass the single input positionally: `GetOutboundRules.Run(workspaceId)`. Do not use a trailing options record.
 - The flow answers a PowerApp, so it must respond within **120 seconds**. One child call and one GET; the budget is not at risk.
-- The app calls this from `Form Screen.OnVisible` guarded by `If(gblFlowResult.oapenabled, ...)`, and again from `BtnSave.OnSelect` alongside `SetOutboundRules` — see [../APP-OUTBOUND-TAB.md](../APP-OUTBOUND-TAB.md).
+- The app calls this from `Form Screen.OnVisible` guarded by `If(gblFlowResult.oapenabled, ...)`, and again from `BtnSave.OnSelect` alongside `SetOutboundRules` — see [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md).
 
 ---
 

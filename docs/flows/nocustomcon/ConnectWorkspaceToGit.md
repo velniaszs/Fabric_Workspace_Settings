@@ -4,7 +4,7 @@ Build instructions for stage 1 of the connect wizard: it points a Fabric workspa
 
 Verified against `Workflows/ConnectWorkspaceToGit-1E895D49-DA8F-F111-8076-70A8A530AE85.json` on 2026-08-17.
 
-Related: [../FLOWS.md](../FLOWS.md) §5 (design rationale), [../PREREQUISITES.md](../PREREQUISITES.md) (A3, B1, D1, E3, E4), [../OPEN-ISSUES.md](../OPEN-ISSUES.md) §1.11, §5.4, §10.3, §10.6.
+Related: [../../FLOWS.md](../../FLOWS.md) §5 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A3, B1, D1, E3, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.11, §5.4, §10.3, §10.6.
 
 ---
 
