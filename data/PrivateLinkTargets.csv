@@ -1,0 +1,29 @@
+crbab_resourcetype,crbab_subresource,crbab_displayname,crbab_sortorder
+microsoft.storage/storageaccounts,blob,Blob Storage (blob),10
+microsoft.storage/storageaccounts,dfs,Data Lake Storage Gen2 (dfs),20
+microsoft.storage/storageaccounts,file,File Storage (file),30
+microsoft.storage/storageaccounts,queue,Queue Storage (queue),40
+microsoft.storage/storageaccounts,table,Table Storage (table),50
+microsoft.documentdb/databaseaccounts,Sql,Cosmos DB for NoSQL (Sql),10
+microsoft.documentdb/databaseaccounts,MongoDB,Cosmos DB for MongoDB (MongoDB),20
+microsoft.synapse/workspaces,Sql,Synapse dedicated SQL pool (Sql),10
+microsoft.synapse/workspaces,SqlOnDemand,Synapse serverless SQL (SqlOnDemand),20
+microsoft.synapse/workspaces,Dev,Synapse Studio and pipelines (Dev),30
+microsoft.purview/accounts,account,Purview account (account),10
+microsoft.purview/accounts,portal,Purview portal (portal),20
+microsoft.databricks/workspaces,databricks_ui_api,Databricks workspace UI and API (databricks_ui_api),10
+microsoft.databricks/workspaces,browser_authentication,Databricks browser authentication (browser_authentication),20
+microsoft.sql/servers,sqlServer,Azure SQL Database (sqlServer),10
+microsoft.sql/managedinstances,managedInstance,Azure SQL Managed Instance (managedInstance),10
+microsoft.keyvault/vaults,vault,Azure Key Vault (vault),10
+microsoft.kusto/clusters,cluster,Azure Data Explorer (cluster),10
+microsoft.eventhub/namespaces,namespace,Azure Event Hubs (namespace),10
+microsoft.devices/iothubs,iotHub,Azure IoT Hub (iotHub),10
+microsoft.search/searchservices,searchService,Azure AI Search (searchService),10
+microsoft.cognitiveservices/accounts,account,Azure AI services (account),10
+microsoft.machinelearningservices/workspaces,amlworkspace,Azure Machine Learning (amlworkspace),10
+microsoft.dbformysql/flexibleservers,mysqlServer,Azure Database for MySQL (mysqlServer),10
+microsoft.dbforpostgresql/flexibleservers,postgresqlServer,Azure Database for PostgreSQL (postgresqlServer),10
+microsoft.insights/privatelinkscopes,azuremonitor,Azure Monitor Private Link Scope (azuremonitor),10
+microsoft.apimanagement/service,gateway,Azure API Management (gateway),10
+microsoft.web/sites,sites,Azure Functions and App Service (sites),10

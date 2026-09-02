@@ -390,6 +390,22 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 
 ---
 
+## Managed private endpoints
+
+Three networking flows for the app's Private endpoints tab. **Built and tested 2026-09-02.** All app-only via `GetFabricToken`, all `connectionReferences: {}` — **no custom connector, no delegated call, no new permissions**. Design rationale in [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md); the tab that calls them in [docs/APP-PRIVATE-ENDPOINTS-TAB.md](docs/APP-PRIVATE-ENDPOINTS-TAB.md).
+
+| Flow | Inputs | Endpoint (under `/v1/workspaces/{id}/managedPrivateEndpoints`) | Returns | Build instructions |
+|---|---|---|---|---|
+| ListPrivateEndpoints | `workspaceId` | `GET` (root), paged on `continuationUri` | `EndpointsJson`, `ErrorMessage` | [flows/nocustomcon/ListPrivateEndpoints.md](docs/flows/nocustomcon/ListPrivateEndpoints.md) |
+| CreatePrivateEndpoint | `workspaceId`, `name`, `targetPrivateLinkResourceId`, `targetSubresourceType`, `requestMessage` | `POST` | `Outcome`, `EndpointId`, `ProvisioningState`, `Message` | [flows/nocustomcon/CreatePrivateEndpoint.md](docs/flows/nocustomcon/CreatePrivateEndpoint.md) |
+| DeletePrivateEndpoint | `workspaceId`, `managedPrivateEndpointId` | `DELETE /{mpeId}` | `Outcome`, `Message` | [flows/nocustomcon/DeletePrivateEndpoint.md](docs/flows/nocustomcon/DeletePrivateEndpoint.md) |
+
+The two writes require **workspace Admin**, which owners do not hold — brokering is the only design that works, not a preference. Neither write may ship before the `crbab_Workspaces` ownership check (F5.9): a create sends a request that leaves Fabric entirely, and a delete breaks a live data path with a 15-minute cooldown before it can be undone.
+
+No polling. `POST` returns `201` immediately with `provisioningState: Provisioning` and carries no `x-ms-operation-id` — `GetGitOperationStatus` is not involved. Progress is observed by re-listing.
+
+---
+
 ## Gotchas
 
 **Positional trigger keys.** PowerApp V2 stores inputs as `text`, `text_1`, `text_2`… The name you type is only the `title`. Map them to named variables in the first action.
@@ -397,6 +413,19 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 **Empty PowerApp V2 inputs are omitted from the trigger body.** A blank optional input does not arrive as an empty string — the property is absent, and `triggerBody()['text_2']` throws `InvalidTemplate: property 'text_2' doesn't exist`. Use `triggerBody()?['text_2']` for anything optional, and wrap it in `coalesce(…,'')` before `equals` or `empty`.
 
 **Self-reference is illegal.** `Set variable X = union(variables('X'), …)` fails. Use a Compose holding the union, then set the variable from `outputs('Compose')`. See `MergePages` in ListGateways.
+
+**`ActionResponseSkipped` when testing from the designer is not a defect.**
+
+```
+The execution of template action 'Respond_to_a_Power_App_or_flow' is skipped:
+the client application is not waiting for a response from service.
+```
+
+A `Respond to a Power App or flow` action only executes when something is synchronously waiting for it. Run the flow from the maker portal's **Test** panel and nothing is, so the action is skipped and the run still reports success. Called from the canvas app with `.Run()` it behaves normally.
+
+What this means in practice: **the Test panel cannot verify a response contract.** It proves the HTTP calls and the run-after wiring, and nothing about the outputs. To see real output values, either read them from the app, or check the `Respond` action's *inputs* in the run history — those are populated even when the action itself is skipped.
+
+The same message appears for a genuine fault when a flow exceeds the **120-second** PowerApp budget: the client gave up, so nothing is waiting any more. Tell the two apart by the run duration, not the message.
 
 **Do-until cannot express OR in the UI.** Switch to advanced mode: `@or(equals(...), equals(...))`, or set a boolean `isDone` flag inside the loop.
 

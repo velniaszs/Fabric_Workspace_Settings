@@ -118,7 +118,7 @@ Read flows may stay on PowerApp V2 with no row at all.
 
 `crbab_Workspaces` is populated externally — out of scope here.
 
-**Planned tables:** `crbab_GitAuditLog` (who did what, when, outcome) and the request table backing the write pattern in §3. Create via maker portal, never by editing `customizations.xml`.
+**Planned tables:** `crbab_GitAuditLog` (who did what, when, outcome), the request table backing the write pattern in §3, and `crbab_PrivateLinkTarget` (resource type → valid private-link sub-resources, seeded from `data/PrivateLinkTargets.csv` — see [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.6). Create via maker portal, never by editing `customizations.xml`.
 
 **Dropped:** `crbab_GitConnection` and `crbab_WorkspaceGitMapping`. Fabric owns that state and the GET APIs return it live — caching it only creates a second source of truth to reconcile.
 
@@ -177,7 +177,7 @@ A solution-aware connector is a Dataverse row, so access needs **table privilege
 
 Required, in order:
 
-1. Security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType` — add it to the solution
+1. Security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType` — and `crbab_PrivateLinkTarget` once it exists — add it to the solution
 2. Entra group → Dataverse **group team** → assign the role to the team
 3. Share the **connector** with the group
 4. Share the **canvas app** with the group
