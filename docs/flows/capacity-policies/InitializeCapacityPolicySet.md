@@ -222,7 +222,9 @@ The created item is at `/result`, not on the operation itself. The operation onl
 
 ### 8b. `Run_rebuild` — **Run a Child Flow** → `RebuildCapacityPolicyRules`, passing `triggerBody()['text']`.
 
-With no rows in `Capacity Workspaces` yet, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
+With no `FabricEnabled` workspaces on the capacity's Node yet, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
+
+> **A brand-new capacity may have no `ubsppcoe_Node` row yet, and the rebuild fails closed on that** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5b. The policy set is still created and recorded, so this is recoverable: add the Node row and rerun. But if provisioning routinely creates the capacity before its inventory record, expect this step to fail on first run, and decide whether the provisioning app should order the two the other way round.
 
 ### 8c. `Activate` — **HTTP**
 
@@ -250,6 +252,19 @@ Runs after `Activate` on **is successful** and **has failed**.
 
 Tolerate `PolicySetIsAlreadyActive` — it means the end state is already what was wanted. Treat any `2xx`, and that specific error code, as `Active`.
 
+### 8e. `Set_outcome_created` — **Set variable**
+
+Runs after `Update_status` on **is successful** and **has failed**.
+
+| Field | Value |
+|---|---|
+| Name | `outcome` |
+| Value | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Created', 'Failed')` |
+
+> **Without this step the flow never reports success.** `outcome` is seeded `Failed` in Step 2 and only reassigned on the two early-exit branches, so the whole happy path — create, register, rebuild, activate — would end at the Respond still saying `Failed`. Easy to miss, because every Fabric side effect works correctly and only the answer is wrong.
+
+Also set `message` here: on success, name the policy set and say the capacity is now governed; on failure, carry `body('Activate')?['message']` so the caller sees why activation failed rather than a bare status.
+
 ---
 
 ## Step 9 — Respond
@@ -258,7 +273,7 @@ Tolerate `PolicySetIsAlreadyActive` — it means the end state is already what w
 
 | Output | Value |
 |---|---|
-| `Outcome` | `variables('outcome')` — set to `Created` on the success path before this action |
+| `Outcome` | `variables('outcome')` — set by Step 8e on the success path |
 | `PolicySetId` | `variables('policySetId')` |
 | `Message` | `variables('message')` |
 

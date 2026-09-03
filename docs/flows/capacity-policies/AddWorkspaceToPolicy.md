@@ -1,6 +1,6 @@
 # Flow — `AddWorkspaceToPolicy`
 
-Whitelists a workspace on a capacity. Writes one Dataverse row, then rebuilds that capacity's rules.
+Confirms that a workspace really is whitelisted on a capacity, then rebuilds that capacity's rules. **Writes nothing to Dataverse.**
 
 > **Not built yet.** Specification, not a description of something that exists.
 
@@ -10,13 +10,22 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 
 ## 0. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow is mostly a wrapper around it.
-- Needs a **Dataverse connection**. It makes **no Fabric calls of its own** — every Fabric interaction happens inside the child flow.
-- Put a **uniqueness key on `(crbab_capacityid, crbab_workspaceid)`** in the `Capacity Workspaces` table. Step 3 checks for duplicates, but the key is what makes it true rather than merely likely.
+- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it, and uses the same placeholder column names — confirm them there.
+- Needs a **Dataverse connection** for reads only. It makes **no Fabric calls of its own** — every Fabric interaction happens inside the child flow.
 
-> ### This flow does not touch rules
+> ## This flow does not add anything
 >
-> No `PATCH`, no "find a rule with space", no 49-chunking. The row is the change; the rebuild recomputes the entire rule layout from scratch. If you find yourself reading policy rules in this flow, the design has been misunderstood — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2.
+> The name is the app's vocabulary, not a description of a write. Whitelist membership is **derived** from two columns on `ubsppcoe_Workspace` — the `Node` lookup and `FabricEnabled` — and **this project never writes either** ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3). `FabricEnabled` in particular is an internal flag meaning *this workspace should receive OAP settings and the rest of the Fabric treatment*; capacity policy is one late consumer of it.
+>
+> So what this flow actually does is **check that the conditions for whitelisting are already true, and publish the consequences**. If they are not true, it says so and refuses — which is the entire reason it still exists as a separate flow rather than a bare "rebuild this capacity" call.
+>
+> There is also no `PATCH` of a policy rule, no "find a rule with space", no 49-chunking. The rebuild recomputes the whole layout. If you find yourself reading policy rules in this flow, the design has been misunderstood — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2.
+
+> ### The failure this flow exists to prevent
+>
+> An app that calls a plain refresh and then tells the user *"workspace added to the policy"* is asserting something nothing checked. A workspace whose `FabricEnabled` is unset produces exactly the same successful rebuild as one that is properly enabled — same outcome, same rule count moving, and the workspace silently absent from the rules.
+>
+> `NotEnabled` in Step 4c is that case made visible. It is the most likely thing to go wrong in normal operation, because it happens whenever the app's provisioning runs ahead of whatever sets `FabricEnabled`.
 
 ---
 
@@ -31,7 +40,7 @@ Two **Text** inputs, in this order:
 | 1 | `capacityId` | `text` | `triggerBody()['text']` |
 | 2 | `workspaceId` | `text_1` | `triggerBody()['text_1']` |
 
-Both required, and both are GUIDs — so getting them the wrong way round produces a syntactically valid pair that quietly whitelists nothing. Add them in the order above and check the first run in the history.
+Both required, and both are GUIDs. Getting them the wrong way round is caught — Step 3 returns `NotFound` — but add them in the order above anyway, and check the first run in the history. `AddWorkspaceToPolicy` and `RemoveWorkspaceFromPolicy` take the same two inputs in the same order, so the app calls both the same way.
 
 ---
 
@@ -44,69 +53,75 @@ Both required, and both are GUIDs — so getting them the wrong way round produc
 
 ---
 
-## Step 3 — Is it already there?
+## Step 3 — Find the workspace row
 
-`Get_existing_link` — Dataverse **List rows**:
+`Get_workspace_row` — Dataverse **List rows**:
 
 | Field | Value |
 |---|---|
-| Table name | `Capacity Workspaces` |
-| Filter rows | `crbab_capacityid eq '@{triggerBody()['text']}' and crbab_workspaceid eq '@{triggerBody()['text_1']}'` |
-| Row count | `1` |
+| Table name | `Workspaces` (`ubsppcoe_Workspace`) |
+| Filter rows | `ubsppcoe_fabricworkspaceid eq '@{triggerBody()['text_1']}'` |
+| Select columns | `ubsppcoe_workspaceid,ubsppcoe_fabricworkspaceid,ubsppcoe_fabricenabled,_ubsppcoe_node_value` |
+| Row count | `2` |
 
-`Condition_already_linked` — **Condition**:
+`Condition_workspace_found` — **Condition**:
 
 | Left | Operator | Right |
 |---|---|---|
-| `empty(body('Get_existing_link')?['value'])` | is equal to | `false` |
+| `length(body('Get_workspace_row')?['value'])` | is equal to | `1` |
 
-**Yes** → `outcome` = `AlreadyPresent`, `message` = `This workspace is already whitelisted on this capacity.` **Do not rebuild** — nothing changed, and a rebuild would spend a Fabric write to produce an identical rule set.
+**No** → `outcome` = `NotFound`, `message` = `No workspace record exists for this ID, or more than one does. It must be registered before it can be whitelisted.` Stop — no rebuild.
 
-Everything below goes in the **No** branch.
+Everything below goes in the **Yes** branch.
 
 ---
 
-## Step 4 — The ceiling check
+## Step 4 — Is it on the right capacity, and is it enabled?
 
-`Count_existing` — Dataverse **List rows**:
+### 4a. Resolve the capacity's Node row
+
+`Get_node_row` — Dataverse **List rows**:
 
 | Field | Value |
 |---|---|
-| Table name | `Capacity Workspaces` |
-| Filter rows | `crbab_capacityid eq '@{triggerBody()['text']}'` |
-| Select columns | `crbab_workspaceid` |
-| Row count | `5000` |
+| Table name | `Nodes` (`ubsppcoe_Node`) |
+| Filter rows | `ubsppcoe_fabriccapacityid eq '@{triggerBody()['text']}'` |
+| Select columns | `ubsppcoe_nodeid` |
+| Row count | `2` |
 
-Pagination **On** in Settings, threshold `5000`.
-
-`Condition_at_ceiling` — **Condition**, advanced:
+### 4b. `Condition_node_matches` — **Condition**, advanced
 
 ```
-@greaterOrEquals(
-  length(body('Count_existing')?['value']),
-  mul(int(parameters('PolicyMaxWorkspacesPerRule (ab_PolicyMaxWorkspacesPerRule)')), sub(int(parameters('PolicyMaxRulesPerPolicy (ab_PolicyMaxRulesPerPolicy)')), 1))
+@and(
+  equals(length(body('Get_node_row')?['value']), 1),
+  equals(
+    first(body('Get_workspace_row')?['value'])?['_ubsppcoe_node_value'],
+    first(body('Get_node_row')?['value'])?['ubsppcoe_nodeid']
+  )
 )
 ```
 
-**Yes** → `outcome` = `Failed`, message naming the limit. Stop.
+**No** → `outcome` = `WrongCapacity`, `message` = `This workspace is not assigned to that capacity, so it will not appear in that capacity's rules.` Stop.
 
-The ceiling is **49 workspaces × 49 whitelist rules = 2401 per capacity** — one of the 50 rules is always rule 1. Catch it here rather than letting the child flow discover it, so the row is never written for a change that cannot be applied.
+> **This check is the reason the two GUIDs cannot be swapped by accident.** Both inputs are GUIDs, so passing them the wrong way round would otherwise produce a syntactically valid pair, a successful rebuild of the **wrong capacity**, and a confident success message. Rebuilding a policy the caller never asked about is the worst outcome available here, and it is a one-line mistake to make.
+
+### 4c. `Condition_enabled` — **Condition**
+
+| Left | Operator | Right |
+|---|---|---|
+| `first(body('Get_workspace_row')?['value'])?['ubsppcoe_fabricenabled']` | is equal to | `true` |
+
+**No** → `outcome` = `NotEnabled`, `message` = `This workspace is registered on the capacity but is not Fabric-enabled, so it cannot be whitelisted. FabricEnabled is set by the platform team's process, not by this app.` Stop — **no rebuild**.
+
+> **Refusing here rather than rebuilding is a judgement call, and this is the reasoning.** Rebuilding would be harmless: the workspace is not enabled, so the rules come out the same. But the caller asked to add a workspace, and returning a success outcome after a no-op rebuild is how an app ends up telling a user they have access they do not have.
+>
+> The cost is that a genuinely stale rule set on that capacity does not get republished by this call. The nightly run covers it, and "we refused and told you why" beats "we succeeded at something you did not ask for".
+
+Everything below goes in the **Yes** branch.
 
 ---
 
-## Step 5 — Write the row
-
-`Add_link_row` — Dataverse **Add a new row**:
-
-| Column | Value |
-|---|---|
-| Table name | `Capacity Workspaces` |
-| `crbab_capacityid` | `triggerBody()['text']` |
-| `crbab_workspaceid` | `triggerBody()['text_1']` |
-
----
-
-## Step 6 — Rebuild
+## Step 5 — Rebuild
 
 `Run_rebuild` — **Run a Child Flow** → `RebuildCapacityPolicyRules`, passing `triggerBody()['text']`.
 
@@ -120,20 +135,19 @@ Configure this Condition to run after `Run_rebuild` on **is successful** and **h
 
 ### Yes
 
-`outcome` = `Added`, `message` = `Workspace whitelisted.`
+`outcome` = `Added`, `message` = `concat('Policy rules updated. ', body('Run_rebuild')?['workspacecount'], ' workspace(s) allowed on this capacity.')`
 
-### No — undo the row
+### No
 
-1. `Delete_link_row` — Dataverse **Delete a row**, Row ID `body('Add_link_row')?['crbab_capacityworkspaceid']`.
-2. `outcome` = `Failed`, `message` = `concat('Rules could not be rebuilt, so the whitelist was not changed: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'))`
+`outcome` = `Failed`, `message` = `concat('The workspace is whitelisted in Dataverse but the rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' The nightly rebuild will apply it.')`
 
-> **The compensating delete is not optional.** Dataverse is the source of truth, so a row that never reached Fabric is a lie: the app would show the workspace as whitelisted while item creation there still fails. Rolling back keeps the two consistent and gives the user an honest failure.
+> **There is nothing to roll back, and that is a real simplification.** Earlier drafts of this flow wrote a row (or a flag) and had to undo it when the rebuild failed — a compensating write that was itself not transactional. Since this flow writes nothing, a failed rebuild leaves the world exactly as it found it: Dataverse already said the workspace was whitelisted before the call, and the previously published rules are untouched.
 >
-> It is not a transaction — the delete can itself fail. If it does, the nightly rebuild in [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) reconciles it by making Fabric match the row, which is the safe direction to converge.
+> The only casualty is timing. The workspace is whitelisted according to Dataverse and not yet according to Fabric, and it stays that way until the next successful rebuild. Say so in the message rather than reporting a bare failure.
 
 ---
 
-## Step 7 — Respond
+## Step 6 — Respond
 
 **Respond to a Power App or flow**, run after the Condition on **is successful** and **has failed**. Two **Text** outputs:
 
@@ -142,23 +156,39 @@ Configure this Condition to run after `Run_rebuild` on **is successful** and **h
 | `Outcome` | `variables('outcome')` |
 | `Message` | `variables('message')` |
 
-| `outcome` | Meaning |
-|---|---|
-| `Added` | Row written and rules rebuilt |
-| `AlreadyPresent` | Nothing done, nothing needed |
-| `Failed` | Nothing changed — the row was rolled back if it had been written |
+| `outcome` | Meaning | Rebuild ran? |
+|---|---|---|
+| `Added` | Confirmed whitelisted, rules republished | Yes |
+| `NotFound` | No workspace record for that ID, or more than one | No |
+| `WrongCapacity` | The row exists but its `Node` is another capacity | No |
+| `NotEnabled` | On the right capacity, but `FabricEnabled` is not set. **The common one** | No |
+| `Failed` | Dataverse is right, Fabric is stale. The nightly run will converge it | Yes, and it failed |
 
 Both outputs **Text**. A non-Text field fails schema validation at runtime and makes *every* output of the flow unreadable to the app.
 
+> **`Added` is not a promise that this call changed anything.** It means the rules now match Dataverse and the workspace is in them. Calling it twice returns `Added` twice; that is correct, and `replaceByPolicy` makes it harmless.
+
 ---
 
-## What the app must do before calling this
+## What the app must do
 
-**Validate the workspace.** Fabric accepts any well-formed GUID in a `workspace.id` condition — a typo, a deleted workspace, or one from another tenant is stored happily and simply never matches. Nothing fails, and the owner is left with a policy that looks correct and denies them.
+### Handle `NotEnabled` as a normal outcome, not an error
 
-Before calling, confirm the workspace exists and is **assigned to that capacity**. `GET /v1/workspaces/{id}` returns `capacityId`; a workspace on a different capacity should not be whitelisted here, because the policy governing it is the other capacity's.
+It is what happens whenever provisioning runs ahead of whatever sets `FabricEnabled` — which, since the two are different systems, will be routine rather than exceptional. The message needs to tell the user **who** sets the flag and that the workspace will be picked up once it is set. An app that shows this as a red failure will generate tickets for something working as designed.
 
-This is the app's job, not the flow's — the flow has no way to distinguish a typo from a deliberate entry, and neither does the API.
+### Do not claim more than the outcome supports
+
+`Added` is safe to phrase as *"workspace whitelisted"*. Nothing else is. In particular `Failed` means the whitelist is correct and the **rules** are stale, which is almost the opposite of what a user reads into the word.
+
+### A `Node` move is a Remove then an Add
+
+Moving a workspace between capacities changes **two** whitelists. Call [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) against the old capacity and this flow against the new one. The old-capacity call is the one that gets forgotten, and it fails silently — the workspace stays in rules it no longer belongs in until the nightly run.
+
+### The inventory is not Fabric
+
+**The `Node` lookup is the CMDB's opinion.** Fabric accepts any well-formed GUID in a `workspace.id` condition — a stale row, a deleted workspace, or one already moved elsewhere is stored happily and simply never matches. Nothing fails, and the owner is left with a policy that looks correct and denies them.
+
+If the app can afford the call, confirm with `GET /v1/workspaces/{id}` that the workspace exists and that its `capacityId` agrees with the Node lookup. Where they disagree the inventory is stale, and the fix belongs in `ubsppcoe_Workspace` — which is a request to its owners, not something any flow here can do.
 
 ---
 
@@ -166,13 +196,20 @@ This is the app's job, not the flow's — the flow has no way to distinguish a t
 
 | # | Test | Expect |
 |---|---|---|
-| 1 | Add a workspace to a capacity with none | `Added`; rules go from 1 to 2 |
-| 2 | Add the same workspace again | `AlreadyPresent`; **no Fabric call** in the child flow's history |
-| 3 | Add a 50th workspace | `Added`; rules go from 2 to 3, split 49 + 1 |
-| 4 | Break the child flow deliberately, then add | `Failed`, and the row is **gone** from `Capacity Workspaces` |
-| 5 | Add to a capacity with no `Capacity Policies` row | `Failed` with the child flow's "run InitializeCapacityPolicySet first" message |
-| 6 | Two adds for the same capacity at once | Both succeed and both appear. The child flow's concurrency limit of 1 serialises the rebuilds |
+| 1 | An enabled workspace on a capacity with no others | `Added`; rules go from 1 to 2 |
+| 2 | The same call again | `Added` again, identical rule set, no duplicates |
+| 3 | The 50th enabled workspace | `Added`; rules go from 2 to 3, split 49 + 1 |
+| 4 | A row whose `FabricEnabled` is No or blank | `NotEnabled`, and **no Fabric call** in the child flow's history |
+| 5 | Break the child flow deliberately | `Failed`, with the "nightly rebuild will apply it" message |
+| 6 | A workspace GUID with no row in `ubsppcoe_Workspace` | `NotFound` |
+| 7 | A workspace whose `Node` is a different capacity | `WrongCapacity`; **no rebuild**, and the other capacity's rules untouched |
+| 8 | Swap the two inputs — pass the capacity id as `workspaceId` | `NotFound`, not a silent no-op |
+| 9 | Capacity with no `Capacity Policies` row | `Failed`, carrying the child flow's "run InitializeCapacityPolicySet first" message |
+| 10 | Inspect any run's action list | **No write action against `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
+| 11 | Two calls for the same capacity at once | Both succeed. The child flow's concurrency limit of 1 serialises the rebuilds |
 
-Test 4 is the one people skip. It is the only test that proves Dataverse and Fabric cannot silently disagree.
+Test 4 is the one worth writing first — it is both the most common real outcome and the one a plain refresh flow could not report at all.
 
-> Testing from the designer reports **`ActionResponseSkipped`** on the Respond action — expected, since nothing is waiting for the response. The row and the rebuild still happen.
+Test 10 is the standing invariant for this whole design.
+
+> Testing from the designer reports **`ActionResponseSkipped`** on the Respond action — expected, since nothing is waiting for the response. The rebuild still happens.

@@ -58,6 +58,8 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 Findings are rewritten each run, so this table is a **current state**, not a log. If an audit trail is wanted, add a second table and append instead — but do not make one table try to be both.
 
+> **This flow is the only writer, and that follows from the wipe.** Step 8 deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
+
 ---
 
 ## Step 1 — Create the flow

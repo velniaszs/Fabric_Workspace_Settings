@@ -17,12 +17,17 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 | Rules edited by hand | **Yes.** Overwritten wholesale |
 | A rule deleted by hand | **Yes.** Regenerated |
 | Rule 1 removed | **Yes** — and this matters most, because a policy with no rules is unenforced, not empty |
-| A row that a failed `AddWorkspaceToPolicy` or `RemoveWorkspaceFromPolicy` never applied | **Yes.** Converges Fabric to the table |
+| A flag that a failed `AddWorkspaceToPolicy` or `RemoveWorkspaceFromPolicy` never applied | **Yes.** Converges Fabric to Dataverse |
+| A `FabricEnabled` or `Node` edit made **outside** these flows | **Yes**, and this is now the common case \u2014 `ubsppcoe_Workspace` is owned by another team and nothing triggers a rebuild when they change it |
+| A workspace **moved** to a different Node | **Yes**, but only because every capacity is rebuilt. Neither the old nor the new capacity is rebuilt at the time of the move |
+| A missing or blank `node` lookup on the policy row | **No.** The rebuild refuses that capacity and reports it — deliberately, see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a |
 | Our policy set **deactivated**, another one active | **No** — see §4 |
 | Our policy set **deleted** | **No.** The rebuild 404s |
 | A policy set created by hand for a capacity we already manage | **No** |
 
-The three it cannot fix are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects. Run both: this one converges what it can, the scan reports what it cannot.
+The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects. Run both: this one converges what it can, the scan reports what it cannot.
+
+> **This flow carries more weight than it did.** When the whitelist lived in a table only these flows wrote to, nightly convergence was a safety net. Now it is the **only** thing that applies an out-of-band `FabricEnabled` change. If a same-day guarantee is needed, that is a Dataverse-modified trigger on `ubsppcoe_Workspace`, not a shorter recurrence here — see Q16 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 
 ---
 
@@ -112,7 +117,17 @@ The child flow already stamps `last_rebuild` and `last_error` on each row, so pe
 
 After the loop, a **Condition** on `@greater(length(variables('failures')), 0)`.
 
-**Yes** → send a mail, post to Teams, or write a row to `Policy Drift` with kind `Missing` — whatever your operational routing is. Include the count and the lines.
+**Yes** → send a mail or post to Teams — whatever your operational routing is. Include the count and the lines.
+
+> **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, for three reasons.
+>
+> **The rows would vanish.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, because its findings are current state rather than a log. Anything this flow wrote would silently disappear on the next run, at an interval nobody is thinking about.
+>
+> **`Missing` means something else.** In the drift table it means *a policy set recorded in Dataverse no longer exists in Fabric*. "The rebuild failed for this capacity" is a different fact with a different remedy, and overloading the kind would make the scan's own output untrustworthy.
+>
+> **One table, one writer.** Two flows writing a table that one of them wipes wholesale is a race with no upside.
+>
+> Per-capacity detail is already recorded where it belongs: `last_error` and `last_rebuild` on the capacity's own `Capacity Policies` row, stamped by the child flow on every attempt. That is queryable, survives the scan, and is what [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) surfaces. This step only needs to raise a human's attention to the summary.
 
 **Do not send anything on a clean run.** A nightly "all fine" mail is unread within a fortnight, and its absence then means nothing. Report exceptions; use `last_rebuild` on the table to prove the run happened.
 
