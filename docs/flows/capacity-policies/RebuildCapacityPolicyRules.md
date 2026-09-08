@@ -121,6 +121,8 @@ Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **
 >
 > **1. Respond to a Power App or flow**, carrying all six Text outputs from Step 10b. **2. Control → Terminate**, Status **`Succeeded`**. In that order.
 >
+> **Name both actions after the guard** — `Respond_no_node` / `Terminate_no_node`, and so on. Left at their defaults you get `Terminate`, `Terminate 2` and `Terminate 3`, and a run history that cannot tell you which guard fired without opening each one.
+>
 > **Respond must come first.** `Terminate` ends the run immediately, so a Respond placed after it never executes and the caller receives nothing at all.
 >
 > **Status is `Succeeded`, not `Failed`, and that is deliberate.** These flows are called with `Run a Child Flow`. Terminating as `Failed` makes that call fail in the parent, which then cannot read the Respond payload — the caller gets a flow fault instead of `Outcome = Failed` and a sentence explaining why. The flow did its job: it detected a bad state and reported it. Reserve a genuine failure for when the flow itself breaks.
@@ -183,16 +185,20 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 
 **1. `Respond_no_policy_row`** — **Respond to a Power App or flow**. **All six Text outputs, not two:**
 
-| Output | Value |
-|---|---|
-| `Outcome` | `Failed` |
-| `PolicySetId` | *(leave empty — there is no row, so there is no policy set id)* |
-| `RuleCount` | `0` |
-| `WorkspaceCount` | `0` |
-| `ExceptionCount` | `0` |
-| `Message` | `No policy set is registered for this capacity. Run InitializeCapacityPolicySet first.` |
+| Output | Type | Value |
+|---|---|---|
+| `Outcome` | **Text** | `Failed` |
+| `PolicySetId` | **Text** | `variables('policySetId')` |
+| `RuleCount` | **Text** | `0` |
+| `WorkspaceCount` | **Text** | `0` |
+| `ExceptionCount` | **Text** | `0` |
+| `Message` | **Text** | `No policy set is registered for this capacity. Run InitializeCapacityPolicySet first.` |
 
-**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**. The caller gets an answer, and this is a caller error rather than a flow fault.
+**Every output box is required — none can be left blank.** `PolicySetId` uses the same expression as the other three Responds even though there is no policy set here: `policySetId` was initialised to an empty string in Step 3 and nothing has set it, so it evaluates to empty on its own. That keeps one expression across all four exits instead of a special case.
+
+**The three counts are Text, not Number — type `0` into a Text field.** Picking Number because the name looks numeric is the mistake; see the typing rule at Step 10b.
+
+**2. `Terminate_no_policy_row`** — **Control** → **Terminate**, **Status = `Succeeded`**. The caller gets an answer, and this is a caller error rather than a flow fault.
 
 > **Declaring only `Outcome` and `Message` here would be a bug**, and a quiet one. Every `Respond` in this flow must declare the same six outputs — see Step 10b. A caller reading `RuleCount` from a response that never declared it gets a **blank, not an error**, which a parent flow then treats as zero.
 
@@ -234,16 +240,16 @@ Three lists come out of Dataverse here: the whitelist (`ubsppcoe_Workspace` rows
 
 **1. `Respond_no_node`** — **Respond to a Power App or flow**, with the same six **Text** outputs as Step 10b:
 
-| Output | Value |
-|---|---|
-| `Outcome` | `Failed` |
-| `PolicySetId` | `variables('policySetId')` — known, Step 4 set it |
-| `RuleCount` | `0` |
-| `WorkspaceCount` | `0` |
-| `ExceptionCount` | `0` |
-| `Message` | `This capacity's policy row has no Node link, so its workspaces cannot be determined.` |
+| Output | Type | Value |
+|---|---|---|
+| `Outcome` | **Text** | `Failed` |
+| `PolicySetId` | **Text** | `variables('policySetId')` — known, Step 4 set it |
+| `RuleCount` | **Text** | `0` |
+| `WorkspaceCount` | **Text** | `0` |
+| `ExceptionCount` | **Text** | `0` |
+| `Message` | **Text** | `This capacity's policy row has no Node link, so its workspaces cannot be determined.` |
 
-**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**.
+**2. `Terminate_no_node`** — **Control** → **Terminate**, **Status = `Succeeded`**.
 
 **Leave the *No* branch empty** — 5b onwards are siblings of this Condition, not children of it.
 
@@ -430,16 +436,16 @@ Separate concern, and not to be confused with the chunking above. Chunking is ho
 
 **1. `Respond_too_many_rules`** — **Respond to a Power App or flow**, all six Text outputs. **Unlike the earlier two guards, almost everything is known by now, so fill it in:**
 
-| Output | Value |
-|---|---|
-| `Outcome` | `Failed` |
-| `PolicySetId` | `variables('policySetId')` |
-| `RuleCount` | `string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1))` |
-| `WorkspaceCount` | `string(length(variables('workspaces')))` |
-| `ExceptionCount` | `string(length(variables('exceptions')))` |
-| `Message` | `concat('This capacity needs ', string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)), ' rules, which exceeds the service limit of ', parameters('PolicyMaxRulesPerPolicy (ubsppcoe_PolicyMaxRulesPerPolicy)'), '. No rules were published.')` |
+| Output | Type | Value |
+|---|---|---|
+| `Outcome` | **Text** | `Failed` |
+| `PolicySetId` | **Text** | `variables('policySetId')` |
+| `RuleCount` | **Text** | `string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1))` |
+| `WorkspaceCount` | **Text** | `string(length(variables('workspaces')))` |
+| `ExceptionCount` | **Text** | `string(length(variables('exceptions')))` |
+| `Message` | **Text** | `concat('This capacity needs ', string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)), ' rules, which exceeds the service limit of ', parameters('PolicyMaxRulesPerPolicy (ubsppcoe_PolicyMaxRulesPerPolicy)'), '. No rules were published.')` |
 
-**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**.
+**2. `Terminate_too_many_rules`** — **Control** → **Terminate**, **Status = `Succeeded`**.
 
 **Blanking the counts here would waste the only useful diagnostic.** The whole point of failing at this step rather than at Fabric is that the caller learns *how far over* the limit the capacity is.
 
@@ -629,14 +635,14 @@ Writing the row on both paths is the point — a failed rebuild that leaves `las
 
 **+ New step** → **Respond to a Power App or flow**, renamed `Respond_rebuilt`. ⋯ → **Configure run after** on `Update_policy_row` with **is successful** and **has failed** ticked. Six **Text** outputs:
 
-| Output | Value |
-|---|---|
-| `Outcome` | `if(less(coalesce(outputs('Replace_rules')?['statusCode'], 0), 300), 'Rebuilt', 'Failed')` |
-| `PolicySetId` | `variables('policySetId')` |
-| `RuleCount` | `string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1))` |
-| `WorkspaceCount` | `string(length(variables('workspaces')))` |
-| `ExceptionCount` | `string(length(variables('exceptions')))` |
-| `Message` | `if(less(coalesce(outputs('Replace_rules')?['statusCode'], 0), 300), 'Rules rebuilt.', coalesce(body('Replace_rules')?['message'], body('Replace_rules')?['errorCode'], string(body('Replace_rules'))))` |
+| Output | Type | Value |
+|---|---|---|
+| `Outcome` | **Text** | `if(less(coalesce(outputs('Replace_rules')?['statusCode'], 0), 300), 'Rebuilt', 'Failed')` |
+| `PolicySetId` | **Text** | `variables('policySetId')` |
+| `RuleCount` | **Text** | `string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1))` |
+| `WorkspaceCount` | **Text** | `string(length(variables('workspaces')))` |
+| `ExceptionCount` | **Text** | `string(length(variables('exceptions')))` |
+| `Message` | **Text** | `if(less(coalesce(outputs('Replace_rules')?['statusCode'], 0), 300), 'Rules rebuilt.', coalesce(body('Replace_rules')?['message'], body('Replace_rules')?['errorCode'], string(body('Replace_rules'))))` |
 
 Status code lives on `outputs('Replace_rules')`, the payload on `body('Replace_rules')`. They are not interchangeable — `body(...)?['statusCode']` is always blank, which would report every rebuild as `Failed`.
 
@@ -654,12 +660,14 @@ There are **four** `Respond to a Power App or flow` actions here — three early
 
 | Action | Step | `Outcome` | `PolicySetId` | `RuleCount` | `WorkspaceCount` | `ExceptionCount` |
 |---|---|---|---|---|---|---|
-| `Respond_no_policy_row` | 4 | `Failed` | *(empty)* | `0` | `0` | `0` |
+| `Respond_no_policy_row` | 4 | `Failed` | `variables('policySetId')` — empty here | `0` | `0` | `0` |
 | `Respond_no_node` | 5a | `Failed` | `variables('policySetId')` | `0` | `0` | `0` |
 | `Respond_too_many_rules` | 6 | `Failed` | `variables('policySetId')` | computed total | actual | actual |
 | `Respond_rebuilt` | 10b | `Rebuilt` / `Failed` | `variables('policySetId')` | computed total | actual | actual |
 
-**The field list is identical everywhere; only the values differ by what is known at that point.** Blank the ones that genuinely are not known yet, and fill in the ones that are — Step 6 in particular, where the counts are the diagnostic the caller needs.
+**The field list is identical everywhere, and so is the type — all six are Text on all four.** `PolicySetId` even uses the same expression on all four; it simply evaluates to empty at Step 4, because nothing has set it yet.
+
+**No output box may be left blank.** The designer requires a value in each one, so "blank" always means *an expression that evaluates to empty*, never an empty field.
 
 A caller reading a field that the branch it happened to take never declared gets a **blank, not an error**. So a mismatch does not fail; it produces early-exit responses whose `RuleCount` is empty and a parent flow that quietly treats it as zero. Identical schemas everywhere is the only version of this that stays debuggable.
 
