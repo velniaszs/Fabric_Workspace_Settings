@@ -262,6 +262,8 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ## 7. Build checklist
 
+**If you have not built Dataverse tables before, follow §8 instead** — it is the same list with every click spelled out. This is the short form for someone who has.
+
 1. **No names are outstanding.** Every logical name on `ubsppcoe_Workspace` and `ubsppcoe_Node` was confirmed on 2026-09-07 — Q19 is closed.
 2. Create the four tables above in the maker portal, in one solution, using a publisher whose prefix is **`ubsppcoe`**. Not `crbab` — that prefix belongs to the workspace-settings canvas app and has nothing to do with policy rules.
 3. **On each *New table* screen, set the primary column before saving** — expand **Advanced options** to set its logical name. This is the one thing you cannot change afterwards (§0).
@@ -271,3 +273,170 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 7. Seed `ubsppcoe_PolicyException` from `fabric_workspaces_exceptions.csv`, if one is in use.
 8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1.
 9. Only then start on [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+
+---
+
+## 8. Step by step in the maker portal
+
+Written for someone who has not created a Dataverse table before. Follow it in order; the two steps that cannot be undone are **8.1** (which publisher) and **8.4** (the primary column).
+
+> **Portal wording drifts between releases.** Where a label has moved around, the alternative is given in brackets. If something is not where this says, it is almost always one level under **Advanced options**.
+
+### 8.0. Before you touch anything
+
+| Check | How |
+|---|---|
+| You are in the **right environment** | make.powerapps.com → the environment picker, top right. Every step below is scoped to it |
+| You have rights to customise | You need the **System Customizer** or **System Administrator** security role. Without it *New table* is missing or fails on save |
+| The platform team's tables are visible | Left nav → **Tables** → set the view filter to **All**. You must be able to see `Workspace` and `Node`. If not, you are in the wrong environment — stop, nothing below will work |
+
+### 8.1. Find the publisher — do not create a new one
+
+**This is the step most likely to go wrong, and it cannot be corrected afterwards.**
+
+A Dataverse **customisation prefix is unique per environment**. `ubsppcoe_Workspace` already exists, so a publisher owning the prefix `ubsppcoe` already exists too. **You must reuse it.** Creating your own publisher and typing `ubsppcoe` into it will be rejected, and picking a different prefix silently gives you `crXXX_capacitypolicy` instead of `ubsppcoe_CapacityPolicy` — every filter in every flow doc then wrong.
+
+1. Left nav → **Solutions**.
+2. Toolbar → **… (ellipsis)** → **Publishers** *(older portals: Settings → Solutions → Publishers)*.
+3. Find the row whose **Prefix** is `ubsppcoe`. Note its **Display name**.
+4. If there is no such publisher, **stop and ask the platform team.** Do not invent one.
+
+> **If you cannot use their publisher**, that is a conversation, not a workaround. Ask them to either share it or create the four tables for you. Any other prefix breaks every logical name in §2–§5, and the fix is deleting and rebuilding all four tables.
+
+### 8.2. Create the solution
+
+1. **Solutions** → **+ New solution**.
+2. **Display name**: `Fabric Capacity Policies`. **Name** fills itself in.
+3. **Publisher**: pick the `ubsppcoe` publisher from 8.1. **Do not click *+ New publisher*.**
+4. **Version**: leave `1.0.0.0`. **Create**.
+
+Everything from here happens **inside this solution**, not from the global Tables list. Building a table outside a solution puts it in the Default solution, where it still works but is far harder to export later.
+
+### 8.3. Open the New table screen
+
+Inside your solution: **+ New** → **Table** → **Table** *(some portals: **New** → **Table** → **Start from blank**)*.
+
+You now have a panel with **Properties** and **Primary column** — either as two tabs or as two expandable sections.
+
+### 8.4. Fill in Properties, then the Primary column — before saving
+
+Doing the first table, `Capacity Policies`, in full. The other three follow the identical shape.
+
+**Properties tab:**
+
+| Field | Value | Notes |
+|---|---|---|
+| Display name | `Capacity Policy` | Singular |
+| Plural name | `Capacity Policies` | Fills itself in; correct it if it guessed badly |
+| Description | *(optional)* | |
+| **Advanced options → Schema name** | `CapacityPolicy` | **The prefix box to its left already shows `ubsppcoe_`.** Type only `CapacityPolicy`, giving `ubsppcoe_CapacityPolicy` |
+| Advanced options → Type | **Standard** | Not Activity, not Virtual, not Elastic |
+| Advanced options → Ownership | **User or team** | |
+
+**Primary column tab — the irreversible one:**
+
+| Field | Value |
+|---|---|
+| Display name | `Capacity Name` |
+| **Advanced options → Schema name** | `capacityname` → giving `ubsppcoe_capacityname` |
+| Data type | Single line of text |
+| **Maximum character count** | `256` |
+
+Then **Save**.
+
+> **Why this cannot wait.** The primary column exists only on this screen. Once you save, its logical name is fixed forever — the only correction is deleting the table and starting again. If you leave it alone you get `ubsppcoe_name`, which is *harmless* (no flow reads primary name columns, §0) but will not match this document.
+
+### 8.5. Add the ordinary columns
+
+Open the new table → **Columns** → **+ New column**. Repeat once per row marked *Add manually* in §2.
+
+The panel is the same every time: **Display name**, then **Advanced options → Schema name**, then **Data type**, then whatever that type needs.
+
+**Recipes by type — these four cover everything in §2–§5:**
+
+| Doc says | Data type to choose | Then set |
+|---|---|---|
+| `Text (50)` / `Text (256)` | **Single line of text**, format **Text** | **Maximum character count** to `50` or `256`. The default is `100` — you must change it |
+| `Multiline text (2000)` | **Multiple lines of text** *(older: Text Area)* | **Maximum character count** to `2000` or `4000` |
+| `Whole number` | **Whole number** | Leave min/max at their defaults |
+| `Date and time` | **Date and time**, format **Date and time** | Leave **Behavior** at **User local**. Not *Date only* — the rebuild stamps a time, and Behavior is effectively one-way once changed |
+| `Boolean, default No` | **Yes/No** *(older: Two Options)* | **Advanced options → Default value → No.** See the warning below |
+| `Lookup → ubsppcoe_Node` | **Lookup** | **Related table** = `Node`. See 8.6 |
+
+So for `Capacity Policies` you add, in any order: `capacityid` (Text 50), `node` (Lookup), `policysetid` (Text 50), `policysetname` (Text 256), `status` (Text 50), `lastrebuild` (Date and time), `lasterror` (Multiline 2000), `workspacecount`, `exceptioncount`, `rulecount` (Whole number).
+
+> **Leave every column *Optional*.** Do not tick **Required** on anything, and specifically not on `ubsppcoe_node` — the rebuild depends on being able to read a policy row whose Node link is blank and fail closed on it (§2). A required column would block flow 1 from writing a partial row at all.
+
+> **`Default value = No` is not the same as never-null.** Rows created before the column existed, and rows created through the API without the field, are still `null`. That is fine — the flows filter on `eq true`, which excludes `false` and `null` alike (§1). Set the default anyway so hand-created rows are unambiguous.
+
+### 8.6. The lookup column, specifically
+
+On `Capacity Policies`, add the `Node` column:
+
+1. **+ New column** → Display name `Node`.
+2. **Advanced options → Schema name**: `node` → giving `ubsppcoe_node`.
+3. **Data type**: **Lookup** → **Lookup**.
+4. **Related table**: `Node` — the platform team's table. Not `Workspace`.
+5. Leave **Required** unticked. **Save**.
+
+> **You will never see `_ubsppcoe_node_value` in this UI.** The portal shows the column as `ubsppcoe_node`. The `_..._value` form is what the Web API and the Dataverse connector's *Filter rows* and *Select columns* boxes expect, and it is generated automatically. Both names refer to this one column — see the near-miss box in §0 before you write a filter.
+
+> **This creates a relationship** from `Capacity Policy` to `Node`. That is expected. It does **not** give any flow permission to write `Node`, and it does not modify their table.
+
+### 8.7. The choice column on Policy Drift
+
+`ubsppcoe_driftkind` is the only choice column in the set.
+
+1. **+ New column** → Display name `Kind`, Schema name `driftkind`.
+2. **Data type**: **Choice** → **Choice**.
+3. **Sync with a global choice?** → **No** — a local choice is right here; nothing else uses these values.
+4. Add exactly four items: `Untracked`, `Missing`, `Inactive`, `Conflict`.
+5. **Note the integer value beside each label** — the portal assigns them automatically. **Write them down.**
+
+> **Flows write choices by integer, not by label.** The Dataverse connector shows you the labels, but what travels is the number. Do not renumber or delete these items once `SyncCapacityPolicySets` is built, or old drift rows become unreadable and new ones land under the wrong kind.
+
+### 8.8. Repeat for the other three tables
+
+Same shape as 8.3–8.5, with the primary column from §3, §4 and §5:
+
+| Table | Schema name | Primary column display / schema | Max length |
+|---|---|---|---|
+| `Policy Item Types` | `PolicyItemType` | `Item Name` / `itemname` | 100 |
+| `Policy Exceptions` | `PolicyException` | `Workspace Name` / `workspacename` | 256 |
+| `Policy Drift` | `PolicyDrift` | `Display Name` / `displayname` | 256 |
+
+### 8.9. Verify before building anything
+
+**This is the step that catches a divergence while it is still cheap to fix.** For each of the four tables:
+
+1. Open the table → **Columns**.
+2. Change the view filter from **Default** to **All**.
+3. Read the **Name** column — that is the logical name — and compare it against §2–§5, character by character.
+
+What you are looking for:
+
+| Symptom | What happened | Fix |
+|---|---|---|
+| `crXXX_capacityid` or any other prefix | Wrong publisher on the solution | Delete all four tables and redo from 8.1 |
+| `ubsppcoe_ubsppcoe_capacityid` | You typed the prefix into the schema name box, which already showed it | Delete that column, re-add it |
+| `ubsppcoe_name` where you expected `ubsppcoe_capacityname` | Primary column left at its default in 8.4 | Harmless — no flow reads it. Either accept it or delete the table and redo |
+| A text column that rejects a long value | Max character count left at `100` | Editable after creation. Raise it |
+| `ubsppcoe_lastrebuild` shows a date but no time | Behavior or Format set to *Date only* | Delete the column and re-add it |
+
+Then check the row key exists and is what §2–§5 says: it appears in the **All** column list as `ubsppcoe_capacitypolicyid` and similar. You did not create it; confirm it is there.
+
+### 8.10. Publish
+
+Solution toolbar → **Publish all customizations**. Nothing is live to the connectors until this runs, and a flow built against an unpublished column shows confusing "column not found" errors.
+
+### 8.11. Common mistakes, collected
+
+| Mistake | Consequence |
+|---|---|
+| Creating a new publisher instead of reusing `ubsppcoe` | Every logical name in every flow doc is wrong. **The expensive one** |
+| Building the tables outside a solution | They work, but land in the Default solution and are painful to export |
+| Ticking **Required** on `ubsppcoe_node` | Flow 1 cannot write a partial row; the fail-closed path in the rebuild becomes untestable |
+| Forgetting **Default value → No** on the two `active` columns | Hand-created rows are `null` instead of `false`. Behaves identically in every filter, but reads as "nobody decided" |
+| Using `statecode` / `statuscode` instead of `ubsppcoe_status` | Conflates *is this row active* with *is the policy set activated in Fabric* (§2) |
+| Skipping **Publish all customizations** | Columns are invisible to the Dataverse connector |
+| Adding `ubsppcoe_Workspace` or `ubsppcoe_Node` to your solution *with* their metadata | You become a co-owner of someone else's schema on export. If you add them at all, add them with **no subcomponents** |
