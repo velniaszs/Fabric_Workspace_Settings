@@ -117,6 +117,16 @@ Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **
 >
 > **The Terminate actions are load-bearing.** The flat structure is safe *only* because they are there. Delete one while tidying up and the flow carries straight on past a failed guard — rebuilding a capacity from data it has just declared unusable, which is exactly what the guards exist to prevent.
 
+> ### Building a guard exit — the same two actions every time
+>
+> **1. Respond to a Power App or flow**, carrying all six Text outputs from Step 10b. **2. Control → Terminate**, Status **`Succeeded`**. In that order.
+>
+> **Respond must come first.** `Terminate` ends the run immediately, so a Respond placed after it never executes and the caller receives nothing at all.
+>
+> **Status is `Succeeded`, not `Failed`, and that is deliberate.** These flows are called with `Run a Child Flow`. Terminating as `Failed` makes that call fail in the parent, which then cannot read the Respond payload — the caller gets a flow fault instead of `Outcome = Failed` and a sentence explaining why. The flow did its job: it detected a bad state and reported it. Reserve a genuine failure for when the flow itself breaks.
+>
+> **Fill in every one of the six outputs, even the ones that are zero or blank.** Step 10b explains why: a caller reading a field the taken branch never declared gets a blank rather than an error, so a parent flow silently treats a missing `RuleCount` as nothing at all.
+
 ---
 
 ## Step 2 — The Fabric connection
@@ -169,7 +179,22 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 |---|---|---|
 | `empty(body('Get_policy_row')?['value'])` | is equal to | `true` |
 
-**Yes** branch → a **Respond to a Power App or flow** returning `Outcome` = `Failed`, `Message` = `No policy set is registered for this capacity. Run InitializeCapacityPolicySet first.`, and the other four fields blank or zero — see Step 10b on keeping the schemas identical. Then **Terminate** with status `Succeeded` — the caller gets an answer, and this is a caller error rather than a flow fault.
+**Yes** branch — two actions, in this order:
+
+**1. `Respond_no_policy_row`** — **Respond to a Power App or flow**. **All six Text outputs, not two:**
+
+| Output | Value |
+|---|---|
+| `Outcome` | `Failed` |
+| `PolicySetId` | *(leave empty — there is no row, so there is no policy set id)* |
+| `RuleCount` | `0` |
+| `WorkspaceCount` | `0` |
+| `ExceptionCount` | `0` |
+| `Message` | `No policy set is registered for this capacity. Run InitializeCapacityPolicySet first.` |
+
+**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**. The caller gets an answer, and this is a caller error rather than a flow fault.
+
+> **Declaring only `Outcome` and `Message` here would be a bug**, and a quiet one. Every `Respond` in this flow must declare the same six outputs — see Step 10b. A caller reading `RuleCount` from a response that never declared it gets a **blank, not an error**, which a parent flow then treats as zero.
 
 **Leave the *No* branch empty.** Then, back at the **top level** after the Condition, three **Set variable** actions:
 
@@ -205,7 +230,22 @@ Three lists come out of Dataverse here: the whitelist (`ubsppcoe_Workspace` rows
 |---|---|---|
 | `empty(variables('nodeRowId'))` | is equal to | `true` |
 
-**Yes** branch → Respond with `Outcome` = `Failed` and the message `This capacity's policy row has no Node link, so its workspaces cannot be determined.` Then **Terminate** with `Succeeded`. **Leave the *No* branch empty** — 5b onwards are siblings of this Condition, not children of it.
+**Yes** branch — two actions, in this order:
+
+**1. `Respond_no_node`** — **Respond to a Power App or flow**, with the same six **Text** outputs as Step 10b:
+
+| Output | Value |
+|---|---|
+| `Outcome` | `Failed` |
+| `PolicySetId` | `variables('policySetId')` — known, Step 4 set it |
+| `RuleCount` | `0` |
+| `WorkspaceCount` | `0` |
+| `ExceptionCount` | `0` |
+| `Message` | `This capacity's policy row has no Node link, so its workspaces cannot be determined.` |
+
+**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**.
+
+**Leave the *No* branch empty** — 5b onwards are siblings of this Condition, not children of it.
 
 > ### Failing here is the whole safety argument
 >
@@ -386,7 +426,22 @@ Separate concern, and not to be confused with the chunking above. Chunking is ho
 |---|---|---|
 | `add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)` | is greater than | `int(parameters('PolicyMaxRulesPerPolicy (ubsppcoe_PolicyMaxRulesPerPolicy)'))` |
 
-**Yes** → Respond with `Outcome` = `Failed`, a message naming the limit, and the same six fields as Step 10b — `PolicySetId`, `WorkspaceCount` and `ExceptionCount` are all known here, so fill them in rather than blanking them. Then **Terminate** with `Succeeded`.
+**Yes** branch — two actions, in this order:
+
+**1. `Respond_too_many_rules`** — **Respond to a Power App or flow**, all six Text outputs. **Unlike the earlier two guards, almost everything is known by now, so fill it in:**
+
+| Output | Value |
+|---|---|
+| `Outcome` | `Failed` |
+| `PolicySetId` | `variables('policySetId')` |
+| `RuleCount` | `string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1))` |
+| `WorkspaceCount` | `string(length(variables('workspaces')))` |
+| `ExceptionCount` | `string(length(variables('exceptions')))` |
+| `Message` | `concat('This capacity needs ', string(add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)), ' rules, which exceeds the service limit of ', parameters('PolicyMaxRulesPerPolicy (ubsppcoe_PolicyMaxRulesPerPolicy)'), '. No rules were published.')` |
+
+**2. `Terminate`** — **Control** → **Terminate**, **Status = `Succeeded`**.
+
+**Blanking the counts here would waste the only useful diagnostic.** The whole point of failing at this step rather than at Fabric is that the caller learns *how far over* the limit the capacity is.
 
 The `add(..., 1)` is rule 1, which is always emitted and always counts against the 50. **Exception chunks count too** — leaving them out of this sum moves the failure from a readable message here to an opaque rejection at Fabric, which is the whole reason the check exists.
 
