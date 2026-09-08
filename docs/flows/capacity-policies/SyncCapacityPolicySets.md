@@ -104,6 +104,14 @@ Seeding `nextUri` with the first page URL keeps the loop body uniform — one *I
 
 Deleting first means a failed scan leaves an empty table rather than yesterday's answers wearing today's date. An empty drift table beside a stale run time is obviously wrong; stale rows that look current are not.
 
+> **Leave `For_each_old_drift` at its default concurrency — do not set it to 1.** Every iteration deletes a different row ID and none depends on another, so running them in parallel is both correct and faster.
+>
+> That looks inconsistent with Step 6, which *does* set Degree of Parallelism to 1. The difference is what the loop body does: Step 6 calls **Fabric** once per iteration and serialises to stay inside the API's rate limits. This loop only touches Dataverse rows that have nothing to do with each other. **Serialise loops that call an external API; leave loops doing independent row writes alone.**
+>
+> The one reason to change it would be Dataverse service protection limits returning `429` on a very large drift table. That should not arise — a healthy tenant has zero rows here and a badly drifted one has a handful — but if it ever does, concurrency 1 is the lever.
+
+> **Two scans overlapping is the real risk, and it is already handled** — by the flow-level Concurrency Control in Step 1, not by anything in this loop. Without that, one run could be deleting while another writes.
+
 > **Why it is numbered `2b` rather than `3`.** It genuinely belongs here in execution order, but the scanning steps below are cross-referenced by number from other documents and from within this one — `Step 5a`, `6b`, `7c`. Inserting a whole step would shift every one of those. `2b` puts it in the right place without moving anything else.
 
 ---
@@ -395,19 +403,58 @@ Matching by ID inside a filter expression is awkward in Power Automate. If it tu
 
 ---
 
-## Step 9 — Stamp the run, and stop
+## Step 9 — Optional: record that the scan ran
 
-**This is the last action in the flow.** There is nothing after it and nothing is returned — see below.
+**Build this only if the app shows a drift screen.** It is not needed for the flow to work, and it costs a small table. Decide with the problem in front of you:
 
-`Stamp_last_run` — write `utcNow()` somewhere the app can read: a single-row settings table, or the `Policy Drift` grid's own header if you have one. Whatever you choose, **the drift table and this timestamp must be shown together.**
+> ### The problem it solves
+>
+> Step 2b deletes before it writes, so **an empty `Policy Drift` table has two very different meanings**: a clean scan found nothing, or a scan died after the delete and before writing. They look identical.
+>
+> The first is the good news everyone wants. The second means the estate has not been checked at all, and the screen is quietly saying it has.
 
-> **The timestamp is what makes an empty drift table readable.** Step 2b deletes before it writes, so "no rows" means either *a clean scan today* or *a scan that failed after the delete*. The run time is the only thing that tells them apart. Displaying the table without it turns a failed scan into a green tick.
+There are two honest ways to resolve that. **Pick one.**
 
-### What this flow returns
+### Option A — do not build it, and alert on failure instead *(recommended to start)*
+
+Add nothing here. Instead, on the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) already uses for its failures.
+
+Then a failed scan is known by mail rather than by absence, and the drift screen can be labelled *"findings from the last successful scan"* without claiming to be current.
+
+**Cost:** the screen cannot show *when* that scan was. Acceptable while this is a daily job somebody watches; less so once it is forgotten infrastructure.
+
+### Option B — a one-row state table
+
+Create a small table alongside the four in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md):
+
+| | |
+|---|---|
+| Schema name | `ubsppcoe_ScanState` |
+| Primary name column | `ubsppcoe_scanname` — Text (100) |
+| Column | `ubsppcoe_lastrun` — Date and time |
+
+**Seed exactly one row by hand**, with `ubsppcoe_scanname` = `CapacityPolicyDrift`.
+
+Then two actions at the very end of the flow:
+
+1. `Get_scan_state` — Dataverse **List rows** on `ubsppcoe_ScanState`, Filter rows `ubsppcoe_scanname eq 'CapacityPolicyDrift'`, Row count `1`.
+2. `Stamp_last_run` — Dataverse **Update a row** on `ubsppcoe_ScanState`, Row ID `first(body('Get_scan_state')?['value'])?['ubsppcoe_scanstateid']`, setting `ubsppcoe_lastrun` = `utcNow()`.
+
+**Look the row up rather than hard-coding its GUID** — the row is created by hand per environment, so a literal ID works in dev and silently fails everywhere else.
+
+> **The timestamp only means anything next to the table.** If the app shows drift rows without it, Option B has bought nothing — the whole point is that *empty plus a fresh timestamp* reads differently from *empty plus a stale one*.
+
+> **Do not use an environment variable for this.** A flow can update one through the Dataverse connector, but environment variable **values** do not travel reliably with a solution export ([OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1) — so the thing recording whether the scan is healthy becomes the thing that breaks on every deployment.
+
+---
+
+## What this flow returns
 
 **Nothing, and it must stay that way.** The Recurrence trigger has no caller waiting, so there is no `Respond to a Power App or flow` action — adding one would fail at runtime with nothing to answer.
 
-The output of a run *is* the contents of `Policy Drift`, plus the timestamp above. If the app needs the four counts on a screen, it reads them from the table, not from this flow.
+The last action is therefore either `Add_drift_conflict` (Step 7c), the optional status refresh (Step 8), or `Stamp_last_run` if you built Option B above. The output of a run *is* the contents of `Policy Drift`.
+
+If the app needs the four counts on a screen, it reads them from the table, not from this flow.
 
 > The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](docs/FLOWS.md) §4.
 

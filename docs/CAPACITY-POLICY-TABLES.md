@@ -436,7 +436,61 @@ Then check the row key exists and is what §2–§5 says: it appears in the **Al
 
 Solution toolbar → **Publish all customizations**. Nothing is live to the connectors until this runs, and a flow built against an unpublished column shows confusing "column not found" errors.
 
-### 8.11. Common mistakes, collected
+### 8.11. The environment variables
+
+The flow docs reference six of these. **They do not exist until you create them**, and a flow referencing a missing one fails at runtime with:
+
+> *Unable to process template language expressions in action `Initialize_nextUri` … The workflow parameter `policyholderworkspaceid ab_policyholderworkspaceid` is not found.*
+
+For each, in your solution: **+ New** → **More** → **Environment variable**.
+
+| Display name | Data type | Current value | Read by |
+|---|---|---|---|
+| `PolicyHolderWorkspaceId` | Text | The workspace holding the PolicySet items | Initialize, Rebuild, Sync |
+| `PolicySentinelWorkspaceId` | Text | `00000000-0000-0000-0000-000000000000` | Rebuild |
+| `PolicyMaxWorkspacesPerRule` | Text | `49` | Rebuild |
+| `PolicyMaxRulesPerPolicy` | Text | `50` | Rebuild |
+| `PolicyNamePrefix` | Text | `pol_` | Initialize |
+
+**Five, not six.** [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
+
+**Both numeric ones are Text, deliberately.** The flows wrap them in `int(...)` at the point of use. A Dataverse *Number* environment variable returns a value the expression engine handles inconsistently; Text plus an explicit cast is the version that behaves.
+
+**Set a Current Value, not only a Default Value.** A variable with neither resolves to blank, which does not error — it silently builds a URL with a missing segment.
+
+> ### The prefix will be `ubsppcoe_`, and the flow docs say `ab_`
+>
+> **The flow docs were written before the prefix decision of 2026-09-07 and still spell these `ab_PolicyHolderWorkspaceId`.** A variable created in your solution gets your publisher's prefix, so yours will be **`ubsppcoe_PolicyHolderWorkspaceId`**. Read every `ab_Policy…` in [flows/capacity-policies/](docs/flows/capacity-policies/) as "whatever prefix your solution gave it".
+>
+> The `ab_` prefix belongs to the **workspace-settings** solution — `ab_TenantId`, `ab_BrokerClientId` and the rest, which are unrelated to policy rules and must not be reused here.
+
+#### Referencing one in a flow
+
+The expression form is exact:
+
+```
+parameters('<Display name> (<Schema name>)')
+```
+
+One space before the bracket, and the case must match. So a variable displayed as `PolicyHolderWorkspaceId` with schema name `ubsppcoe_PolicyHolderWorkspaceId` is referenced as:
+
+```
+parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')
+```
+
+**Read both names off the variable rather than assuming.** Open it in the solution: the **Display name** is at the top, the **Name** is the schema name. Guessing either is how the error above happens.
+
+Three more things that produce the same message:
+
+| Cause | Fix |
+|---|---|
+| The flow was opened from **My flows** rather than from inside the solution | Close it, open the solution, edit it from there |
+| The variable exists in a *different* solution | Add it to this one: **Add existing** → **More** → **Environment variable** |
+| The variable was added after the flow was opened | **Save**, close and reopen the flow so the reference binds |
+
+> **To unblock while sorting the name out**, paste the literal GUID into the expression and confirm the rest of the flow works. Swap the variable back in before committing anything — a literal is correct in exactly one environment.
+
+### 8.12. Common mistakes, collected
 
 | Mistake | Consequence |
 |---|---|
@@ -447,4 +501,5 @@ Solution toolbar → **Publish all customizations**. Nothing is live to the conn
 | Setting a **default choice** on `ubsppcoe_driftkind` | A flow bug that omits the field gets stamped with a plausible kind instead of showing up blank (8.7) |
 | Using `statecode` / `statuscode` instead of `ubsppcoe_status` | Conflates *is this row active* with *is the policy set activated in Fabric* (§2) |
 | Skipping **Publish all customizations** | Columns are invisible to the Dataverse connector |
+| Referencing an environment variable that does not exist, or with the wrong prefix | `The workflow parameter … is not found` at runtime. See 8.11 |
 | Adding `ubsppcoe_Workspace` or `ubsppcoe_Node` to your solution *with* their metadata | You become a co-owner of someone else's schema on export. If you add them at all, add them with **no subcomponents** |

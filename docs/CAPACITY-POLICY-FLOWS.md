@@ -474,7 +474,7 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 | Deny-all sentinel GUID | Environment variable | `00000000-0000-0000-0000-000000000000` |
 | `MaxWorkspacesPerRule` | Environment variable | `49` |
 | `MaxRulesPerPolicy` | Environment variable | `50` |
-| Policy name | Environment variable | `ItemCreation` |
+| Policy name | **Hard-coded** in the rebuild body | `ItemCreation`. Listed here as an environment variable in an earlier draft, but no flow reads one — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §8.11. Parameterise it if the policy type ever needs to vary by environment |
 | Name prefix | Environment variable | `pol_` |
 | Item types | `PolicyItemType` table | |
 | Exceptions — rule 3 | `PolicyException` table | Ours, written by hand or by the app. No flow writes it |
