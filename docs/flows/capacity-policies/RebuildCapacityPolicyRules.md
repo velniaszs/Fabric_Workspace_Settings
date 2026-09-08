@@ -96,6 +96,27 @@ Add one input: **+ Add an input** → **Text**, titled `capacityId`. Referenced 
 
 Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **Degree of Parallelism = 1**. Two rebuilds of the same capacity overlapping would be last-writer-wins against Fabric even though Dataverse stayed consistent.
 
+> ### The shape of this flow — three guards, and you do **not** nest them
+>
+> Steps 4, 5a and 6 are early exits with an identical shape:
+>
+> **Condition → *Yes*: Respond, then Terminate. *No*: leave empty.**
+>
+> Because every one of those *Yes* branches ends in **Terminate**, which stops the entire run immediately, **everything that follows a guard sits at the top level as a sibling.** Do not put the rest of the flow inside the *No* branch.
+>
+> Nesting would work, but it compounds: three guards inside one another puts Step 10 four levels deep, and the designer becomes very hard to work in. Flat, the flow reads as a straight line with three ejector seats.
+>
+> | Condition | Ends in Terminate? | So the rest of the flow is… |
+> |---|---|---|
+> | Step 4 `Condition_policy_exists` | Yes | a sibling after it |
+> | Step 5a `Condition_node_linked` | Yes | a sibling after it |
+> | Step 6 `Condition_too_many_rules` | Yes | a sibling after it |
+> | Step 5k `Condition_has_candidates` | **No** | **genuinely nested** — 5l and 5m live in its *No* branch |
+>
+> **5k is the one real branch**, and it is the exception that proves the rule: it has no Terminate, so its contents must be inside it.
+>
+> **The Terminate actions are load-bearing.** The flat structure is safe *only* because they are there. Delete one while tidying up and the flow carries straight on past a failed guard — rebuilding a capacity from data it has just declared unusable, which is exactly what the guards exist to prevent.
+
 ---
 
 ## Step 2 — The Fabric connection
@@ -150,7 +171,7 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 
 **Yes** branch → a **Respond to a Power App or flow** returning `Outcome` = `Failed`, `Message` = `No policy set is registered for this capacity. Run InitializeCapacityPolicySet first.`, and the other four fields blank or zero — see Step 10b on keeping the schemas identical. Then **Terminate** with status `Succeeded` — the caller gets an answer, and this is a caller error rather than a flow fault.
 
-In the **No** branch, three **Set variable** actions:
+**Leave the *No* branch empty.** Then, back at the **top level** after the Condition, three **Set variable** actions:
 
 | Rename to | Name | Value |
 |---|---|---|
@@ -168,7 +189,9 @@ In the **No** branch, three **Set variable** actions:
 >
 > **This is `Capacity Policies`.`_ubsppcoe_node_value` — note the missing `id`.** The workspace table's lookup is `ubsppcoe_nodeid`, read as `_ubsppcoe_nodeid_value`, and Step 5 uses that one. Two different columns four characters apart, both resolving to the same capacity GUID; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
 
-Everything from Step 5 on goes in the same **No** branch.
+**Leave the *No* branch empty and continue at the top level.** Step 5 onwards are siblings of this Condition, not children of it — the *Yes* branch terminates, so nothing after it runs on that path. See the shape box in Step 1.
+
+> **The three `Set variable` actions above are siblings too**, not children of the Condition. Power Automate variables are scoped to the **run**, not to the branch they were set in, so Step 5 reads them perfectly well from the top level. Putting them inside the *No* branch would also work — it is just the one place where doing so buys nothing and breaks the "every guard's *No* branch is empty" rule.
 
 ---
 
@@ -182,7 +205,7 @@ Three lists come out of Dataverse here: the whitelist (`ubsppcoe_Workspace` rows
 |---|---|---|
 | `empty(variables('nodeRowId'))` | is equal to | `true` |
 
-**Yes** branch → Respond with `Outcome` = `Failed` and the message `This capacity's policy row has no Node link, so its workspaces cannot be determined.` Then **Terminate** with `Succeeded`. Everything from 5b on goes in the **No** branch.
+**Yes** branch → Respond with `Outcome` = `Failed` and the message `This capacity's policy row has no Node link, so its workspaces cannot be determined.` Then **Terminate** with `Succeeded`. **Leave the *No* branch empty** — 5b onwards are siblings of this Condition, not children of it.
 
 > ### Failing here is the whole safety argument
 >
@@ -297,7 +320,9 @@ Deduped the same way as 5d. Here the duplicate is likelier — this table has no
 |---|---|---|
 | `empty(variables('exceptionCandidates'))` | is equal to | `true` |
 
-**Yes** → nothing to do; `exceptions` stays empty and rule 3 is not emitted. The **No** branch holds 5l and 5m. The guard exists because the filter built in 5l is malformed when the array is empty.
+**Yes** → leave it **empty**; `exceptions` stays empty and rule 3 is not emitted. **The *No* branch really does hold 5l and 5m** — this is the one Condition in the flow that nests its contents, because it has no Terminate to fall through from. The guard exists because the filter built in 5l is malformed when the array is empty.
+
+Step 6 onwards resume at the top level, outside this Condition.
 
 ### 5l. `List_exception_workspace_rows` — Dataverse **List rows**
 
@@ -367,7 +392,7 @@ The `add(..., 1)` is rule 1, which is always emitted and always counts against t
 
 This flow does not manage capacity size — it splits into as many rules as the workspaces require, and only fails when the service will not accept the result. Failing here rather than at Fabric means the caller gets a sentence instead of an opaque rejection. Nothing forecasts or warns as a capacity grows.
 
-Steps 7–10 go in the **No** branch.
+**Leave the *No* branch empty.** Steps 7–10 are siblings of this Condition — the *Yes* branch terminates, so they cannot run on that path.
 
 ---
 

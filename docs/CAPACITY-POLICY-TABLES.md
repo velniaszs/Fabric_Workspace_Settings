@@ -490,6 +490,25 @@ Three more things that produce the same message:
 | The variable exists in a *different* solution | Add it to this one: **Add existing** → **More** → **Environment variable** |
 | The variable was added after the flow was opened | **Save**, close and reopen the flow so the reference binds |
 
+> ### The variable exists, the expression looks right, and it still is not found
+>
+> **This is the common one, and the expression is not the problem.** A flow declares every environment variable it uses in its own definition:
+>
+> ```json
+> "parameters": {
+>   "PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)": {
+>     "type": "String",
+>     "metadata": { "schemaName": "ubsppcoe_PolicyHolderWorkspaceId" }
+>   }
+> }
+> ```
+>
+> The designer writes that entry when it resolves your expression **against a variable that exists at save time**. Type the expression first and create the variable afterwards, and the flow saves with no declaration — then creating the variable changes nothing, because nothing goes back and re-reads it. The expression on screen still looks perfectly correct.
+>
+> **Fix: close the flow, reopen it, delete and retype the expression, save.** The designer loads the environment's variables when it opens, so a reopen is what makes them visible to it.
+>
+> To confirm rather than guess, export the solution and look at the flow's `definition.parameters`. If there is no entry keyed `PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)`, that is the whole story.
+
 > **To unblock while sorting the name out**, paste the literal GUID into the expression and confirm the rest of the flow works. Swap the variable back in before committing anything — a literal is correct in exactly one environment.
 
 ### 8.12. Common mistakes, collected
