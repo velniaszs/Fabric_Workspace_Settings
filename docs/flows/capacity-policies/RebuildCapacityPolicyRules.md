@@ -111,7 +111,7 @@ Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **
 > | Step 4 `Condition_policy_exists` | Yes | a sibling after it |
 > | Step 5a `Condition_node_linked` | Yes | a sibling after it |
 > | Step 6 `Condition_too_many_rules` | Yes | a sibling after it |
-> | Step 5k `Condition_has_candidates` | **No** | **genuinely nested** — 5l and 5m live in its *No* branch |
+> | Step 5k `Condition_has_candidates` | **No** | **genuinely nested** — 5l, 5m and 5n live in its *No* branch |
 >
 > **5k is the one real branch**, and it is the exception that proves the rule: it has no Terminate, so its contents must be inside it.
 >
@@ -366,7 +366,7 @@ Deduped the same way as 5d. Here the duplicate is likelier — this table has no
 |---|---|---|
 | `empty(variables('exceptionCandidates'))` | is equal to | `true` |
 
-**Yes** → leave it **empty**; `exceptions` stays empty and rule 3 is not emitted. **The *No* branch really does hold 5l and 5m** — this is the one Condition in the flow that nests its contents, because it has no Terminate to fall through from. The guard exists because the filter built in 5l is malformed when the array is empty.
+**Yes** → leave it **empty**; `exceptions` stays empty and rule 3 is not emitted. **The *No* branch really does hold 5l, 5m and 5n** — this is the one Condition in the flow that nests its contents, because it has no Terminate to fall through from. The guard exists because the filter built in 5l is malformed when the array is empty.
 
 Step 6 onwards resume at the top level, outside this Condition.
 
@@ -387,14 +387,23 @@ The `concat`/`join` builds `'guid','guid','guid'` for the `in` operator. Quoting
 
 > **`ubsppcoe_oapenabled` is deliberately not in this filter.** An exception grants regardless of the flag; only the `Node` is required. Adding `and ubsppcoe_oapenabled eq true` here would silently reduce rule 3 to a subset of rule 2 and make the whole feature a no-op.
 
-### 5m. `Set_exceptions` — **Set variable**, inside the **No** branch
+### 5m. `Select_exception_workspace_ids` — **Select**, inside the **No** branch
+
+| Field | Value |
+|---|---|
+| From | `body('List_exception_workspace_rows')?['value']` |
+| Map | **text mode** (the `T` icon) — `item()?['ubsppcoe_workspaceid']` |
+
+Same shape as 5c, on the exception list instead of the whitelist. Text mode for the same reason: an array of objects is rejected as `predicate.values`.
+
+### 5n. `Set_exceptions` — **Set variable**, inside the **No** branch
 
 | Field | Value |
 |---|---|
 | Name | `exceptions` |
 | Value | `union(body('Select_exception_workspace_ids'), body('Select_exception_workspace_ids'))` |
 
-with `Select_exception_workspace_ids` a **Select** between 5l and 5m, `From` = `body('List_exception_workspace_rows')?['value']`, Map in text mode = `item()?['ubsppcoe_workspaceid']`.
+`union` with itself dedupes, exactly as 5d does for the whitelist.
 
 > **The exception list is deliberately not cross-checked against the whitelist.** A workspace may be in both, and that is neither an error nor a duplicate: rules are all `Allow` and are ORed, so the workspace is simply unrestricted and the narrower rule 2 match adds nothing. `migrate_policy_sets.ps1` does not reconcile the two lists either — do not add a `Filter array` that tries to.
 
