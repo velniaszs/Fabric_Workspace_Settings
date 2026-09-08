@@ -18,8 +18,9 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 | A rule deleted by hand | **Yes.** Regenerated |
 | Rule 1 removed | **Yes** — and this matters most, because a policy with no rules is unenforced, not empty |
 | A flag that a failed `AddWorkspaceToPolicy` or `RemoveWorkspaceFromPolicy` never applied | **Yes.** Converges Fabric to Dataverse |
-| A `FabricEnabled` or `Node` edit made **outside** these flows | **Yes**, and this is now the common case \u2014 `ubsppcoe_Workspace` is owned by another team and nothing triggers a rebuild when they change it |
-| A workspace **moved** to a different Node | **Yes**, but only because every capacity is rebuilt. Neither the old nor the new capacity is rebuilt at the time of the move |
+| A `ubsppcoe_oapenabled` or `Node` edit made **outside** these flows | **Yes**, and this is now the common case — `ubsppcoe_Workspace` is owned by another team and nothing triggers a rebuild when they change it |
+| A `PolicyException` row added, deactivated or deleted | **Yes**, and this is the **only** thing that applies it — no flow writes that table, so nothing else notices the edit |
+| A workspace **moved** to a different Node | **Yes**, but only because every capacity is rebuilt. Neither the old nor the new capacity is rebuilt at the time of the move — and this carries rule 3 with it, since an exception applies wherever the workspace currently sits |
 | A missing or blank `node` lookup on the policy row | **No.** The rebuild refuses that capacity and reports it — deliberately, see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a |
 | Our policy set **deactivated**, another one active | **No** — see §4 |
 | Our policy set **deleted** | **No.** The rebuild 404s |
@@ -27,7 +28,9 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 
 The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects. Run both: this one converges what it can, the scan reports what it cannot.
 
-> **This flow carries more weight than it did.** When the whitelist lived in a table only these flows wrote to, nightly convergence was a safety net. Now it is the **only** thing that applies an out-of-band `FabricEnabled` change. If a same-day guarantee is needed, that is a Dataverse-modified trigger on `ubsppcoe_Workspace`, not a shorter recurrence here — see Q16 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **This flow carries more weight than it did.** When the whitelist lived in a table only these flows wrote to, nightly convergence was a safety net. Now it is the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change. If a same-day guarantee is needed, that is a Dataverse-modified trigger on `ubsppcoe_Workspace`, not a shorter recurrence here — see Q16 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+>
+> The same is true of `PolicyException`, and there it is sharper: **taking an exception away** is not live until this flow runs. A workspace whose exception row was deactivated at nine in the morning can still create anything until tonight. Anyone doing that in earnest should force a rebuild of that capacity rather than wait for the schedule.
 
 ---
 
@@ -59,21 +62,21 @@ Nightly rather than weekly, because the interval is the **worst-case delay on a 
 | Field | Value |
 |---|---|
 | Table name | `Capacity Policies` |
-| Filter rows | `crbab_policysetid ne null` |
-| Sort by | `crbab_lastrebuild asc` |
+| Filter rows | `ubsppcoe_policysetid ne null` |
+| Sort by | `ubsppcoe_lastrebuild asc` |
 | Row count | `5000` |
 
 Pagination **On**, threshold `5000`. **Process the whole estate every run** — 250 capacities is not a large loop, and the retry policy absorbs throttling by waiting rather than failing.
 
 A row without a `policy_set_id` was never initialised. Skipping it here keeps the run log clean — those belong to `InitializeCapacityPolicySet`, and a nightly job reporting the same 3 known-uninitialised capacities as failures every night is how people learn to ignore the report.
 
-### Why sort by `crbab_lastrebuild` if there is no cap?
+### Why sort by `ubsppcoe_lastrebuild` if there is no cap?
 
 Because it costs nothing and makes a truncated run degrade well. If a run is cancelled, hits a quota, or is stopped by hand, the capacities it did not reach are the ones with the **oldest** timestamps — so the next run starts with exactly those. Without the sort, an interrupted run leaves an arbitrary subset stale and the next run may pick the same ones it already did.
 
 Nulls sort first on ascending order, so a capacity that has **never** been rebuilt jumps the queue. That is the behaviour you want, for free.
 
-> **Do not add a row-count cap unless measurement demands it.** An earlier draft of this document capped the batch at 100 for no better reason than caution about an undocumented rate limit. That is premature: it introduces a starvation failure mode that is invisible in the run history — if `crbab_lastrebuild` is not being stamped, the same capacities are rebuilt every night and the rest never are, and everything looks healthy — and it multiplies the worst-case delay on a failed removal by the number of batches. If §5 shows throttling is genuinely severe, capping is the lever; the sort is already in place to make it safe.
+> **Do not add a row-count cap unless measurement demands it.** An earlier draft of this document capped the batch at 100 for no better reason than caution about an undocumented rate limit. That is premature: it introduces a starvation failure mode that is invisible in the run history — if `ubsppcoe_lastrebuild` is not being stamped, the same capacities are rebuilt every night and the rest never are, and everything looks healthy — and it multiplies the worst-case delay on a failed removal by the number of batches. If §5 shows throttling is genuinely severe, capping is the lever; the sort is already in place to make it safe.
 
 ---
 
@@ -89,7 +92,7 @@ Inside:
 
 ### 3a. `Run_rebuild` — **Run a Child Flow** → `RebuildCapacityPolicyRules`
 
-Pass `items('For_each_capacity')?['crbab_capacityid']`.
+Pass `items('For_each_capacity')?['ubsppcoe_capacityid']`.
 
 Configure this action's **run after** so the loop continues past a failure — leave the default, but wrap what follows so a single bad capacity does not abandon the other 299.
 
@@ -104,7 +107,7 @@ Configure this action's **run after** so the loop continues past a failure — l
 `Append_failure` — **Append to array variable** `failures`:
 
 ```
-@{concat(items('For_each_capacity')?['crbab_capacityname'], ' (', items('For_each_capacity')?['crbab_capacityid'], '): ', coalesce(body('Run_rebuild')?['message'], 'child flow failed'))}
+@{concat(items('For_each_capacity')?['ubsppcoe_capacityname'], ' (', items('For_each_capacity')?['ubsppcoe_capacityid'], '): ', coalesce(body('Run_rebuild')?['message'], 'child flow failed'))}
 ```
 
 Declare `failures` as an empty Array variable before the loop.
@@ -163,10 +166,10 @@ Three defences, in order of how much they buy:
 
 | Cost | Why it matters |
 |---|---|
-| Starvation is invisible | If the child flow stops stamping `crbab_lastrebuild`, the same capacities are rebuilt every run and the rest never are. The run history looks perfectly healthy throughout |
+| Starvation is invisible | If the child flow stops stamping `ubsppcoe_lastrebuild`, the same capacities are rebuilt every run and the rest never are. The run history looks perfectly healthy throughout |
 | Slower convergence | The worst-case delay for a failed `RemoveWorkspaceFromPolicy` to reach Fabric becomes *number of batches × interval*. At 100 per night on 250 capacities, up to three days |
 
-If withdrawal of access is ever security-driven, do not cap. Give the app a "rebuild now" button that calls `RebuildCapacityPolicyRules` directly for one capacity instead — the child flow already does exactly that, so it is a button, not a feature.
+If taking access away is ever security-driven, do not cap. Give the app a "rebuild now" button that calls `RebuildCapacityPolicyRules` directly for one capacity instead — the child flow already does exactly that, so it is a button, not a feature.
 
 None of this is worth building before test 7 below shows it is needed.
 
@@ -174,7 +177,7 @@ None of this is worth building before test 7 below shows it is needed.
 
 The retry policy protects the HTTP call **inside** the child. It does nothing for this loop: if a capacity's rebuild exhausts its retries, `Run_rebuild` returns a failure and Step 3b records it.
 
-That is the intended behaviour, not an omission. The capacity keeps its old `crbab_lastrebuild`, so the oldest-first sort puts it near the front of tomorrow's run, and the failure appears in tonight's report. Wrapping the loop body in a Do-until retry would re-enter a rebuild the service has already throttled — pushing on a door it just held shut, and turning a visible failure into a longer, quieter one.
+That is the intended behaviour, not an omission. The capacity keeps its old `ubsppcoe_lastrebuild`, so the oldest-first sort puts it near the front of tomorrow's run, and the failure appears in tonight's report. Wrapping the loop body in a Do-until retry would re-enter a rebuild the service has already throttled — pushing on a door it just held shut, and turning a visible failure into a longer, quieter one.
 
 ### Action quotas
 

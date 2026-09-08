@@ -43,18 +43,18 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 - Build [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) first.
 - Needs a **Dataverse connection**.
-- Substitute your publisher prefix for `crbab_`, and pick tables and columns from the dropdowns rather than typing them.
+- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — so it no longer identifies who owns a table. Pick tables and columns from the dropdowns rather than typing them; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
 
 ### A fourth table — `Policy Drift`
 
 | Column | Logical name | Type |
 |---|---|---|
-| Kind | `crbab_driftkind` | Choice — `Untracked`, `Missing`, `Inactive`, `Conflict` |
-| Policy set ID | `crbab_policysetid` | Text |
-| Capacity ID | `crbab_capacityid` | Text — blank until resolved |
-| Display name | `crbab_displayname` | Text (primary) |
-| Detected | `crbab_detected` | Date and time |
-| Details | `crbab_details` | Multiline text |
+| Kind | `ubsppcoe_driftkind` | Choice — `Untracked`, `Missing`, `Inactive`, `Conflict` |
+| Policy set ID | `ubsppcoe_policysetid` | Text |
+| Capacity ID | `ubsppcoe_capacityid` | Text — blank until resolved |
+| Display name | `ubsppcoe_displayname` | Text (primary) |
+| Detected | `ubsppcoe_detected` | Date and time |
+| Details | `ubsppcoe_details` | Multiline text |
 
 Findings are rewritten each run, so this table is a **current state**, not a log. If an audit trail is wanted, add a second table and append instead — but do not make one table try to be both.
 
@@ -149,7 +149,7 @@ Bare `@expr`, not `@{ }`. Wrapped, it becomes the string `"true"`, never equals 
 | Field | Value |
 |---|---|
 | From | `body('List_policy_rows')?['value']` |
-| Map (**text mode**) | `item()?['crbab_policysetid']` |
+| Map (**text mode**) | `item()?['ubsppcoe_policysetid']` |
 
 ### 4c. `Select_fabric_ids` — Select
 
@@ -180,7 +180,7 @@ Four **Filter array** actions. None of them calls Fabric.
 | Field | Value |
 |---|---|
 | From | `body('List_policy_rows')?['value']` |
-| Condition (advanced) | `@not(contains(body('Select_fabric_ids'), item()?['crbab_policysetid']))` |
+| Condition (advanced) | `@not(contains(body('Select_fabric_ids'), item()?['ubsppcoe_policysetid']))` |
 
 ### 5c. `Filter_inactive`
 
@@ -239,7 +239,7 @@ Three more **Apply to each** blocks, each adding rows to `Policy Drift`. None ma
 
 | Loop over | Kind | Capacity ID | Details |
 |---|---|---|---|
-| `body('Filter_missing')` | `Missing` | the row's `crbab_capacityid` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
+| `body('Filter_missing')` | `Missing` | the row's `ubsppcoe_capacityid` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
 | `body('Filter_inactive')` | `Inactive` | blank | `concat('Status is ', coalesce(item()?['properties']?['status'], 'unknown'), '. Another policy set may have taken the capacity.')` |
 
 For `Conflict`, group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so use a Select of scope IDs and check for duplicates:
@@ -258,7 +258,7 @@ For `Conflict`, group `Filter_capacity_scoped` by scope ID. Power Automate has n
 Findings are current state, so stale rows must go **before** new ones are written. Put this immediately after Step 2, not at the end:
 
 1. `List_old_drift` — Dataverse **List rows** on `Policy Drift`, row count `5000`, pagination on.
-2. **Apply to each** over `body('List_old_drift')?['value']` → Dataverse **Delete a row**, Row ID `items('For_each_old_drift')?['crbab_policydriftid']`.
+2. **Apply to each** over `body('List_old_drift')?['value']` → Dataverse **Delete a row**, Row ID `items('For_each_old_drift')?['ubsppcoe_policydriftid']`.
 
 Deleting first means a failed scan leaves an empty table rather than yesterday's answers wearing today's date. An empty drift table with a stale `last_run` is obviously wrong; stale rows that look current are not.
 
@@ -272,7 +272,7 @@ The list response carries `properties.status` for every tracked set, so the tabl
 
 Do **not** update all 250 rows every run. Filter to the ones whose status differs, then update only those:
 
-- `Filter_status_changed` — From `body('List_policy_rows')?['value']`, condition compares the row's `crbab_status` against the matching set's status from `variables('policySets')`.
+- `Filter_status_changed` — From `body('List_policy_rows')?['value']`, condition compares the row's `ubsppcoe_status` against the matching set's status from `variables('policySets')`.
 
 Matching by ID inside a filter expression is awkward in Power Automate. If it turns fiddly, skip this step: `Policy Drift` already reports the `Inactive` case, which is the only status change that matters.
 

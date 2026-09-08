@@ -13,7 +13,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [GetPo
 - Build [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) and [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow calls both.
 - Needs a **Dataverse connection**.
 - The SPN needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
-- Substitute your publisher prefix for `crbab_`.
+- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
 
 > ### The capacity is born locked, on purpose
 >
@@ -57,7 +57,7 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 | Field | Value |
 |---|---|
 | Table name | `Capacity Policies` |
-| Filter rows | `crbab_capacityid eq '@{triggerBody()['text']}'` |
+| Filter rows | `ubsppcoe_capacityid eq '@{triggerBody()['text']}'` |
 | Row count | `1` |
 
 `Condition_already_exists` — **Condition**:
@@ -66,7 +66,7 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 |---|---|---|
 | `empty(body('Get_policy_row')?['value'])` | is equal to | `false` |
 
-**Yes** → set `outcome` = `AlreadyExists`, `policySetId` = `first(body('Get_policy_row')?['value'])?['crbab_policysetid']`, `message` = `This capacity already has a policy set.` Then skip to the Respond.
+**Yes** → set `outcome` = `AlreadyExists`, `policySetId` = `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']`, `message` = `This capacity already has a policy set.` Then skip to the Respond.
 
 Everything below goes in the **No** branch.
 
@@ -213,16 +213,16 @@ The created item is at `/result`, not on the operation itself. The operation onl
 
 | Column | Value |
 |---|---|
-| `crbab_capacityid` | `triggerBody()['text']` |
-| `crbab_capacityname` | `triggerBody()['text_1']` |
-| `crbab_policysetid` | `variables('policySetId')` |
-| `crbab_status` | `Inactive` |
+| `ubsppcoe_capacityid` | `triggerBody()['text']` |
+| `ubsppcoe_capacityname` | `triggerBody()['text_1']` |
+| `ubsppcoe_policysetid` | `variables('policySetId')` |
+| `ubsppcoe_status` | `Inactive` |
 
 **Write the row before activating.** If activation fails, the policy set still exists in Fabric and must be recorded, or the next run creates a second one and `SyncCapacityPolicySets` reports a `Conflict` nobody caused.
 
 ### 8b. `Run_rebuild` — **Run a Child Flow** → `RebuildCapacityPolicyRules`, passing `triggerBody()['text']`.
 
-With no `FabricEnabled` workspaces on the capacity's Node yet, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
+With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows for a policy row that was created seconds ago, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
 
 > **A brand-new capacity may have no `ubsppcoe_Node` row yet, and the rebuild fails closed on that** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5b. The policy set is still created and recorded, so this is recoverable: add the Node row and rerun. But if provisioning routinely creates the capacity before its inventory record, expect this step to fail on first run, and decide whether the provisioning app should order the two the other way round.
 
@@ -246,9 +246,9 @@ Runs after `Activate` on **is successful** and **has failed**.
 
 | Column | Value |
 |---|---|
-| Row ID | `body('Add_policy_row')?['crbab_capacitypolicyid']` |
-| `crbab_status` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Active', 'Inactive')` |
-| `crbab_lasterror` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
+| Row ID | `body('Add_policy_row')?['ubsppcoe_capacitypolicyid']` |
+| `ubsppcoe_status` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Active', 'Inactive')` |
+| `ubsppcoe_lasterror` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
 
 Tolerate `PolicySetIsAlreadyActive` — it means the end state is already what was wanted. Treat any `2xx`, and that specific error code, as `Active`.
 

@@ -19,9 +19,9 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 > At **200–300 capacities**, both of the obvious richer implementations blow the **120-second** Power Apps budget:
 >
 > - **Asking Fabric.** A list call plus a `GET` per policy set to resolve `properties.scope.id`, which the list response frequently omits. Hundreds of round trips.
-> - **Counting workspaces here.** `ubsppcoe_Workspace` filtered by Node and `FabricEnabled`, once per capacity. Hundreds of Dataverse queries, for a number the rebuild already computed.
+> - **Counting workspaces here.** `ubsppcoe_Workspace` filtered by Node and `ubsppcoe_oapenabled`, once per capacity. Hundreds of Dataverse queries, for a number the rebuild already computed.
 >
-> So `workspace_count` and `rule_count` are **stamped on `CapacityPolicy` by the rebuild** and simply read here ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q26). This flow is a table read and a projection. Keep it that way.
+> So `workspace_count`, `exception_count` and `rule_count` are **stamped on `CapacityPolicy` by the rebuild** and simply read here ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q26). This flow is a table read and a projection. Keep it that way.
 
 ---
 
@@ -48,8 +48,8 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 | Field | Value |
 |---|---|
 | Table name | `Capacity Policies` |
-| Select columns | `crbab_capacityid,crbab_capacityname,crbab_policysetid,crbab_policysetname,crbab_status,crbab_workspacecount,crbab_rulecount,crbab_lastrebuild,crbab_lasterror` |
-| Sort by | `crbab_capacityname asc` |
+| Select columns | `ubsppcoe_capacityid,ubsppcoe_capacityname,ubsppcoe_policysetid,ubsppcoe_policysetname,ubsppcoe_status,ubsppcoe_workspacecount,ubsppcoe_exceptioncount,ubsppcoe_rulecount,ubsppcoe_lastrebuild,ubsppcoe_lasterror` |
+| Sort by | `ubsppcoe_capacityname asc` |
 | Row count | `5000` |
 
 ⋯ → **Settings** → **Pagination On**, threshold `5000`.
@@ -70,29 +70,30 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 |---|---|
 | From | `body('List_policy_rows')?['value']` |
 
-Map, in **key/value mode** — nine entries:
+Map, in **key/value mode** — ten entries:
 
 | Key | Value |
 |---|---|
-| `capacityId` | `item()?['crbab_capacityid']` |
-| `capacityName` | `item()?['crbab_capacityname']` |
-| `policySetId` | `item()?['crbab_policysetid']` |
-| `policySetName` | `item()?['crbab_policysetname']` |
-| `status` | `coalesce(item()?['crbab_status'], 'Unknown')` |
-| `workspaceCount` | `string(coalesce(item()?['crbab_workspacecount'], 0))` |
-| `ruleCount` | `string(coalesce(item()?['crbab_rulecount'], 0))` |
-| `lastRebuild` | `coalesce(item()?['crbab_lastrebuild'], '')` |
-| `lastError` | `coalesce(item()?['crbab_lasterror'], '')` |
+| `capacityId` | `item()?['ubsppcoe_capacityid']` |
+| `capacityName` | `item()?['ubsppcoe_capacityname']` |
+| `policySetId` | `item()?['ubsppcoe_policysetid']` |
+| `policySetName` | `item()?['ubsppcoe_policysetname']` |
+| `status` | `coalesce(item()?['ubsppcoe_status'], 'Unknown')` |
+| `workspaceCount` | `string(coalesce(item()?['ubsppcoe_workspacecount'], 0))` |
+| `exceptionCount` | `string(coalesce(item()?['ubsppcoe_exceptioncount'], 0))` |
+| `ruleCount` | `string(coalesce(item()?['ubsppcoe_rulecount'], 0))` |
+| `lastRebuild` | `coalesce(item()?['ubsppcoe_lastrebuild'], '')` |
+| `lastError` | `coalesce(item()?['ubsppcoe_lasterror'], '')` |
 
 **`coalesce` on every nullable column.** A `null` inside the JSON is not an error, but Power Fx treats a missing property and a null one differently once parsed, and the app then needs two checks where it should need none.
 
-> **`workspaceCount` and `ruleCount` are `string(...)` deliberately.** They are whole numbers in Dataverse, and this is a display payload — the app formats them, it does not do arithmetic on them. Keeping every field the same type makes the `ParseJSON` schema on the app side trivial and removes a class of type-mismatch error that only appears when one row has a null.
+> **The counts are `string(...)` deliberately.** They are whole numbers in Dataverse, and this is a display payload — the app formats them, it does not do arithmetic on them. Keeping every field the same type makes the `ParseJSON` schema on the app side trivial and removes a class of type-mismatch error that only appears when one row has a null.
 >
 > If the app ever needs to sort numerically, do it in Step 3's `Sort by`, not by changing the type here.
 
 ### `lastRebuild` is what makes the counts honest
 
-The two counts are **as of the last rebuild**, not live. A `FabricEnabled` change made this morning is not reflected until that capacity is next rebuilt.
+The three counts are **as of the last rebuild**, not live. A `ubsppcoe_oapenabled` change made this morning, or an exception row added at lunchtime, is not reflected until that capacity is next rebuilt.
 
 **The app must show `lastRebuild` next to them.** A count with no timestamp beside it will be read as current, and the first time someone acts on a number that is eighteen hours stale, this flow gets blamed for a cache that is working as designed.
 
@@ -133,13 +134,14 @@ That distinction matters more here than in most flows, because **empty is a plau
 
 ## What the app does with it
 
-`ParseJSON` the string, then bind. Every field is text, so the schema is nine strings and nothing else.
+`ParseJSON` the string, then bind. Every field is text, so the schema is ten strings and nothing else.
 
 | Column | Show it as |
 |---|---|
 | `status` | The activation state. `Inactive` with a blank `lastError` means activation was never attempted |
 | `lastError` | Non-blank is the only unhealthy signal in the payload. Make it visible without a click |
 | `workspaceCount` / `ruleCount` | Always beside `lastRebuild` |
+| `exceptionCount` | Non-zero means the capacity has workspaces that can create **anything**. Worth being visible rather than buried in a detail pane — it is the one number here that represents a granted exemption rather than a derived count |
 | `policySetName` | Useful when someone is looking at the same set in the Fabric portal |
 
 > **A row with a blank `policySetId` should not exist.** Flow 1 writes the row and the id together. If one appears, the row was created by hand or a run failed between the two, and the capacity is unmanaged despite having a record — worth surfacing rather than rendering as a normal entry.
@@ -152,7 +154,7 @@ That distinction matters more here than in most flows, because **empty is a plau
 |---|---|---|
 | 1 | Run with several capacities registered | One JSON array, one object per row, sorted by name |
 | 2 | Peek code on `Compose_json` | A **string**, not an array. This is the one that silently breaks the app |
-| 3 | A capacity that has never been rebuilt | `workspaceCount` and `ruleCount` are `"0"`, not null or missing |
+| 3 | A capacity that has never been rebuilt | `workspaceCount`, `exceptionCount` and `ruleCount` are `"0"`, not null or missing |
 | 4 | A capacity whose last rebuild failed | `lastError` populated, and the row still present |
 | 5 | Empty `Capacity Policies` table | `PolicySetsJson` = `[]`, `ErrorMessage` blank. **Not** an error |
 | 6 | Break the Dataverse connection | `PolicySetsJson` = `[]` and `ErrorMessage` populated — distinguishable from test 5 |
