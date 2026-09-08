@@ -283,48 +283,48 @@ Three more **Apply to each** blocks, each with one Dataverse **Add a new row** a
 >
 > | Loop | Iterates over | So `items(...)` is | Fields available |
 > |---|---|---|---|
-> | `For_each_missing` | `body('Filter_missing')` \u2014 from **Dataverse** | a `Capacity Policies` **row** | `ubsppcoe_policysetid`, `ubsppcoe_policysetname`, `ubsppcoe_capacityid`, `ubsppcoe_capacityname` |
-> | `For_each_inactive` | `body('Filter_inactive')` \u2014 from **Fabric** | a **policy set object** | `id`, `displayName`, `properties.status`, `properties.scope` |
+> | `For_each_missing` | `body('Filter_missing')` — from **Dataverse** | a `Capacity Policies` **row** | `ubsppcoe_policysetid`, `ubsppcoe_policysetname`, `ubsppcoe_capacityid`, `ubsppcoe_capacityname` |
+> | `For_each_inactive` | `body('Filter_inactive')` — from **Fabric** | a **policy set object** | `id`, `displayName`, `properties.status`, `properties.scope` |
 >
-> Same destination table, two completely different sources. Copying the column values from one loop to the other produces blanks, not errors \u2014 `items(...)?['id']` on a Dataverse row is simply null.
+> Same destination table, two completely different sources. Copying the column values from one loop to the other produces blanks, not errors — `items(...)?['id']` on a Dataverse row is simply null.
 
 **Name each `Apply to each`** as given below. The expressions use `items('For_each_missing')` rather than bare `item()`, which is ambiguous once these sit next to the loop in Step 6.
 
-### 7a. `For_each_missing` \u2014 over `body('Filter_missing')`
+### 7a. `For_each_missing` — over `body('Filter_missing')`
 
 Inside it, one **Add a new row** named `Add_drift_missing`, Table name **`Policy Drift`**:
 
 | Column | Logical name | Value |
 |---|---|---|
-| Kind | `ubsppcoe_driftkind` | `Missing` \u2014 from the dropdown |
+| Kind | `ubsppcoe_driftkind` | `Missing` — from the dropdown |
 | Policy set ID | `ubsppcoe_policysetid` | `items('For_each_missing')?['ubsppcoe_policysetid']` |
 | Capacity ID | `ubsppcoe_capacityid` | `items('For_each_missing')?['ubsppcoe_capacityid']` |
 | Display name | `ubsppcoe_displayname` | `coalesce(items('For_each_missing')?['ubsppcoe_policysetname'], items('For_each_missing')?['ubsppcoe_capacityname'], '')` |
 | Detected | `ubsppcoe_detected` | `utcNow()` |
 | Details | `ubsppcoe_details` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
 
-> **The display name comes from our own row, and it has to.** The set is gone from Fabric, so there is no live name to read \u2014 `ubsppcoe_policysetname` is the last known one, which is exactly the job that column was given in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) \u00a73. The `coalesce` falls back to the capacity name because a row written by an older build may not have it.
+> **The display name comes from our own row, and it has to.** The set is gone from Fabric, so there is no live name to read — `ubsppcoe_policysetname` is the last known one, which is exactly the job that column was given in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3. The `coalesce` falls back to the capacity name because a row written by an older build may not have it.
 >
 > This is also the **only** kind that arrives with a capacity ID already attached, because it came out of our table rather than Fabric's list.
 
-### 7b. `For_each_inactive` \u2014 over `body('Filter_inactive')`
+### 7b. `For_each_inactive` — over `body('Filter_inactive')`
 
 Inside it, one **Add a new row** named `Add_drift_inactive`, Table name **`Policy Drift`**:
 
 | Column | Logical name | Value |
 |---|---|---|
-| Kind | `ubsppcoe_driftkind` | `Inactive` \u2014 from the dropdown |
+| Kind | `ubsppcoe_driftkind` | `Inactive` — from the dropdown |
 | Policy set ID | `ubsppcoe_policysetid` | `items('For_each_inactive')?['id']` |
 | Capacity ID | `ubsppcoe_capacityid` | `coalesce(items('For_each_inactive')?['properties']?['scope']?['id'], '')` |
 | Display name | `ubsppcoe_displayname` | `coalesce(items('For_each_inactive')?['displayName'], '')` |
 | Detected | `ubsppcoe_detected` | `utcNow()` |
 | Details | `ubsppcoe_details` | `concat('Status is ', coalesce(items('For_each_inactive')?['properties']?['status'], 'unknown'), '. Another policy set may have taken the capacity.')` |
 
-> **Capacity ID is often blank here, and that is accepted.** `properties.scope.id` is frequently absent from the list response (\u00a70), and this flow will not spend a `GET` per set to recover it. The `coalesce` records it when Fabric happens to supply it.
+> **Capacity ID is often blank here, and that is accepted.** `properties.scope.id` is frequently absent from the list response (§0), and this flow will not spend a `GET` per set to recover it. The `coalesce` records it when Fabric happens to supply it.
 >
-> If a populated capacity matters, do **not** add a `GET`. These sets are *tracked*, so the capacity is already sitting in `List_policy_rows` \u2014 a `Filter array` inside the loop matching `ubsppcoe_policysetid` against `items('For_each_inactive')?['id']` recovers it with no extra Fabric call. That is the only version of this worth building.
+> If a populated capacity matters, do **not** add a `GET`. These sets are *tracked*, so the capacity is already sitting in `List_policy_rows` — a `Filter array` inside the loop matching `ubsppcoe_policysetid` against `items('For_each_inactive')?['id']` recovers it with no extra Fabric call. That is the only version of this worth building.
 
-### 7c. `Conflict` \u2014 not a loop
+### 7c. `Conflict` — not a loop
 
 Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so use a Select of scope IDs and check for duplicates:
 
