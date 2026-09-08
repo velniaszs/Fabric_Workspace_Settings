@@ -60,7 +60,7 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 Findings are rewritten each run, so this table is a **current state**, not a log. If an audit trail is wanted, add a second table and append instead — but do not make one table try to be both.
 
-> **This flow is the only writer, and that follows from the wipe.** Step 8 deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
+> **This flow is the only writer, and that follows from the wipe.** Step 2b deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
 
 ---
 
@@ -81,16 +81,30 @@ Then ⋯ → **Settings** → **Concurrency Control** → **On**, **Degree of Pa
 ## Step 2 — Variables
 
 > **No token step.** Earlier drafts opened with `Run a Child Flow` → `GetPolicyToken` and an `accessToken` variable. Both are gone.
-3. `Initialize_policySets` — `policySets`, Array, empty.
-4. `Initialize_nextUri` — `nextUri`, String:
+
+1. `Initialize_policySets` — `policySets`, Array, empty.
+2. `Initialize_nextUri` — `nextUri`, String:
 
 ```
 @{concat('https://api.fabric.microsoft.com/v1/workspaces/', parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)'), '/policySets?recursive=true')}
 ```
 
-5. `Initialize_isDone` — `isDone`, Boolean, `false`.
+3. `Initialize_isDone` — `isDone`, Boolean, `false`.
 
 Seeding `nextUri` with the first page URL keeps the loop body uniform — one *Invoke an HTTP request* action serves the first page and every continuation.
+
+---
+
+## Step 2b — Clear the previous run
+
+**This runs third, before any scanning.** Findings are current state, so stale rows must go *before* new ones are written.
+
+1. `List_old_drift` — Dataverse **List rows** on `Policy Drift`, row count `5000`, pagination on.
+2. `For_each_old_drift` — **Apply to each** over `body('List_old_drift')?['value']`, containing Dataverse **Delete a row**, Row ID `items('For_each_old_drift')?['ubsppcoe_policydriftid']`.
+
+Deleting first means a failed scan leaves an empty table rather than yesterday's answers wearing today's date. An empty drift table beside a stale run time is obviously wrong; stale rows that look current are not.
+
+> **Why it is numbered `2b` rather than `3`.** It genuinely belongs here in execution order, but the scanning steps below are cross-referenced by number from other documents and from within this one — `Step 5a`, `6b`, `7c`. Inserting a whole step would shift every one of those. `2b` puts it in the right place without moving anything else.
 
 ---
 
@@ -369,20 +383,7 @@ Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so t
 
 ---
 
-## Step 8 — Clear the previous run first
-
-Findings are current state, so stale rows must go **before** new ones are written. Put this immediately after Step 2, not at the end:
-
-1. `List_old_drift` — Dataverse **List rows** on `Policy Drift`, row count `5000`, pagination on.
-2. **Apply to each** over `body('List_old_drift')?['value']` → Dataverse **Delete a row**, Row ID `items('For_each_old_drift')?['ubsppcoe_policydriftid']`.
-
-Deleting first means a failed scan leaves an empty table rather than yesterday's answers wearing today's date. An empty drift table with a stale `last_run` is obviously wrong; stale rows that look current are not.
-
-Record the run time somewhere the app can see — a single-row settings table, or an environment variable updated at the end.
-
----
-
-## Step 9 — Optional: refresh `status`
+## Step 8 — Optional: refresh `status`
 
 The list response carries `properties.status` for every tracked set, so the table's `status` column can be refreshed with no extra Fabric calls.
 
@@ -391,6 +392,24 @@ Do **not** update all 250 rows every run. Filter to the ones whose status differ
 - `Filter_status_changed` — From `body('List_policy_rows')?['value']`, condition compares the row's `ubsppcoe_status` against the matching set's status from `variables('policySets')`.
 
 Matching by ID inside a filter expression is awkward in Power Automate. If it turns fiddly, skip this step: `Policy Drift` already reports the `Inactive` case, which is the only status change that matters.
+
+---
+
+## Step 9 — Stamp the run, and stop
+
+**This is the last action in the flow.** There is nothing after it and nothing is returned — see below.
+
+`Stamp_last_run` — write `utcNow()` somewhere the app can read: a single-row settings table, or the `Policy Drift` grid's own header if you have one. Whatever you choose, **the drift table and this timestamp must be shown together.**
+
+> **The timestamp is what makes an empty drift table readable.** Step 2b deletes before it writes, so "no rows" means either *a clean scan today* or *a scan that failed after the delete*. The run time is the only thing that tells them apart. Displaying the table without it turns a failed scan into a green tick.
+
+### What this flow returns
+
+**Nothing, and it must stay that way.** The Recurrence trigger has no caller waiting, so there is no `Respond to a Power App or flow` action — adding one would fail at runtime with nothing to answer.
+
+The output of a run *is* the contents of `Policy Drift`, plus the timestamp above. If the app needs the four counts on a screen, it reads them from the table, not from this flow.
+
+> The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](docs/FLOWS.md) §4.
 
 ---
 
