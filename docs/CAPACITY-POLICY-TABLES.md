@@ -391,7 +391,14 @@ On `Capacity Policies`, add the `Node` column:
 2. **Data type**: **Choice** → **Choice**.
 3. **Sync with a global choice?** → **No** — a local choice is right here; nothing else uses these values.
 4. Add exactly four items: `Untracked`, `Missing`, `Inactive`, `Conflict`.
-5. **Note the integer value beside each label** — the portal assigns them automatically. **Write them down.**
+5. **Default choice: leave it at *None*.** See below.
+6. **Note the integer value beside each label** — the portal assigns them automatically. **Write them down.**
+
+> **Do not set a default choice, even though the two `active` columns do have a default.** The difference is who writes the rows.
+>
+> `ubsppcoe_active` is created **by hand**, so a default of `No` makes an untouched row mean something definite and safe. `ubsppcoe_driftkind` is written **only by `SyncCapacityPolicySets`**, which always sets the kind explicitly — there is no hand-creation path for it to protect.
+>
+> So a default here could only ever be applied when the flow **failed to set the field**, and it would stamp that bug with a plausible-looking kind. A drift row silently labelled `Untracked` is a finding someone will investigate. Left at *None*, the same bug shows up as a blank cell, which reads as broken — which it is.
 
 > **Flows write choices by integer, not by label.** The Dataverse connector shows you the labels, but what travels is the number. Do not renumber or delete these items once `SyncCapacityPolicySets` is built, or old drift rows become unreadable and new ones land under the wrong kind.
 
@@ -437,6 +444,7 @@ Solution toolbar → **Publish all customizations**. Nothing is live to the conn
 | Building the tables outside a solution | They work, but land in the Default solution and are painful to export |
 | Ticking **Required** on `ubsppcoe_node` | Flow 1 cannot write a partial row; the fail-closed path in the rebuild becomes untestable |
 | Forgetting **Default value → No** on the two `active` columns | Hand-created rows are `null` instead of `false`. Behaves identically in every filter, but reads as "nobody decided" |
+| Setting a **default choice** on `ubsppcoe_driftkind` | A flow bug that omits the field gets stamped with a plausible kind instead of showing up blank (8.7) |
 | Using `statecode` / `statuscode` instead of `ubsppcoe_status` | Conflates *is this row active* with *is the policy set activated in Fabric* (§2) |
 | Skipping **Publish all customizations** | Columns are invisible to the Dataverse connector |
 | Adding `ubsppcoe_Workspace` or `ubsppcoe_Node` to your solution *with* their metadata | You become a co-owner of someone else's schema on export. If you add them at all, add them with **no subcomponents** |
