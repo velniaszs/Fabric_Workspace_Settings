@@ -263,19 +263,86 @@ Then the columns. **The designer lists them by display name**, which is what the
 
 ## Step 7 — Record the rest
 
-Three more **Apply to each** blocks, each with one Dataverse **Add a new row** against **`Policy Drift`** (`ubsppcoe_PolicyDrift`) — the same table and the same six columns as 6b. None makes a Fabric call.
+Three more **Apply to each** blocks, each with one Dataverse **Add a new row** against **`Policy Drift`** (`ubsppcoe_PolicyDrift`) — the same table and the same six columns as 6b. **None makes a Fabric call, and none needs to.**
 
-| Loop over | Kind | Capacity ID | Details |
-|---|---|---|---|
-| `body('Filter_missing')` | `Missing` | the row's `ubsppcoe_capacityid` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
-| `body('Filter_inactive')` | `Inactive` | blank | `concat('Status is ', coalesce(item()?['properties']?['status'], 'unknown'), '. Another policy set may have taken the capacity.')` |
+> ### Why there is no `GET` here, kind by kind
+>
+> | Kind | Where its data already is | Why a Fabric call would be wrong |
+> |---|---|---|
+> | `Missing` | The Dataverse row from `List_policy_rows` — it already carries `ubsppcoe_capacityid` | **The set does not exist in Fabric.** That is the finding. A `GET` would `404` by definition and fail the loop |
+> | `Inactive` | `variables('policySets')` — the list response already carries `properties.status` | The status is in hand. A per-set `GET` would re-fetch what Step 3 already read |
+> | `Conflict` | `Filter_capacity_scoped`, also from the same list | Same |
+>
+> **Step 6 is the only place a `GET` is justified**, because an untracked set has no Dataverse row and therefore no capacity ID to report. Everything else was already paged in during Step 3.
+>
+> This is the cheap-scan property from §0 doing its work: on a healthy tenant the whole flow is **one paged list plus Dataverse reads**, and the Fabric call count scales with the amount of drift, not the size of the estate. Adding a `GET` to this step would quietly convert it into a per-set scan of the entire tenant.
 
-For `Conflict`, group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so use a Select of scope IDs and check for duplicates:
+> ### The two loops iterate over different shapes, and that decides every value
+>
+> This is the thing to get straight before filling anything in:
+>
+> | Loop | Iterates over | So `items(...)` is | Fields available |
+> |---|---|---|---|
+> | `For_each_missing` | `body('Filter_missing')` \u2014 from **Dataverse** | a `Capacity Policies` **row** | `ubsppcoe_policysetid`, `ubsppcoe_policysetname`, `ubsppcoe_capacityid`, `ubsppcoe_capacityname` |
+> | `For_each_inactive` | `body('Filter_inactive')` \u2014 from **Fabric** | a **policy set object** | `id`, `displayName`, `properties.status`, `properties.scope` |
+>
+> Same destination table, two completely different sources. Copying the column values from one loop to the other produces blanks, not errors \u2014 `items(...)?['id']` on a Dataverse row is simply null.
+
+**Name each `Apply to each`** as given below. The expressions use `items('For_each_missing')` rather than bare `item()`, which is ambiguous once these sit next to the loop in Step 6.
+
+### 7a. `For_each_missing` \u2014 over `body('Filter_missing')`
+
+Inside it, one **Add a new row** named `Add_drift_missing`, Table name **`Policy Drift`**:
+
+| Column | Logical name | Value |
+|---|---|---|
+| Kind | `ubsppcoe_driftkind` | `Missing` \u2014 from the dropdown |
+| Policy set ID | `ubsppcoe_policysetid` | `items('For_each_missing')?['ubsppcoe_policysetid']` |
+| Capacity ID | `ubsppcoe_capacityid` | `items('For_each_missing')?['ubsppcoe_capacityid']` |
+| Display name | `ubsppcoe_displayname` | `coalesce(items('For_each_missing')?['ubsppcoe_policysetname'], items('For_each_missing')?['ubsppcoe_capacityname'], '')` |
+| Detected | `ubsppcoe_detected` | `utcNow()` |
+| Details | `ubsppcoe_details` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
+
+> **The display name comes from our own row, and it has to.** The set is gone from Fabric, so there is no live name to read \u2014 `ubsppcoe_policysetname` is the last known one, which is exactly the job that column was given in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) \u00a73. The `coalesce` falls back to the capacity name because a row written by an older build may not have it.
+>
+> This is also the **only** kind that arrives with a capacity ID already attached, because it came out of our table rather than Fabric's list.
+
+### 7b. `For_each_inactive` \u2014 over `body('Filter_inactive')`
+
+Inside it, one **Add a new row** named `Add_drift_inactive`, Table name **`Policy Drift`**:
+
+| Column | Logical name | Value |
+|---|---|---|
+| Kind | `ubsppcoe_driftkind` | `Inactive` \u2014 from the dropdown |
+| Policy set ID | `ubsppcoe_policysetid` | `items('For_each_inactive')?['id']` |
+| Capacity ID | `ubsppcoe_capacityid` | `coalesce(items('For_each_inactive')?['properties']?['scope']?['id'], '')` |
+| Display name | `ubsppcoe_displayname` | `coalesce(items('For_each_inactive')?['displayName'], '')` |
+| Detected | `ubsppcoe_detected` | `utcNow()` |
+| Details | `ubsppcoe_details` | `concat('Status is ', coalesce(items('For_each_inactive')?['properties']?['status'], 'unknown'), '. Another policy set may have taken the capacity.')` |
+
+> **Capacity ID is often blank here, and that is accepted.** `properties.scope.id` is frequently absent from the list response (\u00a70), and this flow will not spend a `GET` per set to recover it. The `coalesce` records it when Fabric happens to supply it.
+>
+> If a populated capacity matters, do **not** add a `GET`. These sets are *tracked*, so the capacity is already sitting in `List_policy_rows` \u2014 a `Filter array` inside the loop matching `ubsppcoe_policysetid` against `items('For_each_inactive')?['id']` recovers it with no extra Fabric call. That is the only version of this worth building.
+
+### 7c. `Conflict` \u2014 not a loop
+
+Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so use a Select of scope IDs and check for duplicates:
 
 - `Select_scope_ids` — From `body('Filter_capacity_scoped')`, map (text mode) `coalesce(item()?['properties']?['scope']?['id'], '')`
 - **Condition:** `@not(equals(length(body('Select_scope_ids')), length(union(body('Select_scope_ids'), body('Select_scope_ids')))))`
 
-`union` with itself dedupes, so a shorter result means duplicates exist. On **Yes**, add a single `Conflict` row listing the duplicated IDs rather than one row per set — a conflict is a fact about a capacity, not about each set involved.
+`union` with itself dedupes, so a shorter result means duplicates exist. On **Yes**, one **Add a new row** named `Add_drift_conflict`, Table name **`Policy Drift`**:
+
+| Column | Logical name | Value |
+|---|---|---|
+| Kind | `ubsppcoe_driftkind` | `Conflict` — from the dropdown |
+| Policy set ID | `ubsppcoe_policysetid` | *(leave empty — a conflict is about a capacity, not one set)* |
+| Capacity ID | `ubsppcoe_capacityid` | *(leave empty — see below)* |
+| Display name | `ubsppcoe_displayname` | `Multiple policy sets scoped to one capacity` |
+| Detected | `ubsppcoe_detected` | `utcNow()` |
+| Details | `ubsppcoe_details` | `concat('Capacity-scoped sets: ', string(length(body('Select_scope_ids'))), ', distinct capacities: ', string(length(union(body('Select_scope_ids'), body('Select_scope_ids')))), '. Scope IDs: ', join(body('Select_scope_ids'), ', '))` |
+
+**One row, not one per set** — a conflict is a fact about a capacity, not about each set involved. `Capacity ID` is left empty for the same reason: the finding may span more than one, and the IDs are all in `Details`.
 
 > Scope IDs are often blank in the list response, which would make several sets look like duplicates of `''`. Filter those out before comparing, or accept that `Conflict` is a hint that warrants a manual look rather than a precise finding. Given how rare it should be, the hint is enough.
 
