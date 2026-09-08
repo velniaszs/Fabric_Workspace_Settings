@@ -93,15 +93,19 @@ Everything below goes in the **No** branch.
 | From | `body('Get_capacities')?['value']` |
 | Condition (advanced) | `@equals(toLower(item()?['id']), toLower(triggerBody()['text']))` |
 
-`Condition_eligible` — **Condition**, advanced mode:
+`Condition_eligible` — **Condition**. The new designer has no *Edit in advanced mode* on this card, so build it as **three rows joined with `And`** using the **+ Add** → **Add row** button. Each left side is an expression from the ƒx tab:
 
-```
-@and(
-  not(empty(body('Filter_capacity'))),
-  equals(first(body('Filter_capacity'))?['state'], 'Active'),
-  startsWith(toUpper(coalesce(first(body('Filter_capacity'))?['sku'], '')), 'F')
-)
-```
+| # | Left (expression) | Operator | Right |
+|---|---|---|---|
+| 1 | `length(body('Filter_capacity'))` | is greater than | `0` |
+| 2 | `first(body('Filter_capacity'))?['state']` | is equal to | `Active` |
+| 3 | `substring(concat(toUpper(coalesce(first(body('Filter_capacity'))?['sku'], '')), 'X'), 0, 1)` | is equal to | `F` |
+
+Set the group's join to **And**, not `Or`.
+
+> **Row 3 looks convoluted for a reason.** The natural `startsWith(...)` returns a boolean, and comparing a real boolean against a right-hand box containing the text `true` is the classic silent mismatch in this editor. Taking the SKU's first character and comparing two strings avoids booleans entirely.
+>
+> The `concat(..., 'X')` guarantees at least one character, because `substring('', 0, 1)` throws on an empty string — which is what a capacity with a missing `sku` would produce. The appended `X` can never be mistaken for an `F`.
 
 **No** branch → `outcome` = `Skipped`, message naming which check failed. Skip to Respond.
 

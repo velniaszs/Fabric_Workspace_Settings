@@ -338,11 +338,17 @@ Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so t
 
 **i. `Select_scope_ids`** — From `body('Filter_capacity_scoped')`, Map in **text mode**: `coalesce(item()?['properties']?['scope']?['id'], '')`
 
-**ii. `Condition_has_conflict`** — one row, written in advanced mode:
+**ii. `Condition_has_conflict`** — one row in the ordinary two-box editor. **Both sides are expressions**, entered from the ƒx tab:
 
-```
-@not(equals(length(body('Select_scope_ids')), length(union(body('Select_scope_ids'), body('Select_scope_ids')))))
-```
+| Left (expression) | Operator | Right (expression) |
+|---|---|---|
+| `length(body('Select_scope_ids'))` | **is not equal to** | `length(union(body('Select_scope_ids'), body('Select_scope_ids')))` |
+
+> **The new designer removed *Edit in advanced mode* from the `Condition` card**, so a single `@not(equals(...))` expression cannot be pasted in. Comparing the two lengths directly says the same thing and fits the basic editor natively — it is the better formulation regardless.
+>
+> `Filter array` **has** kept advanced mode, which is why the conditions in Step 5 are still written as one expression.
+>
+> **Avoid conditions that compare a boolean to `true` here.** A left side returning a real boolean against a right side typed as the text `true` is the classic silent mismatch. Comparing two integers, as above, has no such trap.
 
 `union` with itself dedupes, so a shorter result means two sets claim the same capacity. **Leave the *No* branch completely empty** — no conflict is the normal case and needs no row.
 
