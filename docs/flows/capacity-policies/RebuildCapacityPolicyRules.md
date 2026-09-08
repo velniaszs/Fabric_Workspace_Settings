@@ -59,10 +59,12 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 
 | Environment variable | Value |
 |---|---|
-| `ab_PolicyHolderWorkspaceId` | The workspace holding the PolicySet items |
-| `ab_PolicySentinelWorkspaceId` | `00000000-0000-0000-0000-000000000000` |
-| `ab_PolicyMaxWorkspacesPerRule` | `49` |
-| `ab_PolicyMaxRulesPerPolicy` | `50` |
+| `ubsppcoe_PolicyHolderWorkspaceId` | The workspace holding the PolicySet items |
+| `ubsppcoe_PolicySentinelWorkspaceId` | `00000000-0000-0000-0000-000000000000` |
+| `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
+| `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
+
+**Create these before building — they do not exist by default**, and a missing one fails at runtime with `The workflow parameter … is not found`. Steps in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §8.11.
 
 > ### The one thing that must not go wrong
 >
@@ -115,7 +117,7 @@ Ten `Initialize variable` actions, in order.
 | `Initialize_policySetId` | `policySetId` | String | *(leave empty)* |
 | `Initialize_nodeRowId` | `nodeRowId` | String | *(leave empty)* |
 | `Initialize_policyRowId` | `policyRowId` | String | *(leave empty)* |
-| `Initialize_maxPerRule` | `maxPerRule` | Integer | `int(parameters('PolicyMaxWorkspacesPerRule (ab_PolicyMaxWorkspacesPerRule)'))` |
+| `Initialize_maxPerRule` | `maxPerRule` | Integer | `int(parameters('PolicyMaxWorkspacesPerRule (ubsppcoe_PolicyMaxWorkspacesPerRule)'))` |
 | `Initialize_workspaces` | `workspaces` | Array | *(leave empty)* |
 | `Initialize_itemTypes` | `itemTypes` | Array | *(leave empty)* |
 | `Initialize_exceptionCandidates` | `exceptionCandidates` | Array | *(leave empty)* |
@@ -357,7 +359,7 @@ Separate concern, and not to be confused with the chunking above. Chunking is ho
 
 | Left | Operator | Right |
 |---|---|---|
-| `add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)` | is greater than | `int(parameters('PolicyMaxRulesPerPolicy (ab_PolicyMaxRulesPerPolicy)'))` |
+| `add(add(variables('chunkCount'), variables('exceptionChunkCount')), 1)` | is greater than | `int(parameters('PolicyMaxRulesPerPolicy (ubsppcoe_PolicyMaxRulesPerPolicy)'))` |
 
 **Yes** → Respond with `Outcome` = `Failed`, a message naming the limit, and the same six fields as Step 10b — `PolicySetId`, `WorkspaceCount` and `ExceptionCount` are all known here, so fill them in rather than blanking them. Then **Terminate** with `Succeeded`.
 
@@ -465,7 +467,7 @@ Map in **text mode**:
       "targetProperty": "workspace.id",
       "predicate": {
         "operator": "AnyOf",
-        "values": [ "@{parameters('PolicySentinelWorkspaceId (ab_PolicySentinelWorkspaceId)')}" ]
+        "values": [ "@{parameters('PolicySentinelWorkspaceId (ubsppcoe_PolicySentinelWorkspaceId)')}" ]
       }
     }
   ],
@@ -501,7 +503,7 @@ The sentinel here is a **single value inside a literal array**, so `"@{…}"` in
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy` |
 | Header `Content-Type` | `application/json` |
 | Body of the request | `@outputs('Compose_body')` |
 

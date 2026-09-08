@@ -15,7 +15,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5, [.
 | `Run a Child Flow` → `GetPolicyToken`, then `Initialize variable` → `accessToken` | **Nothing.** Each flow starts at its first real step |
 | `HTTP` action with `Authorization: Bearer @{variables('accessToken')}` | **Invoke an HTTP request** on the connector, no auth header |
 | Client secret in an `Initialize variable`, scrubbed to a space on export | **No secret anywhere in the design** |
-| `ab_PolicyTenantId`, `ab_PolicyClientId` environment variables | Not needed |
+| Tenant-id and client-id environment variables | Not needed. Neither was ever created |
 | Secure Inputs / Secure Outputs on the token actions | Not needed — no token ever reaches the run history |
 
 The connector pattern is set out once in [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0, and every flow doc in this folder now uses it.

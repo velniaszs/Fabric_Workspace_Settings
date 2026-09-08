@@ -444,13 +444,15 @@ The flow docs reference six of these. **They do not exist until you create them*
 
 For each, in your solution: **+ New** → **More** → **Environment variable**.
 
-| Display name | Data type | Current value | Read by |
-|---|---|---|---|
-| `PolicyHolderWorkspaceId` | Text | The workspace holding the PolicySet items | Initialize, Rebuild, Sync |
-| `PolicySentinelWorkspaceId` | Text | `00000000-0000-0000-0000-000000000000` | Rebuild |
-| `PolicyMaxWorkspacesPerRule` | Text | `49` | Rebuild |
-| `PolicyMaxRulesPerPolicy` | Text | `50` | Rebuild |
-| `PolicyNamePrefix` | Text | `pol_` | Initialize |
+| Display name | Schema name | Data type | Current value | Read by |
+|---|---|---|---|---|
+| `PolicyHolderWorkspaceId` | `ubsppcoe_PolicyHolderWorkspaceId` | Text | The workspace holding the PolicySet items | Initialize, Rebuild, Sync |
+| `PolicySentinelWorkspaceId` | `ubsppcoe_PolicySentinelWorkspaceId` | Text | `00000000-0000-0000-0000-000000000000` | Rebuild |
+| `PolicyMaxWorkspacesPerRule` | `ubsppcoe_PolicyMaxWorkspacesPerRule` | Text | `49` | Rebuild |
+| `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | Text | `50` | Rebuild |
+| `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | Text | `pol_` | Initialize |
+
+**The schema name comes from your solution's publisher**, so creating these inside the solution from 8.2 produces the `ubsppcoe_` names above automatically. Type only the part after the prefix — the box already shows `ubsppcoe_`.
 
 **Five, not six.** [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
 
@@ -458,11 +460,11 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 
 **Set a Current Value, not only a Default Value.** A variable with neither resolves to blank, which does not error — it silently builds a URL with a missing segment.
 
-> ### The prefix will be `ubsppcoe_`, and the flow docs say `ab_`
+> ### The prefix is `ubsppcoe_`, matching the tables
 >
-> **The flow docs were written before the prefix decision of 2026-09-07 and still spell these `ab_PolicyHolderWorkspaceId`.** A variable created in your solution gets your publisher's prefix, so yours will be **`ubsppcoe_PolicyHolderWorkspaceId`**. Read every `ab_Policy…` in [flows/capacity-policies/](docs/flows/capacity-policies/) as "whatever prefix your solution gave it".
+> **Decision 2026-09-08: the policy environment variables use the `ubsppcoe_` prefix**, like everything else this project creates. The flow docs have been updated to match.
 >
-> The `ab_` prefix belongs to the **workspace-settings** solution — `ab_TenantId`, `ab_BrokerClientId` and the rest, which are unrelated to policy rules and must not be reused here.
+> The `ab_` prefix belongs to the **workspace-settings** solution — `ab_TenantId`, `ab_BrokerClientId` and the rest. Those are unrelated to policy rules and must not be reused here. If you find an `ab_Policy…` reference anywhere, it is a leftover from an earlier draft and should be corrected.
 
 #### Referencing one in a flow
 

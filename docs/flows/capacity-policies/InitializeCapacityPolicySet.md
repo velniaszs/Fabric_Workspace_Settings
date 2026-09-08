@@ -126,7 +126,7 @@ Three **Compose** actions. Capacity display names are far more permissive than F
 ### 5a. `Compose_name_raw`
 
 ```
-@{concat(parameters('PolicyNamePrefix (ab_PolicyNamePrefix)'), triggerBody()['text_1'])}
+@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
 ```
 
 ### 5b. `Compose_name_clean`
@@ -158,7 +158,7 @@ If you prefer readability, use an `Initialize variable` for the capped value and
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets` |
 | Header `Content-Type` | `application/json` |
 
 Body:
@@ -239,7 +239,7 @@ With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
 | Header `Content-Type` | `application/json` |
 | Body | `{ "scopeId": "@{triggerBody()['text']}", "scopeType": "Capacity" }` |
 

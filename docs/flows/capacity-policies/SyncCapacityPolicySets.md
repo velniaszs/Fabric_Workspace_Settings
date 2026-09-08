@@ -86,7 +86,7 @@ Then ⋯ → **Settings** → **Concurrency Control** → **On**, **Degree of Pa
 2. `Initialize_nextUri` — `nextUri`, String:
 
 ```
-@{concat('https://api.fabric.microsoft.com/v1/workspaces/', parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)'), '/policySets?recursive=true')}
+@{concat('https://api.fabric.microsoft.com/v1/workspaces/', parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)'), '/policySets?recursive=true')}
 ```
 
 3. `Initialize_isDone` — `isDone`, Boolean, `false`.
@@ -253,7 +253,7 @@ Inside:
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_untracked')?['id']}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_untracked')?['id']}` |
 | Header `Accept` | `application/json` |
 
 Same headers as 3a. **Neither `GET` strictly needs one** — Fabric returns JSON regardless — but keeping the two identical means a difference between them is always a mistake rather than something to puzzle over.
@@ -474,7 +474,7 @@ If the app needs the four counts on a screen, it reads them from the table, not 
 
 > ### A clean run on an empty estate proves less than it looks
 >
-> Before any policy set exists, **test 0 and test 1 are indistinguishable — and so is a wrong `ab_PolicyHolderWorkspaceId`.** A workspace that exists but is not the holder returns an empty list and a perfectly green run.
+> Before any policy set exists, **test 0 and test 1 are indistinguishable — and so is a wrong `ubsppcoe_PolicyHolderWorkspaceId`.** A workspace that exists but is not the holder returns an empty list and a perfectly green run.
 >
 > So a first clean run tells you the connection authenticates and Dataverse is reachable. It does **not** tell you that you are pointed at the right workspace. **Test 2 is what proves that** — create one policy set by hand in the workspace you believe is the holder and confirm it comes back as `Untracked`. Do that before trusting any later "no drift" result.
 >
