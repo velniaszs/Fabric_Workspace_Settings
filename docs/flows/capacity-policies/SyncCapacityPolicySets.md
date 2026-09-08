@@ -324,14 +324,29 @@ Inside it, one **Add a new row** named `Add_drift_inactive`, Table name **`Polic
 >
 > If a populated capacity matters, do **not** add a `GET`. These sets are *tracked*, so the capacity is already sitting in `List_policy_rows` — a `Filter array` inside the loop matching `ubsppcoe_policysetid` against `items('For_each_inactive')?['id']` recovers it with no extra Fabric call. That is the only version of this worth building.
 
-### 7c. `Conflict` — not a loop
+### 7c. `Conflict` — three plain actions, **no `Apply to each`**
 
-Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so use a Select of scope IDs and check for duplicates:
+7a and 7b loop because they emit **one drift row per item**. 7c emits **one row for the whole finding**, however many sets are involved — so there is nothing to iterate and no loop to add.
 
-- `Select_scope_ids` — From `body('Filter_capacity_scoped')`, map (text mode) `coalesce(item()?['properties']?['scope']?['id'], '')`
-- **Condition:** `@not(equals(length(body('Select_scope_ids')), length(union(body('Select_scope_ids'), body('Select_scope_ids')))))`
+| | Action name | What to pick in the designer | Where it goes |
+|---|---|---|---|
+| i | `Select_scope_ids` | **Data Operation** → **Select** | Top level, after 7b |
+| ii | `Condition_has_conflict` | **Control** → **Condition** | Top level, after i |
+| iii | `Add_drift_conflict` | **Microsoft Dataverse** → **Add a new row** | **Inside the *Yes* branch** of ii |
 
-`union` with itself dedupes, so a shorter result means duplicates exist. On **Yes**, one **Add a new row** named `Add_drift_conflict`, Table name **`Policy Drift`**:
+Group `Filter_capacity_scoped` by scope ID. Power Automate has no group-by, so the trick is to select the scope IDs and see whether deduping shortens the list.
+
+**i. `Select_scope_ids`** — From `body('Filter_capacity_scoped')`, Map in **text mode**: `coalesce(item()?['properties']?['scope']?['id'], '')`
+
+**ii. `Condition_has_conflict`** — one row, written in advanced mode:
+
+```
+@not(equals(length(body('Select_scope_ids')), length(union(body('Select_scope_ids'), body('Select_scope_ids')))))
+```
+
+`union` with itself dedupes, so a shorter result means two sets claim the same capacity. **Leave the *No* branch completely empty** — no conflict is the normal case and needs no row.
+
+**iii. `Add_drift_conflict`** — in the **Yes** branch only. Table name **`Policy Drift`**:
 
 | Column | Logical name | Value |
 |---|---|---|
