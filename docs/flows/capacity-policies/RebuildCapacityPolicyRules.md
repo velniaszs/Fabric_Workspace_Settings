@@ -625,9 +625,9 @@ Writing the row on both paths is the point — a failed rebuild that leaves `las
 >
 > Store them as **whole numbers**, not text. The typing rule that forces every *Respond* output to Text does not apply to Dataverse columns, and flow 2 needs to sort on them.
 
-### 10b. Respond
+### 10b. `Respond_rebuilt`
 
-**+ New step** → **Respond to a Power App or flow**, ⋯ → **Configure run after** on `Update_policy_row` with **is successful** and **has failed** ticked. Six **Text** outputs:
+**+ New step** → **Respond to a Power App or flow**, renamed `Respond_rebuilt`. ⋯ → **Configure run after** on `Update_policy_row` with **is successful** and **has failed** ticked. Six **Text** outputs:
 
 | Output | Value |
 |---|---|
@@ -648,11 +648,22 @@ It is already in a variable, so returning it is free. What it buys is a run hist
 
 > **Do not return the rule IDs.** `replaceByPolicy` responds with the rules it created, and it is tempting to keep them. They are regenerated with new IDs on every rebuild, so anything that stored them would be stale within a day, and nothing in this design addresses a rule by ID — that is the entire point of rebuilding wholesale.
 
-### Keep every Respond in this flow to the same six fields
+### Every Respond in this flow declares the same six fields
 
-There are three `Respond to a Power App or flow` actions here — the two early exits in Steps 4 and 6, and this one. **Give all of them the same six outputs**, with `PolicySetId`, `RuleCount`, `WorkspaceCount` and `ExceptionCount` set to `''`, `'0'`, `'0'` and `'0'` on the early exits.
+There are **four** `Respond to a Power App or flow` actions here — three early exits and the real one:
+
+| Action | Step | `Outcome` | `PolicySetId` | `RuleCount` | `WorkspaceCount` | `ExceptionCount` |
+|---|---|---|---|---|---|---|
+| `Respond_no_policy_row` | 4 | `Failed` | *(empty)* | `0` | `0` | `0` |
+| `Respond_no_node` | 5a | `Failed` | `variables('policySetId')` | `0` | `0` | `0` |
+| `Respond_too_many_rules` | 6 | `Failed` | `variables('policySetId')` | computed total | actual | actual |
+| `Respond_rebuilt` | 10b | `Rebuilt` / `Failed` | `variables('policySetId')` | computed total | actual | actual |
+
+**The field list is identical everywhere; only the values differ by what is known at that point.** Blank the ones that genuinely are not known yet, and fill in the ones that are — Step 6 in particular, where the counts are the diagnostic the caller needs.
 
 A caller reading a field that the branch it happened to take never declared gets a **blank, not an error**. So a mismatch does not fail; it produces early-exit responses whose `RuleCount` is empty and a parent flow that quietly treats it as zero. Identical schemas everywhere is the only version of this that stays debuggable.
+
+> **`Message` is omitted from the table above only because every one differs.** It is still required on all four.
 
 ---
 
