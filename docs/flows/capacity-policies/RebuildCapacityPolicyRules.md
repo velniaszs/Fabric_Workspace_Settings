@@ -29,6 +29,8 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2 and
 | Set `Content-Type: application/json` on POST and PATCH | **Add an `Authorization` header.** The connector adds it. A hand-written one is either ignored or breaks the call |
 | Leave **Retry Policy** at Default — it covers `429` | Reference `variables('accessToken')`. There is no such variable any more |
 
+**Headers, in full:** a `GET` needs none — `Accept: application/json` is optional and harmless, and the flow docs include it only so every `GET` looks alike. A `POST` or `PATCH` carrying a body needs `Content-Type: application/json`. Nothing in this design needs any other header.
+
 > **The connection's identity is what Fabric sees**, not the flow and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5 must be held by that identity. Which identity it should be is **Q45**, still open.
 
 > **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.

@@ -68,6 +68,10 @@ Findings are rewritten each run, so this table is a **current state**, not a log
 
 **Solutions** → **New** → **Automation** → **Cloud flow** → **Scheduled**. Name it `SyncCapacityPolicySets`. Recurrence: once daily, outside business hours.
 
+> **Pick Scheduled, not Instant, and pick it now.** A flow's trigger cannot reliably be swapped afterwards — if you start from **Instant** you will be deleting the flow and starting again. An Instant flow only ever runs when someone presses a button, so the nightly scan would silently never happen, and this is the only thing that detects a policy set being deactivated, replaced or deleted.
+>
+> Wanting to test it by hand is not a reason to choose Instant: a Scheduled flow still runs on demand from the **Test** panel.
+
 > **If you want a "Scan now" button in the app instead**, use a **Power Apps (V2)** trigger with no inputs and add a `Respond to a Power App or flow` at the end returning the four counts. The body is identical. In steady state it returns well inside the 120-second budget; on a badly drifted tenant it will not, which is the argument for the schedule doing the work and the app reading `Policy Drift`.
 
 Then ⋯ → **Settings** → **Concurrency Control** → **On**, **Degree of Parallelism = 1**. Two overlapping scans would both rewrite the drift table.
@@ -133,7 +137,19 @@ Bare `@expr`, not `@{ }`. Wrapped, it becomes the string `"true"`, never equals 
 
 ---
 
-## Step 4 — Read what Dataverse thinks
+## Step 4 — Reduce both sides to two lists of IDs
+
+**Three separate top-level actions, added one after another with + New step.** They are siblings, not settings inside one another — 4b and 4c are **not** part of the `List rows` action, and nothing here is nested.
+
+| | Action name | What to pick in the designer |
+|---|---|---|
+| 4a | `List_policy_rows` | **Microsoft Dataverse** → **List rows** |
+| 4b | `Select_known_ids` | **Data Operation** → **Select** |
+| 4c | `Select_fabric_ids` | **Data Operation** → **Select** |
+
+**Rename each action to the name in that table.** Step 5 refers to them as `body('Select_known_ids')` and `body('Select_fabric_ids')`, and those expressions break if the actions are left as `Select`, `Select 2`.
+
+> **Only 4a and 4b touch Dataverse. 4c does not.** It reads `variables('policySets')` — the array Step 3 built from Fabric — and reshapes it the same way. The two Selects exist so Step 5 can compare like with like: one list of policy set IDs Dataverse knows about, one list of policy set IDs Fabric actually has.
 
 ### 4a. `List_policy_rows` — Dataverse **List rows**
 
@@ -144,21 +160,21 @@ Bare `@expr`, not `@{ }`. Wrapped, it becomes the string `"true"`, never equals 
 
 ⋯ → **Settings** → **Pagination On**, threshold `5000`.
 
-### 4b. `Select_known_ids` — Select
+### 4b. `Select_known_ids` — **Data Operation → Select**
 
 | Field | Value |
 |---|---|
 | From | `body('List_policy_rows')?['value']` |
 | Map (**text mode**) | `item()?['ubsppcoe_policysetid']` |
 
-### 4c. `Select_fabric_ids` — Select
+### 4c. `Select_fabric_ids` — **Data Operation → Select**
 
 | Field | Value |
 |---|---|
 | From | `variables('policySets')` |
 | Map (**text mode**) | `item()?['id']` |
 
-Text mode on both. In key/value mode these produce arrays of objects, and `contains()` in Step 5 then never matches.
+**Switch the Map box to text mode on both** — the `T` icon on the right of the Map row. A **Select** shows two boxes, key and value, by default; text mode collapses it to one. In key/value mode these produce arrays of *objects*, and the `contains()` tests in Step 5 then never match — which reads as "no drift at all", the most reassuring possible wrong answer.
 
 ---
 
@@ -216,17 +232,30 @@ Inside:
 |---|---|
 | Method | `GET` |
 | URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_untracked')?['id']}` |
+| Header `Accept` | `application/json` |
+
+Same headers as 3a. **Neither `GET` strictly needs one** — Fabric returns JSON regardless — but keeping the two identical means a difference between them is always a mistake rather than something to puzzle over.
 
 ### 6b. `Add_drift_untracked` — Dataverse **Add a new row**
 
-| Column | Value |
+| Field | Value |
 |---|---|
-| Kind | `Untracked` |
-| Policy set ID | `items('For_each_untracked')?['id']` |
-| Capacity ID | `coalesce(body('Get_untracked_set')?['properties']?['scope']?['id'], '')` |
-| Display name | `items('For_each_untracked')?['displayName']` |
-| Detected | `utcNow()` |
-| Details | `concat('Scope ', coalesce(body('Get_untracked_set')?['properties']?['scope']?['type'], 'unknown'), ', status ', coalesce(body('Get_untracked_set')?['properties']?['status'], 'unknown'))` |
+| Table name | **`Policy Drift`** (`ubsppcoe_PolicyDrift`) |
+
+Then the columns. **The designer lists them by display name**, which is what the left column below gives; the logical name is beside it so you can confirm you are on the right table — several of these names also exist on `Capacity Policies`.
+
+| Column (as shown) | Logical name | Value |
+|---|---|---|
+| Kind | `ubsppcoe_driftkind` | `Untracked` |
+| Policy set ID | `ubsppcoe_policysetid` | `items('For_each_untracked')?['id']` |
+| Capacity ID | `ubsppcoe_capacityid` | `coalesce(body('Get_untracked_set')?['properties']?['scope']?['id'], '')` |
+| Display name | `ubsppcoe_displayname` | `items('For_each_untracked')?['displayName']` |
+| Detected | `ubsppcoe_detected` | `utcNow()` |
+| Details | `ubsppcoe_details` | `concat('Scope ', coalesce(body('Get_untracked_set')?['properties']?['scope']?['type'], 'unknown'), ', status ', coalesce(body('Get_untracked_set')?['properties']?['status'], 'unknown'))` |
+
+> **`ubsppcoe_policysetid` and `ubsppcoe_capacityid` exist on both `Policy Drift` and `Capacity Policies`**, with the same meanings ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2 and §5). Picking the wrong table here writes a malformed capacity row instead of a drift finding. Set **Table name** first and check it before filling anything in.
+
+**Kind is a choice column** — pick `Untracked` from the dropdown rather than typing it. It travels as an integer, not as the label (§1).
 
 `coalesce` on the scope ID because the field can be absent even from a direct `GET` — the PowerShell has the same defence and treats a missing scope as "assume it targets the expected capacity" rather than an error.
 
@@ -234,7 +263,7 @@ Inside:
 
 ## Step 7 — Record the rest
 
-Three more **Apply to each** blocks, each adding rows to `Policy Drift`. None makes a Fabric call.
+Three more **Apply to each** blocks, each with one Dataverse **Add a new row** against **`Policy Drift`** (`ubsppcoe_PolicyDrift`) — the same table and the same six columns as 6b. None makes a Fabric call.
 
 | Loop over | Kind | Capacity ID | Details |
 |---|---|---|---|
@@ -281,11 +310,20 @@ Matching by ID inside a filter expression is awkward in Power Automate. If it tu
 
 | # | Test | Expect |
 |---|---|---|
+| 0 | **Nothing built yet — no policy sets anywhere** | A clean run, zero drift rows, zero Fabric writes. See the warning below before reading anything into it |
 | 1 | Healthy tenant | Zero drift rows, and **zero** calls to `Get_untracked_set` in the run history. That is the cheap-scan property working |
 | 2 | Create a policy set by hand in the holder workspace | One `Untracked` row, with the capacity resolved |
 | 3 | Delete a tracked policy set in the portal | One `Missing` row |
 | 4 | Create and activate a replacement on a capacity that already has one | `Inactive` on the old set **and** `Untracked` on the new one — the signature to recognise |
 | 5 | Run twice in a row | Same rows, not doubled |
 | 6 | More than one page of policy sets | Every set appears. Hard to force at fewer than a few hundred; if you cannot, the loop rests on the same pattern used elsewhere in this repo |
+
+> ### A clean run on an empty estate proves less than it looks
+>
+> Before any policy set exists, **test 0 and test 1 are indistinguishable — and so is a wrong `ab_PolicyHolderWorkspaceId`.** A workspace that exists but is not the holder returns an empty list and a perfectly green run.
+>
+> So a first clean run tells you the connection authenticates and Dataverse is reachable. It does **not** tell you that you are pointed at the right workspace. **Test 2 is what proves that** — create one policy set by hand in the workspace you believe is the holder and confirm it comes back as `Untracked`. Do that before trusting any later "no drift" result.
+>
+> Check the run history for `List_page` returning **200 with an empty `value`**, not a `401`, `403` or `404`. Those three mean the identity cannot see the workspace, which is a different problem with the same visible outcome: no drift rows.
 
 Test 1 is the one to check deliberately. If `Get_untracked_set` runs at all on a healthy tenant, the ID matching in Step 5a is broken — most likely because a Select was left in key/value mode and is producing objects instead of strings.
