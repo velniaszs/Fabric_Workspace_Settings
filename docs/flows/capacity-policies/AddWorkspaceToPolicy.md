@@ -10,8 +10,8 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 
 ## 0. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it, and uses the same placeholder column names — confirm them there.
-- Needs a **Dataverse connection** for reads only. It makes **no Fabric calls of its own** — every Fabric interaction happens inside the child flow.
+- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it.
+- Needs a **Dataverse connection** for reads only, and **not** the Entra ID HTTP connector. It makes **no Fabric calls of its own** — every Fabric interaction, and therefore the whole auth question, lives inside the child flow.
 
 > ## This flow does not add anything
 >

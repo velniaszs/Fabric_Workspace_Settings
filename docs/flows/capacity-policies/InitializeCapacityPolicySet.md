@@ -4,13 +4,14 @@ Creates the policy set for a newly provisioned capacity, registers it in Dataver
 
 > **Not built yet.** Specification, not a description of something that exists.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
+Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses.
 
 ---
 
 ## 0. Before you start
 
-- Build [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) and [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow calls both.
+- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow calls it, and its §0 defines the Fabric connector pattern used below.
+- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header**.
 - Needs a **Dataverse connection**.
 - The SPN needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
 - Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
@@ -38,10 +39,11 @@ Both required. An optional PowerApp V2 input is dropped from the payload entirel
 
 ---
 
-## Step 2 — Token and outcome variables
+## Step 2 — Outcome variables
 
-1. **Run a Child Flow** → `GetPolicyToken` (leave named `Run_a_Child_Flow`).
-2. `Initialize_variable` — `accessToken`, String, `body('Run_a_Child_Flow')?['access_token']`.
+`Initialize_variable` actions for `outcome`, `policySetId` and `message`.
+
+> **No token step.** Earlier drafts started with `Run a Child Flow` → `GetPolicyToken` and an `accessToken` variable. Both are gone — delete them if you are copying an older draft.
 3. `Initialize_policySetId` — `policySetId`, String, empty.
 4. `Initialize_outcome` — `outcome`, String, `Failed`.
 5. `Initialize_message` — `message`, String, empty.
@@ -74,14 +76,15 @@ Everything below goes in the **No** branch.
 
 ## Step 4 — Check the capacity is eligible
 
-`Get_capacities` — **HTTP**:
+`Get_capacities` — **Invoke an HTTP request**:
 
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URI | `https://api.fabric.microsoft.com/v1/capacities` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/capacities` |
 | Header `Accept` | `application/json` |
+
+> **This list is scoped to the connection's identity**, not to the flow. A capacity the identity does not administer is simply absent, and Step 4 reports `Skipped` — indistinguishable from the capacity not existing. If every capacity comes back `Skipped`, suspect the connection before suspecting the data (Q45).
 
 `Filter_capacity` — **Filter array**:
 
@@ -106,7 +109,7 @@ Three separate reasons, one outcome:
 
 | Condition | Why |
 |---|---|
-| Not in the list | Either it does not exist, or the SPN is not an admin on it — indistinguishable from here, and both mean this flow cannot proceed |
+| Not in the list | Either it does not exist, or **the connection's identity** is not an admin on it — indistinguishable from here, and both mean this flow cannot proceed |
 | Not `Active` | A paused capacity cannot host a working policy set |
 | SKU is not `F*` | **Only Fabric capacities can hold a policy set.** Power BI SKUs — `P`, `A`, `EM`, `PP` — are a normal thing to encounter, not an error. `Skipped`, not `Failed` |
 
@@ -146,13 +149,12 @@ If you prefer readability, use an `Initialize variable` for the capped value and
 
 ## Step 6 — Create the policy set
 
-`Create_policy_set` — **HTTP**:
+`Create_policy_set` — **Invoke an HTTP request**:
 
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets` |
 | Header `Content-Type` | `application/json` |
 
 Body:
@@ -172,7 +174,7 @@ Body:
 
 Then ⋯ → **Settings** → **Asynchronous Pattern** → **Off**.
 
-> Leave **Retry Policy** at Default on every HTTP action here. It already covers `429`. The one to watch is `Activate`: the Admin activation endpoints are documented at **10 requests per minute**, so a provisioning burst creating several capacities at once is where throttling would first show up.
+> Leave **Retry Policy** at Default on every Fabric call here. It already covers `429`. The one to watch is `Activate`: the Admin activation endpoints are documented at **10 requests per minute**, so a provisioning burst creating several capacities at once is where throttling would first show up.
 
 > **Turn the async pattern off deliberately.** Create Policy Set is a long-running operation: it answers `201` with the created item, or `202` with `Location` and `x-ms-operation-id`. Left on, the connector follows the `Location` header itself — but that points at the *operation*, not the created item, so the action resolves to an operation status and `body('Create_policy_set')?['id']` is not the policy set ID. Handling the two status codes explicitly is longer and predictable.
 
@@ -188,6 +190,8 @@ Then ⋯ → **Settings** → **Asynchronous Pattern** → **Off**.
 
 Status code is on `outputs(...)`, never on `body(...)`.
 
+> **Confirm this on the first real run.** `statusCode` and `headers` are read off an *Invoke an HTTP request* action here, not the plain `HTTP` action the earlier drafts used. API-connection actions expose both, but this branch and the `x-ms-operation-id` read below are the only places in the whole design that depend on it — so if the connector surfaces them differently, this is the one section to rewrite. Everything else reads `body(...)`.
+
 ### Yes — `201`
 
 `Set_policySetId_sync` — Set variable → `policySetId` = `body('Create_policy_set')?['id']`.
@@ -197,10 +201,10 @@ Status code is on `outputs(...)`, never on `body(...)`.
 1. `Initialize_operationId` — String, `outputs('Create_policy_set')?['headers']?['x-ms-operation-id']`.
 2. `Initialize_opStatus` — String, `Running`.
 3. **Do until** `@or(equals(variables('opStatus'), 'Succeeded'), equals(variables('opStatus'), 'Failed'))`, count `60`, timeout `PT10M`:
-   - `Get_operation` — HTTP `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}` with the auth header.
+   - `Get_operation` — **Invoke an HTTP request**, `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}`. No auth header.
    - `Set_opStatus` — Set variable → `coalesce(body('Get_operation')?['status'], 'Running')`.
    - **Delay** 5 seconds. Without it the loop burns its 60 iterations in seconds and reports a timeout on an operation that was going to succeed.
-4. `Get_operation_result` — HTTP `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}/result`.
+4. `Get_operation_result` — **Invoke an HTTP request**, `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}/result`.
 5. `Set_policySetId_async` — Set variable → `policySetId` = `body('Get_operation_result')?['id']`.
 
 The created item is at `/result`, not on the operation itself. The operation only reports status.
@@ -226,13 +230,12 @@ With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows
 
 > **A brand-new capacity may have no `ubsppcoe_Node` row yet, and the rebuild fails closed on that** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5b. The policy set is still created and recorded, so this is recoverable: add the Node row and rerun. But if provisioning routinely creates the capacity before its inventory record, expect this step to fail on first run, and decide whether the provisioning app should order the two the other way round.
 
-### 8c. `Activate` — **HTTP**
+### 8c. `Activate` — **Invoke an HTTP request**
 
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
 | Header `Content-Type` | `application/json` |
 | Body | `{ "scopeId": "@{triggerBody()['text']}", "scopeType": "Capacity" }` |
 

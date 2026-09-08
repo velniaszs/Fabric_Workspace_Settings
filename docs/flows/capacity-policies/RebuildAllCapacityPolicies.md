@@ -37,7 +37,7 @@ The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-
 ## 1. Before you start
 
 - Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow is a loop around it.
-- Needs a **Dataverse connection**. No direct Fabric calls.
+- Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. No direct Fabric calls — the child flow makes them all.
 
 ---
 

@@ -2,7 +2,7 @@
 
 Plan for the Power Automate flows that operate the capacity-scoped `ItemCreation` policy sets currently managed by PowerShell in the **`ubs-policies`** repository (`C:\GIT\ubs-policies`).
 
-**Architecture decided 2026-09-02: desired state in Dataverse, rules rebuilt with `replaceByPolicy`. Revised 2026-09-03: the desired state is the existing `ubsppcoe_Workspace` table, read-only, plus an exception list this project owns. Revised 2026-09-07: the column that decides whitelist membership is `ubsppcoe_oapenabled`.** Eight flows, two existing tables read and four new tables created. Nothing is built yet.
+**Architecture decided 2026-09-02: desired state in Dataverse, rules rebuilt with `replaceByPolicy`. Revised 2026-09-03: the desired state is the existing `ubsppcoe_Workspace` table, read-only, plus an exception list this project owns. Revised 2026-09-07: the column that decides whitelist membership is `ubsppcoe_oapenabled`. Revised 2026-09-08: Fabric is called through the *HTTP with Microsoft Entra ID (preauthorized)* connector, so there is no token flow.** Seven flows, two existing tables read and four new tables created. Nothing is built yet.
 
 Source material reviewed 2026-09-02, all in `C:\GIT\ubs-policies`: `migrate_policy_sets.ps1`, `add_policy_rule.ps1`, `remove_workspace_from_rule.ps1`, `new_policy_set.ps1`, `list_policy_sets.ps1`, `FabricPolicies.Common.ps1`, `Migration-Steps.md`, and `docs/Fabric-Policies-REST-API-Reference.md`.
 
@@ -28,7 +28,7 @@ The flows must reproduce this model exactly, or they will fight the PowerShell.
 | `PATCH policyRules/{id}` **replaces the whole `conditions` array** — rebuild every condition, not just the edited one | `remove_workspace_from_rule.ps1` |
 | An empty `values` list is rejected (`PropertyMinCount`) — delete the rule instead | same |
 | Only **F SKU** capacities can host a policy set | `-CapacitySkuPattern 'F*'` |
-| Auth is **app-only client credentials**, scope `https://api.fabric.microsoft.com/.default` | `FabricPolicies.Common.ps1` |
+| Auth in the scripts is **app-only client credentials**, scope `https://api.fabric.microsoft.com/.default` | `FabricPolicies.Common.ps1` |
 
 Item types come from `fabric_item_types.csv`; workspace whitelists from `fabric_workspaces.csv`; exceptions from `fabric_workspaces_exceptions.csv`. **None of the three is reachable from a flow** — see §6.
 
@@ -260,13 +260,12 @@ It removes a seeding problem and introduces a coupling one.
 
 ---
 
-## 4. The eight flows
+## 4. The seven flows
 
 Build instructions are one file per flow in [flows/capacity-policies/](docs/flows/capacity-policies/). The summaries here are design intent; the per-flow files are the specification and win on any detail.
 
 | Flow | Trigger | Purpose |
 |---|---|---|
-| [GetPolicyToken](docs/flows/capacity-policies/GetPolicyToken.md) | Manual (child) | App-only token for the policy SPN |
 | [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Manual (child) | **The only writer of rules.** Rebuilds one capacity from the tables |
 | [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Power Apps (V2) | Creates, registers, builds and activates a new capacity's policy set |
 | [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) | Power Apps (V2) | What the app reads. One table, no Fabric calls |
@@ -425,12 +424,28 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 
 ## 5. Permissions
 
+**Decision 2026-09-08: every Fabric call uses the *HTTP with Microsoft Entra ID (preauthorized)* connector, not the plain `HTTP` action.** The connector attaches the bearer token itself, so there is no token flow, no client secret, and no `Authorization` header anywhere in this design. `GetPolicyToken` is retired.
+
+> ### What that changes, and it is not only plumbing
+>
+> **The identity stops being a service principal we configured and becomes whatever the connection authenticates as.** Everything in this section hangs off that, so settle it before granting anything:
+>
+> | | Old — app-only token flow | New — connector connection |
+> |---|---|---|
+> | Who calls Fabric | The policy SPN, via client credentials | **The connection's identity** |
+> | Where the secret lives | An environment variable we manage | Nowhere. The platform holds it |
+> | *Service principals can use Fabric APIs* tenant setting | Hard prerequisite | **Only if the connection is a service principal.** Irrelevant for a user connection |
+> | `Item.ReadWrite.All` etc. | Delegated scopes, and therefore **not** the mechanism | **The mechanism, if the connection is delegated** — this inverts |
+> | Breaks when | The secret expires | The secret expires **or the connection owner leaves, loses the role, or has the connection revoked** |
+>
+> **Whichever identity is chosen, the Fabric-side roles below attach to that identity** — they do not follow the flow. See Q45; this is unresolved and it blocks granting.
+
 | Need | Where | Notes |
 |---|---|---|
-| SPN enabled for Fabric APIs | Tenant setting *Service principals can use Fabric APIs* | Hard prerequisite. Symptom when missing: a bare `401` on every call — same failure mode as PREREQUISITES A3/B1 in this repo |
-| **Contributor on the holder workspace** | Fabric workspace role, on **one** workspace | See below |
+| **Contributor on the holder workspace** | Fabric workspace role, on **one** workspace | Held by the connection's identity. See below |
 | **Capacity Admin on every managed capacity** | Capacity role | Confirmed requirement for activating a policy set on that capacity |
-| Capacity enumeration | `GET /v1/capacities` | Returns what the principal administers. The Power BI admin API route returns the whole tenant but needs admin rights |
+| Capacity enumeration | `GET /v1/capacities` | Returns what the **connection's identity** administers. A user connection therefore sees a different list from an SPN one — and flow 1 reads `Skipped` off exactly that list |
+| *Service principals can use Fabric APIs* | Tenant setting | **Only if the connection is a service principal.** Symptom when missing: a bare `401` on every call — same failure mode as PREREQUISITES A3/B1 |
 | Fabric administrator | only for `/v1/admin/policySets/*` | **Not needed.** Those operations are tenant-scope only; nothing here uses them |
 
 ### Contributor is needed on the holder workspace only
@@ -439,13 +454,15 @@ Not on the workspaces being whitelisted. Every write path is `/v1/workspaces/{ho
 
 The workspaces in a whitelist are never touched. They are string values inside `predicate.values` — data, not resources. `migrate_policy_sets.ps1` demonstrates this: it takes one `-WorkspaceId` for the holder and reads every whitelisted GUID from a CSV without any permission check.
 
-So the SPN needs Contributor on **one** workspace, Capacity Admin on the capacities, and **nothing at all** on the thousands of workspaces it grants access to.
+So the calling identity needs Contributor on **one** workspace, Capacity Admin on the capacities, and **nothing at all** on the thousands of workspaces it grants access to.
 
 > **The sting: whitelist GUIDs are never validated.** Fabric accepts any well-formed GUID in `workspace.id`. A typo, a deleted workspace, or a workspace from another tenant is stored happily and simply never matches. Nothing fails, and the owner is left with a policy that looks correct and denies them.
 >
 > Nothing in these flows can fix that, because the GUIDs come from `ubsppcoe_Workspace` and we do not write it. A stale or mistyped workspace GUID on an enabled row goes into the rules verbatim and matches nothing. **The validation has to happen where the row is created** — confirm the workspace exists and is actually assigned to that capacity. The API will not do it, and neither will we.
 
-The scopes in the API reference (`Item.ReadWrite.All`, `Tenant.ReadWrite.All`) are **delegated** scopes. For an app-only token they are not the mechanism; Fabric-side roles are. Do not add Entra application permissions expecting them to help — the same finding as ARCHITECTURE §2.
+> **A user connection makes the whole subsystem depend on one person's account.** The nightly rebuild is the sharp end: it runs unattended against 200–300 capacities, and it stops the day that account is disabled, loses Capacity Admin, or is prompted to re-consent. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
+>
+> If a service-principal connection is available for this connector, prefer it. If not, the connection should be owned by a **service account**, never a named individual, and its expiry should be monitored. That is Q45.
 
 ---
 
@@ -519,13 +536,21 @@ Environment variables travel with a solution export; their **values** may not. S
 | Q42 | What prefix do the four new tables use? | **`ubsppcoe_`, the same as the platform team's.** Not `crbab_`, which belongs to the workspace-settings canvas app and is unrelated to policy rules. The consequence is that **the prefix no longer indicates ownership**: state every read-only rule by table name. Two logical names — `ubsppcoe_workspaceid` and `ubsppcoe_workspacename` — now exist on two tables each, both times meaning the same thing, so the collisions are harmless; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0 |
 | Q43 | What is the `Node` lookup on `ubsppcoe_Workspace`? | **`ubsppcoe_nodeid`, filtered and read as `_ubsppcoe_nodeid_value`.** This closes Q19 — no name is outstanding. Note the near miss with `ubsppcoe_nodeuniqueid` (the Node row key) and with our own `ubsppcoe_node` on `CapacityPolicy`: three similar names, all resolving to the same capacity GUID |
 
+### Decisions taken 2026-09-08
+
+| # | Question | Answer |
+|---|---|---|
+| Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on every Fabric call. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven |
+| Q45 | What identity does that connection use? | **Unresolved, and it blocks granting Fabric roles** — see §5. A service-principal connection keeps the current model; a delegated user connection moves every role onto that account and makes the tenant SPN setting irrelevant. **If it must be a user, use a service account, not a named person** — the nightly rebuild across 200–300 capacities is otherwise one leaver away from stopping |
+
 ### Still open
 
-Ordered by what they block. **Nothing here blocks the flow build any more** — Q19, the last one that did, closed on 2026-09-07 when the final column name was confirmed.
+Ordered by what they block. **No column name blocks the build any more** — Q19 closed on 2026-09-07. Q45 now does.
 
 | # | Question | Blocks |
 |---|---|---|
 | **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist | Pre-launch |
+| **Q45** | Which identity does the connector connection authenticate as, and who owns it? Every Fabric role in §5 attaches to that identity, so nothing can be granted until it is decided | **Flow build** |
 | **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`, and who raises the corrections, given we cannot make them ourselves (§3)? | Cutover |
 | **Q16** | Nothing triggers a rebuild when the owning system changes `ubsppcoe_oapenabled` or moves a `Node` — **or when somebody edits `PolicyException`, which is our own table**. Nightly convergence is currently the only backstop. Acceptable, or does this need a Dataverse modified-row trigger? | Post-launch |
 | **Q33** | Taking an exception away is not live until a rebuild runs (§3). Is "deactivate the row and force a rebuild" a good enough procedure, or does it need a flow of its own after all? | Post-launch |
@@ -542,8 +567,8 @@ Ordered by what they block. **Nothing here blocks the flow build any more** — 
 One document per flow in [flows/capacity-policies/](docs/flows/capacity-policies/); build them in this order.
 
 1. **The four new tables** — `Capacity Policies`, `Policy Item Types`, `Policy Exceptions`, `Policy Drift` — plus the environment variables in §6. **Build them from [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md)**, which carries every column and type. Seed `Policy Item Types` from `fabric_item_types.csv`, and `Policy Exceptions` from `fabric_workspaces_exceptions.csv` if one is in use. Every column read from `ubsppcoe_Workspace` and `ubsppcoe_Node` is now confirmed (Q19 closed), so no filter is blocked on a name.
-2. **[GetPolicyToken](docs/flows/capacity-policies/GetPolicyToken.md)** — client credentials, secret in a Key Vault-backed variable rather than inline. A **different** principal from the workspace-settings broker; do not reuse it.
-3. **[SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md)** — read-only against Fabric. Proves the token, the permissions and the Dataverse wiring with nothing at risk.
+2. **The connector connection.** Create one *HTTP with Microsoft Entra ID (preauthorized)* connection against `https://api.fabric.microsoft.com`, decide whose identity it uses (**Q45**), and grant that identity Contributor on the holder workspace and Capacity Admin on a throwaway capacity. There is no token flow to build — that is the whole of the auth work.
+3. **[SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md)** — read-only against Fabric. Proves the connection, the permissions and the Dataverse wiring with nothing at risk. **This is where a wrong identity surfaces**, as an empty list or a `401`, rather than halfway through the first rebuild.
 4. **[RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md)** — the writer. Test on one throwaway capacity. Exercise the **zero-enabled-workspace** case first and confirm it emits rule 1 alone; that is the path that silently unlocks a capacity if it is wrong. Then blank the policy row's **`node` lookup**, and confirm it fails rather than emitting rule 1. Add one `Policy Exceptions` row last and confirm rule 3 appears with **one** condition.
 5. **[InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md)** — end to end on the same throwaway capacity, including activation. Confirms Capacity Admin is sufficient (§5).
 6. **[AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)**, then **[RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)** — build add first and copy it. Verify the validation outcomes before the happy path: `NotEnabled` on add and `StillEnabled` on remove are the two that a bare rebuild wrapper could not report, and they are the reason both flows exist.

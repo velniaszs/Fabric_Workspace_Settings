@@ -11,7 +11,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 ## 0. Before you start
 
 - Needs a **Dataverse connection**, for reads only.
-- **No Fabric calls, no child flows, no token.** This flow reads one table and formats it. If it grows an `HTTP` action, something has gone wrong — see below.
+- **No Fabric calls and no child flows.** This flow reads one table and formats it. If it grows an *Invoke an HTTP request* action, something has gone wrong — see below. It needs a Dataverse connection and nothing else; **not** the Entra ID HTTP connector.
 - Build it after [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), because two of the columns it returns are written by that flow and will be empty until it has run.
 
 > ### One table, one query, no joins

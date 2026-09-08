@@ -4,7 +4,7 @@ Scans the holder workspace, reconciles what Fabric actually holds against the `C
 
 > **Not built yet.** Specification, not a description of something that exists.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
+Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses.
 
 ---
 
@@ -41,7 +41,9 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 ## 1. Before you start
 
-- Build [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) first.
+- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0.
+
+> **Build this flow first, and it is the one that proves the connection.** It is read-only against Fabric, so a wrong or under-privileged identity shows up here as an empty list or a `401` — cheaply, before anything writes rules. See Q45.
 - Needs a **Dataverse connection**.
 - Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — so it no longer identifies who owns a table. Pick tables and columns from the dropdowns rather than typing them; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
 
@@ -72,10 +74,9 @@ Then ⋯ → **Settings** → **Concurrency Control** → **On**, **Degree of Pa
 
 ---
 
-## Step 2 — Token and variables
+## Step 2 — Variables
 
-1. **Run a Child Flow** → `GetPolicyToken`, left named `Run_a_Child_Flow`.
-2. `Initialize_variable` — `accessToken`, String, `body('Run_a_Child_Flow')?['access_token']`.
+> **No token step.** Earlier drafts opened with `Run a Child Flow` → `GetPolicyToken` and an `accessToken` variable. Both are gone.
 3. `Initialize_policySets` — `policySets`, Array, empty.
 4. `Initialize_nextUri` — `nextUri`, String:
 
@@ -85,7 +86,7 @@ Then ⋯ → **Settings** → **Concurrency Control** → **On**, **Degree of Pa
 
 5. `Initialize_isDone` — `isDone`, Boolean, `false`.
 
-Seeding `nextUri` with the first page URL keeps the loop body uniform — one HTTP action serves the first page and every continuation.
+Seeding `nextUri` with the first page URL keeps the loop body uniform — one *Invoke an HTTP request* action serves the first page and every continuation.
 
 ---
 
@@ -103,13 +104,12 @@ A scheduled flow is not answering a PowerApp, so the 120-second budget does not 
 
 Inside, in this order:
 
-### 3a. `List_page` — HTTP
+### 3a. `List_page` — **Invoke an HTTP request**
 
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URI | `@{variables('nextUri')}` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `@{variables('nextUri')}` |
 | Header `Accept` | `application/json` |
 
 Leave **Retry Policy** at Default here and on `Get_untracked_set`. It covers `429`, which matters more than usual on this flow: a throttle part-way through paging would leave a partial `policySets` array, and Step 5 would read that as a pile of `Missing` drift that does not exist — a confident wrong answer rather than a visible failure.
@@ -210,13 +210,12 @@ Set its ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism
 
 Inside:
 
-### 6a. `Get_untracked_set` — HTTP
+### 6a. `Get_untracked_set` — **Invoke an HTTP request**
 
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_untracked')?['id']}` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_untracked')?['id']}` |
 
 ### 6b. `Add_drift_untracked` — Dataverse **Add a new row**
 

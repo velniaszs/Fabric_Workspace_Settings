@@ -4,16 +4,34 @@ Child flow. **The only flow that writes policy rules.** Reads the desired state 
 
 > **Not built yet.** Specification, not a description of something that exists.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2 and §3, [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md).
+Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2 and §3, [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md).
 
 ---
 
 ## 0. Before you start
 
-- Build [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) first.
+- **There is no token flow.** Fabric is called through the *HTTP with Microsoft Entra ID (preauthorized)* connector, which attaches the bearer token itself — see the box below. [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) is retired.
 - The new tables from [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 must exist, and `Policy Item Types` must be seeded. `Policy Exceptions` may legitimately be empty.
-- **This flow needs a Dataverse connection**, unlike the Fabric-only flows elsewhere in this repo. It will have a `connectionReferences` entry. That is expected here.
+- **This flow needs two connections** — Dataverse, and the Entra ID HTTP connector. Both appear in `connectionReferences` on export. That is expected here.
 - Logical names below use the **`ubsppcoe_`** prefix — for the four tables this project creates **and** for the platform team's two. Since 2026-09-07 they share it, so **the prefix no longer tells you which table you are pointed at.** Pick tables and columns from the designer dropdowns rather than typing them, and see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0 for the two logical names that now exist on more than one table.
+
+### How every Fabric call in this folder is made
+
+**This is the pattern. It is written out once here; the other flow docs refer back to it.**
+
+1. **+ New step** → search **HTTP with Microsoft Entra ID (preauthorized)**.
+2. Choose the action **Invoke an HTTP request**.
+3. First time only, create the connection: **Base Resource URL** and **Microsoft Entra ID Resource URI (Application ID URI)** are both `https://api.fabric.microsoft.com`.
+4. Fill in **Method**, **URL of the request**, and where needed **Headers** and **Body of the request**.
+
+| Do | Do not |
+|---|---|
+| Set `Content-Type: application/json` on POST and PATCH | **Add an `Authorization` header.** The connector adds it. A hand-written one is either ignored or breaks the call |
+| Leave **Retry Policy** at Default — it covers `429` | Reference `variables('accessToken')`. There is no such variable any more |
+
+> **The connection's identity is what Fabric sees**, not the flow and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5 must be held by that identity. Which identity it should be is **Q45**, still open.
+
+> **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.
 
 ### The two tables this flow does not own
 
@@ -76,16 +94,13 @@ Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **
 
 ---
 
-## Step 2 — Token
+## Step 2 — The Fabric connection
 
-1. **+ New step** → **Run a Child Flow** → **GetPolicyToken**. Leave the action name `Run_a_Child_Flow`.
-2. **+ New step** → **Initialize variable**, named `Initialize_variable`:
+**Nothing is built in this step** — it replaces what used to be the token step, and the numbering below is unchanged so existing references still resolve.
 
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `body('Run_a_Child_Flow')?['access_token']` |
+The first time you add an **Invoke an HTTP request** action (Step 9), Power Automate asks you to create the connection. Create it once, as described in §0, and every later flow reuses it from the dropdown.
+
+> **There is no `accessToken` variable in this flow, and no `Run a Child Flow` at the top.** If you are copying an older draft, delete both.
 
 ---
 
@@ -479,15 +494,16 @@ The sentinel here is a **single value inside a literal array**, so `"@{…}"` in
 
 ## Step 9 — Write the rules
 
-**+ New step** → **HTTP**, renamed `Replace_rules`.
+**+ New step** → **HTTP with Microsoft Entra ID (preauthorized)** → **Invoke an HTTP request**, renamed `Replace_rules`.
 
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ab_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy` |
 | Header `Content-Type` | `application/json` |
-| Body | `@outputs('Compose_body')` |
+| Body of the request | `@outputs('Compose_body')` |
+
+**No `Authorization` header** — the connector supplies it (§0).
 
 The body is the bare `@outputs(...)` form. Wrapping it in `@{ }` would send the whole document as a quoted string.
 
