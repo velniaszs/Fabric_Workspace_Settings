@@ -39,14 +39,21 @@ Both required. An optional PowerApp V2 input is dropped from the payload entirel
 
 ---
 
-## Step 2 — Outcome variables
+## Step 2 — Variables
 
-`Initialize_variable` actions for `outcome`, `policySetId` and `message`.
+Five `Initialize variable` actions, **all at the top level**, before any Condition.
+
+| Rename to | Name | Type | Value |
+|---|---|---|---|
+| `Initialize_policySetId` | `policySetId` | String | *(leave empty)* |
+| `Initialize_outcome` | `outcome` | String | `Failed` |
+| `Initialize_message` | `message` | String | *(leave empty)* |
+| `Initialize_operationId` | `operationId` | String | *(leave empty)* |
+| `Initialize_opStatus` | `opStatus` | String | *(leave empty)* |
 
 > **No token step.** Earlier drafts started with `Run a Child Flow` → `GetPolicyToken` and an `accessToken` variable. Both are gone — delete them if you are copying an older draft.
-3. `Initialize_policySetId` — `policySetId`, String, empty.
-4. `Initialize_outcome` — `outcome`, String, `Failed`.
-5. `Initialize_message` — `message`, String, empty.
+
+> **`operationId` and `opStatus` are declared here even though only Step 7's `202` branch uses them.** `Initialize variable` is the one action Power Automate refuses to place inside a Condition, Scope or Apply to each — and that branch sits three levels deep. Declare at the top, assign with **Set variable** where they are needed.
 
 Seeding `outcome` with `Failed` means any path nobody anticipated reports failure rather than silence.
 
@@ -179,7 +186,7 @@ Three **Compose** actions. Capacity display names are far more permissive than F
 ### 5a. `Compose_name_raw`
 
 ```
-"@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
+@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
 ```
 
 ### 5b. `Compose_name_clean`
@@ -255,8 +262,10 @@ Status code is on `outputs(...)`, never on `body(...)`.
 
 ### No — treat as `202`
 
-1. `Initialize_operationId` — String, `outputs('Create_policy_set')?['headers']?['x-ms-operation-id']`.
-2. `Initialize_opStatus` — String, `Running`.
+**Both variables were declared in Step 2**, so these are **Set variable**, not Initialize.
+
+1. `Set_operationId` — `operationId` = `outputs('Create_policy_set')?['headers']?['x-ms-operation-id']`.
+2. `Set_opStatus_initial` — `opStatus` = `Running`.
 3. **Do until** `@or(equals(variables('opStatus'), 'Succeeded'), equals(variables('opStatus'), 'Failed'))`, count `60`, timeout `PT10M`:
    - `Get_operation` — **Invoke an HTTP request**, `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}`. No auth header.
    - `Set_opStatus` — Set variable → `coalesce(body('Get_operation')?['status'], 'Running')`.
@@ -265,6 +274,14 @@ Status code is on `outputs(...)`, never on `body(...)`.
 5. `Set_policySetId_async` — Set variable → `policySetId` = `body('Get_operation_result')?['id']`.
 
 The created item is at `/result`, not on the operation itself. The operation only reports status.
+
+> ### Why leaving the async pattern **on** does not replace this branch
+>
+> It is the obvious simplification and it does not work. With **Asynchronous Pattern On**, the connector follows `Location` and polls until the operation reaches a terminal state — then hands you **the operation status object**, because that is what `/v1/operations/{id}` returns. The policy set itself lives at `/operations/{id}/result`, a second call the connector does not make.
+>
+> So you would still need step 4 above — but you would no longer have `operationId` to build its URL with, because the `202` and its `x-ms-operation-id` header were consumed by the poller and never surfaced. Async On trades an explicit branch for the same work plus a lost identifier.
+>
+> **`body('Create_policy_set')?['id']` would then be the operation's id, not the policy set's** — and it is a GUID, so it writes to `ubsppcoe_policysetid` without complaint and every later rebuild `404`s against a policy set that does not exist.
 
 ---
 
