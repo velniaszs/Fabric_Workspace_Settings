@@ -76,10 +76,17 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 >                               ├─ Yes: Step 4b  Get_node_row
 >                               │                Condition_node_missing
 >                               │                  ├─ Yes: 2 × Set variable  ← Failed, no Node row
->                               │                  └─ No:  Steps 5, 6, 7, 8
+>                               │                  └─ No:  Step 5   3 × Compose
+>                               │                          Step 6   Create_policy_set
+>                               │                          Step 7   Condition_created_sync
+>                               │                                     ├─ Yes: Set_policySetId_sync
+>                               │                                     └─ No:  the 202 branch
+>                               │                          Step 8   8a … 8e   ← AFTER the Condition, not inside it
 >                               └─ No:  2 × Set variable         ← Skipped
 > Step 9   Respond                              ← top level, reached by every path
 > ```
+>
+> **Step 8 is a sibling of `Condition_created_sync`, not a child of either branch.** Both branches of Step 7 exist only to resolve `policySetId`; they converge, and the registration work happens once, after. Drop 8a inside the `201` branch and a run that answered `202` skips the whole of Step 8 — the policy set is created, no Dataverse row is written, no rules are built, and the flow still reports whatever `outcome` was last set. Nothing fails, so the run history looks healthy apart from a column of greyed-out actions.
 >
 > **Step 9 sits at the top level, after `Condition_already_exists`.** That is what "skip to the Respond" means throughout this document: there is no skipping instruction in Power Automate, and none is needed — a branch that sets its variables and contains nothing else simply falls out of the Condition and lands on the Respond.
 >
@@ -336,6 +343,8 @@ The created item is at `/result`, not on the operation itself. The operation onl
 
 ## Step 8 — Register, build rules, activate
 
+**Place these after `Condition_created_sync` closes, at the same level as it** — inside Step 4b's No branch, but outside both of Step 7's branches. `policySetId` is set by whichever branch ran; Step 8 reads the variable and does not care which.
+
 ### 8a. `Add_policy_row` — Dataverse **Add a new row**
 
 | Field | Value |
@@ -356,6 +365,8 @@ Then the columns:
 > **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Step 4b exists solely to make this line safe to write.
 >
 > **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's key. The capacity id works as that key because it *is* the Node row key. If the connector rejects it, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
+>
+> **Type this one straight into the field — not into the ƒx tab.** Every other row in the table above is a bare expression, so the habit is to open **Expression** and paste. This row is a *string* with an expression interpolated into it, and `/ubsppcoe_nodes(@{...})` is not valid expression syntax — the editor rejects it as invalid. Paste it into the column's own box, where `@{}` is interpolation. If you would rather stay in the ƒx tab, the equivalent is `concat('/ubsppcoe_nodes(', triggerBody()['text'], ')')`.
 
 > **`ubsppcoe_policysetname` is written here and nowhere else.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) uses it to spot a policy set renamed by hand without spending a `GET` per set, and the rebuild never touches it. Leave it blank and that check silently compares against nothing.
 
@@ -385,6 +396,10 @@ With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows
 ### 8d. `Update_status` — Dataverse **Update a row**
 
 Runs after `Activate` on **is successful** and **has failed**.
+
+| Field | Value |
+|---|---|
+| Table name | **`Capacity Policies`** (`ubsppcoe_CapacityPolicy`) — the row 8a created |
 
 | Column | Value |
 |---|---|
