@@ -780,7 +780,7 @@ The build order deliberately puts this flow **before** [InitializeCapacityPolicy
 
 | # | What | How |
 |---|---|---|
-| 1 | A **throwaway capacity that already has a `ubsppcoe_Node` row** | Pick an existing one. **Do not create the Node row** — that table belongs to the platform team and nothing in this project writes it (§0). If no spare capacity has one, that is a request to them, not a workaround |
+| 1 | A **throwaway capacity that already has a `ubsppcoe_Node` row** | Pick an existing one — see below for how to tell. **Do not create the Node row** — that table belongs to the platform team and nothing in this project writes it (§0). If no spare capacity has one, that is a request to them, not a workaround |
 | 2 | A **policy set** in the holder workspace, scoped to that capacity | `POST /v1/workspaces/{holderWs}/policySets` by hand, or the Fabric portal. **Leave it deactivated** |
 | 3 | A row in **`Capacity Policies`** | `ubsppcoe_capacityid` = the capacity GUID · `ubsppcoe_policysetid` = the new set's GUID · `ubsppcoe_node` = the Node row from 1 |
 | 4 | At least one active row in **`Policy Item Types`** | Import [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv). Only needed once a workspace is whitelisted — see the warning below |
@@ -788,6 +788,20 @@ The build order deliberately puts this flow **before** [InitializeCapacityPolicy
 **Rules: none needed.** A freshly created policy set has no rules at all, and that is the right starting point — `replaceByPolicy` overwrites whatever is there, including nothing. Test 1 then proves the flow puts the deny-all baseline in.
 
 **Names: irrelevant to this flow.** It addresses the policy set by GUID and never reads or writes its display name. `pol_<capacity>` is a convention that flow 1 applies at creation, and `ubsppcoe_policysetname` on the row is only read by the drift scan and the app. Call your test set anything.
+
+> ### Checking whether a capacity has a Node row
+>
+> **It is a lookup by row key, not a filter.** `ubsppcoe_nodeuniqueid` *is* the Fabric capacity GUID, so there is no "capacity id" column to search on — which is the first thing that confuses people looking for one.
+>
+> In a browser signed into the environment:
+>
+> ```
+> https://<org>.crm<n>.dynamics.com/api/data/v9.2/ubsppcoe_nodes(<capacity-guid>)?$select=ubsppcoe_nodename
+> ```
+>
+> `200` means the row exists; `404` means it does not. The instance URL is at make.powerapps.com → gear → **Session details**. If the call 404s complaining about the *segment* rather than the row, the entity set is pluralised differently — check `/api/data/v9.2/$metadata`.
+>
+> In the maker portal instead: **Tables → Node → Data**, then **Edit columns** and add *Node Unique Id*. It is hidden by default, which is why the grid appears to have no capacity id at all.
 
 > **Leave the policy set deactivated while testing.** Rule 1 is a deny-all baseline, so an *activated* set with the rules this flow publishes will genuinely stop item creation on that capacity. Deactivated, every rule is written and visible in the portal and nothing is enforced — which is all you need to verify tests 1–18. Activation is flow 1's job, on a capacity you have decided to govern.
 

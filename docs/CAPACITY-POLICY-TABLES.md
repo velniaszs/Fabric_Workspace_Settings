@@ -194,6 +194,12 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **Tables → `Policy Item Types` → Import → Import data from Excel**, then switch the file type to CSV. The headers are logical names and map automatically. `ubsppcoe_active` is a Yes/No column, so the literal `Yes` in the file is what the importer expects — not `true` or `1`.
 
+**Leave every other column unmapped**, including the row key `ubsppcoe_policyitemtypeid`. They are system-owned and Dataverse fills them; mapping the row key turns the import from an insert into an upsert against GUIDs you do not have.
+
+**Then check two things:** that there are **14 rows**, and that `Active` reads `Yes` on all of them. A Yes/No mapping that silently failed leaves them `No`, the rebuild emits rule 2 with an empty `item.type` list, and Fabric rejects the call — surfacing at Step 9 as what looks like a bug in the rule builder.
+
+> **Consider an alternate key on `ubsppcoe_itemtype`.** Nothing stops the import being run twice, and a second run inserts 14 more rows rather than updating. The published rules would survive it — Step 5g's `union` deduplicates the values — but the table would again hold several rows per item type, which is precisely what the deduplicated file exists to avoid. A uniqueness constraint makes the second import fail instead of quietly doubling the table.
+
 **This table has no effect on rule 3.** Exception rules carry no `item.type` condition at all, so retiring or adding a governed type changes nothing for excepted workspaces.
 
 ---
