@@ -201,7 +201,7 @@ If the app can afford the call, confirm with `GET /v1/workspaces/{id}` that the 
 | 8 | Swap the two inputs — pass the capacity id as `workspaceId` | `NotFound`, not a silent no-op |
 | 9 | Capacity with no `Capacity Policies` row | `Failed`, carrying the child flow's "run InitializeCapacityPolicySet first" message |
 | 10 | Inspect any run's action list | **No write action against `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
-| 11 | Two calls for the same capacity at once | Both succeed. The child flow's concurrency limit of 1 serialises the rebuilds |
+| 11 | Two calls for the same capacity at once | Both succeed, and the later rebuild wins. The child flow **cannot** serialise them — trigger concurrency is not allowed on a request-response flow ([RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 1). Both read the same tables, so the published rules agree |
 
 Test 4 is the one worth writing first — it is both the most common real outcome and the one a plain refresh flow could not report at all.
 

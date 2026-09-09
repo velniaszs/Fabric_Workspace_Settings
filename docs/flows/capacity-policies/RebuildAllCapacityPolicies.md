@@ -51,7 +51,7 @@ Nightly rather than weekly, because the interval is the **worst-case delay on a 
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. A run that overlaps its predecessor would have two loops rebuilding the same capacities.
 
-⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. A run that overlaps its predecessor would have two loops rebuilding the same capacities.
+**This flow can set it and the child flow cannot** — a Recurrence trigger has no `Respond` action, so the platform allows trigger concurrency here. [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) is request-response and is rejected if you try. That makes this setting the only thing preventing concurrent rebuilds at scale.
 
 ---
 

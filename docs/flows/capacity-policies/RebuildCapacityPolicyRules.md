@@ -80,7 +80,7 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 > | Rule 2..n — whitelist | `workspace.id AnyOf [chunk]` **and** `item.type AnyOf [types]` | Allow |
 > | Rule 3 — exceptions | `workspace.id AnyOf [chunk]` — **and nothing else** | Allow |
 >
-> **Rule 3's missing second condition is the entire feature, not an omission.** With no `item.type` condition the rule matches every item type, so a workspace listed there can create anything the policy governs. If you copy Step 7 to build Step 7b and leave the `item.type` block in, the exception silently degrades into an ordinary whitelist entry and nobody notices until someone tries to create the item type they were excepted for.
+> **Rule 3's missing second condition is the entire feature, not an omission.** With no `item.type` condition the rule matches every item type, so a workspace listed there can create anything the policy governs. If you copy Step 7a to build Step 7d and leave the `item.type` block in, the exception silently degrades into an ordinary whitelist entry and nobody notices until someone tries to create the item type they were excepted for.
 >
 > **All three are scoped to this capacity by the same `Node` lookup.** Rule 3's workspaces come from a tenant-wide table, so the join in Step 5l is what keeps them here — and what makes a workspace that has moved capacity disappear from this capacity's rules without anyone deleting anything.
 
@@ -94,7 +94,17 @@ Add one input: **+ Add an input** → **Text**, titled `capacityId`. Referenced 
 
 > Trigger must be **Manually trigger a flow** so the other flows can call it with `Run a Child Flow`.
 
-Then ⋯ on the flow → **Settings** → **Concurrency Control** → **On**, **Degree of Parallelism = 1**. Two rebuilds of the same capacity overlapping would be last-writer-wins against Fabric even though Dataverse stayed consistent.
+> ### Do **not** set Concurrency Control on this trigger
+>
+> Power Automate rejects it:
+>
+> > *Concurrency control is not supported when the workflow contains actions of type 'Response' without the operationOptions flag set to 'Asynchronous'.*
+>
+> A request-response flow — a **Manually trigger a flow** trigger plus a `Respond to a Power App or flow` action — cannot have trigger concurrency at all. Making the Response asynchronous would satisfy the platform and defeat the point, since every caller needs the answer.
+>
+> **The consequence: two rebuilds of the same capacity can overlap, and the later write wins.** That is tolerable, because both runs read the same Dataverse state and `replaceByPolicy` publishes the whole rule set from it — so the two agree unless the data changed in the seconds between their reads. If it did, the loser's view is at most seconds stale and the next rebuild, or the nightly run, converges it.
+>
+> **Serialisation happens where the volume is**, not here: [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) is Recurrence-triggered with no `Respond`, so it *can* set Degree of Parallelism 1 — both on its trigger and on its loop. The nightly batch therefore never overlaps itself, which is the only case that would have produced concurrent rebuilds at scale.
 
 > ### The shape of this flow — three guards, and you do **not** nest them
 >
@@ -143,7 +153,7 @@ The first time you add an **Invoke an HTTP request** action (Step 9), Power Auto
 
 ## Step 3 — Variables
 
-Ten `Initialize variable` actions, in order.
+Twelve `Initialize variable` actions, in order.
 
 | Rename to | Name | Type | Value |
 |---|---|---|---|
@@ -155,10 +165,14 @@ Ten `Initialize variable` actions, in order.
 | `Initialize_itemTypes` | `itemTypes` | Array | *(leave empty)* |
 | `Initialize_exceptionCandidates` | `exceptionCandidates` | Array | *(leave empty)* |
 | `Initialize_exceptions` | `exceptions` | Array | *(leave empty)* |
+| `Initialize_whitelistRules` | `whitelistRules` | Array | *(leave empty)* |
+| `Initialize_exceptionRules` | `exceptionRules` | Array | *(leave empty)* |
 | `Initialize_chunkCount` | `chunkCount` | Integer | `0` |
 | `Initialize_exceptionChunkCount` | `exceptionChunkCount` | Integer | `0` |
 
-> **All of these must sit at the top level of the flow, before the first Condition.** `Initialize variable` is the one action Power Automate refuses to place inside a Condition, Scope or Apply to each — the designer offers it and then fails validation on save, which is a confusing way to find out. Everything below sets these with **Set variable** instead.
+> **All of these must sit at the top level of the flow, before the first Condition.** `Initialize variable` is the one action Power Automate refuses to place inside a Condition, Scope or Apply to each — the designer offers it and then fails validation on save, which is a confusing way to find out. Everything below sets these with **Set variable**, or with **Append to array variable** in Steps 7 and 7c.
+
+> **`whitelistRules` and `exceptionRules` exist because the rules are built in a loop** (Step 7). Appending to an array variable is the only way to accumulate across `Apply to each` iterations — which is also why they cannot be declared next to the loop that fills them.
 
 That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are assigned later, rather than being initialised from a lookup that has not run yet.
 
@@ -229,6 +243,28 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 ## Step 5 — Read the desired state
 
 Three lists come out of Dataverse here: the whitelist (`ubsppcoe_Workspace` rows whose `Node` is this capacity **and** whose `ubsppcoe_oapenabled` is `true`), the governed item types, and the exception workspaces — which are approved centrally and then narrowed to this capacity by the same `Node` lookup. `nodeRowId` and `policyRowId` are already in hand from Step 4.
+
+**Fourteen actions, of which exactly three are nested:**
+
+```
+5a  Condition_node_linked        ── guard: Yes = Respond + Terminate, No = empty
+5b  List_workspace_rows          ─┐
+5c  Select_workspace_ids          │ the whitelist
+5d  Set_workspaces               ─┘
+5e  List_item_type_rows          ─┐
+5f  Select_item_types             │ the governed item types
+5g  Set_itemTypes                ─┘
+5h  List_exception_rows          ─┐
+5i  Select_exception_ids          │ exception candidates, tenant-wide
+5j  Set_exceptionCandidates      ─┘
+5k  Condition_has_candidates      ── Yes: empty
+        └─ No:  5l  List_exception_workspace_rows   ─┐
+                5m  Select_exception_workspace_ids   │ narrowed to this capacity
+                5n  Set_exceptions                  ─┘
+Step 6 …                          ── back at the top level
+```
+
+Everything except 5l, 5m and 5n sits at the top level.
 
 ### 5a. `Condition_node_linked` — **Condition**
 
@@ -468,25 +504,31 @@ This flow does not manage capacity size — it splits into as many rules as the 
 
 ## Step 7 — Build the whitelist rules
 
-**+ New step** → **Select**, renamed `Select_whitelist_rules`.
+> **Do not try to do this with a `Select`.** An earlier draft of this document put the rule object into a **Select** action's Map in text mode. **That does not work** — text mode expects a single *expression*, so a pasted JSON literal fails with *"the expression is invalid"* on the leading `{`. `Compose` is the action that accepts raw JSON with embedded expressions, so the rules are built one per loop iteration and appended.
+
+**+ New step** → **Apply to each**, renamed `For_each_whitelist_chunk`.
 
 | Field | Value |
 |---|---|
-| From | `range(0, variables('chunkCount'))` |
+| Select an output from previous steps | `range(0, variables('chunkCount'))` |
 
-Switch the **Map** to **text mode** and paste this whole object:
+⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. The chunks must be appended in order, or `(1/3)` may not be the first 49 workspaces. Nothing breaks if they are out of order — each rule carries its own index in its name — but a rebuilt policy set then cannot be diffed against a migrated one.
+
+**`range(0, 0)` is an empty array**, so a capacity with no whitelisted workspaces runs this loop zero times and `whitelistRules` stays `[]`. That is the zero case handled without a special branch.
+
+### 7a. `Compose_whitelist_rule` — **Compose**, inside the loop
 
 ```json
 {
-  "displayName": "@{if(greater(variables('chunkCount'), 1), concat('Approved item types for whitelisted workspaces (', string(add(item(), 1)), '/', string(variables('chunkCount')), ')'), 'Approved item types for whitelisted workspaces')}",
-  "description": "@{concat('Allow ', string(length(variables('itemTypes'))), ' item type(s) in ', string(length(take(skip(variables('workspaces'), mul(item(), variables('maxPerRule'))), variables('maxPerRule')))), ' whitelisted workspace(s).')}",
+  "displayName": "@{if(greater(variables('chunkCount'), 1), concat('Approved item types for whitelisted workspaces (', string(add(items('For_each_whitelist_chunk'), 1)), '/', string(variables('chunkCount')), ')'), 'Approved item types for whitelisted workspaces')}",
+  "description": "@{concat('Allow ', string(length(variables('itemTypes'))), ' item type(s) in ', string(length(take(skip(variables('workspaces'), mul(items('For_each_whitelist_chunk'), variables('maxPerRule'))), variables('maxPerRule')))), ' whitelisted workspace(s).')}",
   "conditions": [
     {
       "type": "Dynamic",
       "targetProperty": "workspace.id",
       "predicate": {
         "operator": "AnyOf",
-        "values": "@take(skip(variables('workspaces'), mul(item(), variables('maxPerRule'))), variables('maxPerRule'))"
+        "values": "@take(skip(variables('workspaces'), mul(items('For_each_whitelist_chunk'), variables('maxPerRule'))), variables('maxPerRule'))"
       }
     },
     {
@@ -502,9 +544,18 @@ Switch the **Map** to **text mode** and paste this whole object:
 }
 ```
 
-Three things about this block matter.
+### 7b. `Append_whitelist_rule` — **Append to array variable**, inside the loop
 
-**`take(skip(…))` is the chunking.** `From` is `range(0, chunkCount)`, so `item()` is the chunk index — 0, 1, 2. `skip` drops the earlier chunks, `take` keeps 49. No loop, no append, and the order is guaranteed because `Select` preserves it.
+| Field | Value |
+|---|---|
+| Name | `whitelistRules` |
+| Value | `outputs('Compose_whitelist_rule')` |
+
+Four things about this block matter.
+
+**`items('For_each_whitelist_chunk')`, not `item()`.** Inside an `Apply to each` the bare `item()` is ambiguous and the designer will often reject it outright. The named form is the chunk index — 0, 1, 2.
+
+**`take(skip(…))` is the chunking.** `skip` drops the earlier chunks, `take` keeps 49.
 
 **`"@expr"` versus `"@{expr}"` is not cosmetic.** The two `values` properties use the bare `"@…"` form, which yields a real **array**. The `displayName` and `description` use `"@{…}"`, which yields a **string**. Get this backwards on `values` and Fabric receives `"[\"guid\",\"guid\"]"` — a string that looks right in the run history and is rejected, or worse, accepted as a single nonsense value.
 
@@ -512,27 +563,25 @@ Three things about this block matter.
 
 ---
 
-## Step 7b — Build the exception rules
+## Step 7c — Build the exception rules
 
-**+ New step** → **Select**, renamed `Select_exception_rules`.
+Same shape as Step 7: a loop, a `Compose`, an append.
 
-| Field | Value |
-|---|---|
-| From | `range(0, variables('exceptionChunkCount'))` |
+**+ New step** → **Apply to each**, renamed `For_each_exception_chunk`, over `range(0, variables('exceptionChunkCount'))`. Concurrency 1, for the same reason.
 
-Map in **text mode**:
+### 7d. `Compose_exception_rule` — **Compose**, inside the loop
 
 ```json
 {
-  "displayName": "@{if(greater(variables('exceptionChunkCount'), 1), concat('Unrestricted item creation for exception workspaces (', string(add(item(), 1)), '/', string(variables('exceptionChunkCount')), ')'), 'Unrestricted item creation for exception workspaces')}",
-  "description": "@{concat('Allow any item type in ', string(length(take(skip(variables('exceptions'), mul(item(), variables('maxPerRule'))), variables('maxPerRule')))), ' exception workspace(s); the item type whitelist does not apply to them.')}",
+  "displayName": "@{if(greater(variables('exceptionChunkCount'), 1), concat('Unrestricted item creation for exception workspaces (', string(add(items('For_each_exception_chunk'), 1)), '/', string(variables('exceptionChunkCount')), ')'), 'Unrestricted item creation for exception workspaces')}",
+  "description": "@{concat('Allow any item type in ', string(length(take(skip(variables('exceptions'), mul(items('For_each_exception_chunk'), variables('maxPerRule'))), variables('maxPerRule')))), ' exception workspace(s); the item type whitelist does not apply to them.')}",
   "conditions": [
     {
       "type": "Dynamic",
       "targetProperty": "workspace.id",
       "predicate": {
         "operator": "AnyOf",
-        "values": "@take(skip(variables('exceptions'), mul(item(), variables('maxPerRule'))), variables('maxPerRule'))"
+        "values": "@take(skip(variables('exceptions'), mul(items('For_each_exception_chunk'), variables('maxPerRule'))), variables('maxPerRule'))"
       }
     }
   ],
@@ -540,11 +589,18 @@ Map in **text mode**:
 }
 ```
 
-> **One condition. Do not add a second.** This block is Step 7 with the `item.type` condition deleted, and that deletion *is* the feature — a rule with no `item.type` condition matches every item type, which is what an exception means. Pasting Step 7 and editing the strings, while leaving the second condition behind, produces a rule that looks plausible in the portal and grants exactly nothing extra.
+### 7e. `Append_exception_rule` — **Append to array variable**, inside the loop
+
+| Field | Value |
+|---|---|
+| Name | `exceptionRules` |
+| Value | `outputs('Compose_exception_rule')` |
+
+> **One condition. Do not add a second.** This block is Step 7a with the `item.type` condition deleted, and that deletion *is* the feature — a rule with no `item.type` condition matches every item type, which is what an exception means. Pasting Step 7a and editing the strings, while leaving the second condition behind, produces a rule that looks plausible in the portal and grants exactly nothing extra.
 
 **The base name is 50 characters**, against the service's 60-character cap. That leaves room for ` (1/2)` but not for ` (10/12)` — which would need 58 and still fits, while a three-digit chunk count would not. A capacity with 450+ exception workspaces is not a scenario this design expects; if one appears, shorten the base name rather than truncating at runtime.
 
-**`exceptionChunkCount` = 0 gives `[]`,** and Step 8b's `union` then appends nothing. No exceptions, no rule 3, no special case.
+**`exceptionChunkCount` = 0 means the loop never runs,** `exceptionRules` stays `[]`, and Step 8b's `union` appends nothing. No exceptions, no rule 3, no special case.
 
 ---
 
@@ -579,11 +635,11 @@ The sentinel here is a **single value inside a literal array**, so `"@{…}"` in
 ```json
 {
   "policy": "ItemCreation",
-  "policyRules": "@union(union(createArray(outputs('Compose_rule1')), body('Select_whitelist_rules')), body('Select_exception_rules'))"
+  "policyRules": "@union(union(createArray(outputs('Compose_rule1')), variables('whitelistRules')), variables('exceptionRules'))"
 }
 ```
 
-`createArray` wraps rule 1 into a one-element array; the inner `union` appends the whitelist rules after it, the outer one appends the exception rules last. When both `Select` actions return `[]` the result is **rule 1 alone** — the safe default from §0, reached without a special case.
+`createArray` wraps rule 1 into a one-element array; the inner `union` appends the whitelist rules after it, the outer one appends the exception rules last. When both loops ran zero times the result is **rule 1 alone** — the safe default from §0, reached without a special case.
 
 **The order matches `migrate_policy_sets.ps1`:** baseline, whitelist, exceptions. Rules are all `Allow` and are evaluated as an OR, so order carries no meaning to the service — but keeping it identical means a migrated policy set and a rebuilt one can be compared rule by rule during cutover.
 
@@ -697,7 +753,7 @@ A caller reading a field that the branch it happened to take never declared gets
 | 7 | **Policy row whose `node` lookup is blank** | `Failed`, and **no Fabric call**. Not rule 1 alone — see the box in Step 5a |
 | 8 | A workspace on the Node with `ubsppcoe_oapenabled` **null** (never set) | Absent from the rules, identical to an explicit `false`. **The case the `eq true` filter has to get right** |
 | 9 | Move a workspace's `Node` to another capacity, rebuild **both** | It appears on the new capacity and disappears from the old |
-| 10 | Peek code on `Select_whitelist_rules` | `values` is a JSON **array**, not a quoted string |
+| 10 | Peek code on `Compose_whitelist_rule` | `values` is a JSON **array**, not a quoted string |
 | 11 | **One active `Policy Exceptions` row**, for a workspace on this capacity's Node | A third rule appears, with **one** condition and no `item.type`. Check this in the portal, not just in the run history |
 | 12 | Set that row's `active` to No and rerun | The rule is gone entirely — not left behind as an empty or orphaned rule |
 | 13 | A `Policy Exceptions` row created with `active` never set | Absent from the rules. Blank is not Yes |
