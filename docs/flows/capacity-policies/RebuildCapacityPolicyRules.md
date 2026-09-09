@@ -799,7 +799,11 @@ The build order deliberately puts this flow **before** [InitializeCapacityPolicy
 > https://<org>.crm<n>.dynamics.com/api/data/v9.2/ubsppcoe_nodes(<capacity-guid>)?$select=ubsppcoe_nodename
 > ```
 >
-> `200` means the row exists; `404` means it does not. The instance URL is at make.powerapps.com → gear → **Session details**. If the call 404s complaining about the *segment* rather than the row, the entity set is pluralised differently — check `/api/data/v9.2/$metadata`.
+> `200` means the row exists; `404` means it does not.
+>
+> **Finding the instance URL:** make.powerapps.com → gear → **Session details** → *Instance url*, or admin.powerplatform.microsoft.com → **Environments** → your environment → *Environment URL*. **Do not guess the `crm<n>` part** — it is regional (`crm` North America, `crm4` EMEA, `crm5`/`crm6` APAC, and others). The `make.powerapps.com/environments/<guid>/…` address is the **environment ID**, a different identifier, and will not work against the Web API.
+>
+> If the call 404s complaining about the *segment* rather than the row, the entity set is pluralised differently — check `/api/data/v9.2/$metadata`.
 >
 > In the maker portal instead: **Tables → Node → Data**, then **Edit columns** and add *Node Unique Id*. It is hidden by default, which is why the grid appears to have no capacity id at all.
 
