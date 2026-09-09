@@ -455,13 +455,24 @@ _ubsppcoe_nodeid_value eq 6f9a… and (ubsppcoe_workspaceid eq 'g1' or ubsppcoe_
 
 Doubled or missing apostrophes mean the `'''` quoting is off. Read this from the run history, never from the expression in the designer.
 
-> ### Why this is an `or` chain and not `in`
+**Settings on this action** — ⋯ → **Settings**. These are not the defaults, and unlike every other action here the defaults are wrong:
+
+| Setting | Value |
+|---|---|
+| **Timeout** | `PT2M` |
+| **Retry Policy** | **Fixed Interval**, Count `2`, Interval `PT10S` |
+
+A bad filter now fails in well under half a minute instead of hanging.
+
+> ### Why this one action overrides the retry defaults
 >
-> `in` is a documented Dataverse `$filter` operator and reads far better, but **it is rejected in this environment — confirmed 2026-09-09.** The connector answers **`501 NotImplemented`**.
+> `in` is a documented Dataverse `$filter` operator and reads far better than the chain above, but **it is rejected in this environment — confirmed 2026-09-09.** The connector answers **`501 NotImplemented`**.
 >
-> The symptom is nastier than a plain failure: `501` is a `5xx`, so the action's default retry policy keeps retrying something that can never succeed. It presents as a `List rows` sitting at *0 seconds duration* with a growing retry count for half an hour, rather than as an error.
+> The symptom is nastier than a plain failure. `501` is a `5xx`, so the **default** retry policy treats it as transient and keeps retrying something that can never succeed — presenting as a `List rows` stuck at *0 seconds duration* with a climbing retry count for **thirty minutes**, rather than as an error.
 >
-> **While debugging any Dataverse filter, set that action's Retry Policy to None** (⋯ → Settings). A malformed filter is permanent, and the default policy turns a five-second failure into a thirty-minute one. Put it back afterwards.
+> **That is not survivable for a child flow.** `Run a Child Flow` gives this flow roughly 120 seconds to answer ([RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §5). An action that can burn thirty minutes takes the caller down with it, and in the nightly batch it would stall the whole queue behind one bad capacity.
+>
+> Two retries still cover a genuine Dataverse `429`, which is the only transient failure worth waiting for here.
 >
 > If a future environment does accept `in`, the equivalent is `ubsppcoe_workspaceid in (@{concat('''', join(variables('exceptionCandidates'), ''','''), '''')})` — shorter, and it needs no parentheses because `in` is a single operand.
 

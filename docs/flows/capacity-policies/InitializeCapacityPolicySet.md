@@ -50,6 +50,30 @@ Both required. An optional PowerApp V2 input is dropped from the payload entirel
 
 Seeding `outcome` with `Failed` means any path nobody anticipated reports failure rather than silence.
 
+> ### The shape of this flow — this one **does** nest, unlike the rebuild
+>
+> [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) keeps its guards flat, because each one ends in **Terminate** and stops the run. **This flow has no Terminate anywhere.** It has a single `Respond` at the end that every path must reach, so an early exit cannot stop the run — it can only set `outcome` and `message` and let everything else be skipped by *not being on its branch*.
+>
+> That means the work genuinely lives inside the branches, two levels deep:
+>
+> ```
+> trigger
+> Step 2   Initialize_policySetId / Initialize_outcome / Initialize_message
+> Step 3   Get_policy_row
+>          Condition_already_exists
+>            ├─ Yes:  3 × Set variable          ← AlreadyExists, then nothing else
+>            └─ No:   Step 4  Get_capacities
+>                            Filter_capacity
+>                            Condition_eligible
+>                              ├─ Yes: Steps 5, 6, 7, 8
+>                              └─ No:  2 × Set variable   ← Skipped
+> Step 9   Respond                              ← top level, reached by every path
+> ```
+>
+> **Step 9 sits at the top level, after `Condition_already_exists`.** That is what "skip to the Respond" means throughout this document: there is no skipping instruction in Power Automate, and none is needed — a branch that sets its variables and contains nothing else simply falls out of the Condition and lands on the Respond.
+>
+> **Do not add a Terminate to the early exits here.** It would stop the run before Step 9, and the caller would get no outputs at all rather than `AlreadyExists` or `Skipped`.
+
 ---
 
 ## Step 3 — Already registered?
@@ -68,9 +92,19 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 |---|---|---|
 | `empty(body('Get_policy_row')?['value'])` | is equal to | `false` |
 
-**Yes** → set `outcome` = `AlreadyExists`, `policySetId` = `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']`, `message` = `This capacity already has a policy set.` Then skip to the Respond.
+**True means a row was found**, so *Yes* is the early exit and *No* is the normal path. Getting that polarity backwards builds a flow that only works for capacities it has already registered.
 
-Everything below goes in the **No** branch.
+**Yes branch** — three **Set variable** actions and nothing else:
+
+| Rename to | Name | Value |
+|---|---|---|
+| `Set_outcome_exists` | `outcome` | `AlreadyExists` |
+| `Set_policySetId_exists` | `policySetId` | `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']` |
+| `Set_message_exists` | `message` | `This capacity already has a policy set.` |
+
+The branch ends there. Execution falls out of the Condition and reaches Step 9.
+
+**No branch** — **everything from Step 4 to Step 8 goes inside it.** Step 9 does **not**; it stays at the top level so both branches reach it.
 
 ---
 
@@ -107,7 +141,26 @@ Set the group's join to **And**, not `Or`.
 >
 > The `concat(..., 'X')` guarantees at least one character, because `substring('', 0, 1)` throws on an empty string — which is what a capacity with a missing `sku` would produce. The appended `X` can never be mistaken for an `F`.
 
-**No** branch → `outcome` = `Skipped`, message naming which check failed. Skip to Respond.
+**True means eligible**, so this time *Yes* is the normal path.
+
+**Yes branch** — **Steps 5 to 8 go inside it.**
+
+**No branch** — two **Set variable** actions and nothing else:
+
+| Rename to | Name | Value |
+|---|---|---|
+| `Set_outcome_skipped` | `outcome` | `Skipped` |
+| `Set_message_skipped` | `message` | the expression below |
+
+```
+if(equals(length(body('Filter_capacity')), 0),
+   'Capacity not found, or the connection identity does not administer it.',
+   if(not(equals(first(body('Filter_capacity'))?['state'], 'Active')),
+      concat('Capacity state is ', coalesce(first(body('Filter_capacity'))?['state'], 'unknown'), ', not Active.'),
+      concat('Capacity SKU is ', coalesce(first(body('Filter_capacity'))?['sku'], 'unknown'), '. Only F SKUs can host a policy set.')))
+```
+
+**That nested `if` is what "naming which check failed" means.** The Condition itself only reports pass or fail, so without this the caller gets `Skipped` and no idea which of the three reasons applied — and they need different actions: chase the capacity id, resume a paused capacity, or accept that a P SKU can never be governed. The order matters: test for *not in the list* first, because the other two dereference `first(...)` and would fail on an empty array.
 
 Three separate reasons, one outcome:
 
@@ -126,7 +179,7 @@ Three **Compose** actions. Capacity display names are far more permissive than F
 ### 5a. `Compose_name_raw`
 
 ```
-@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
+"@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
 ```
 
 ### 5b. `Compose_name_clean`
