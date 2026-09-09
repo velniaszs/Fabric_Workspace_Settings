@@ -72,6 +72,29 @@ Both required. Same order as `AddWorkspaceToPolicy`, so the app calls both the s
 | `Initialize_outcome` | `outcome` | String | `Failed` |
 | `Initialize_message` | `message` | String | *(empty)* |
 
+Both at the **top level**, before any Condition.
+
+> ### The shape of this flow — it is flat, unlike `AddWorkspaceToPolicy`
+>
+> **There are no guards here.** Nothing refuses, nothing exits early, and every path reaches the rebuild — which is the whole asymmetry in §0: a workspace that does not qualify is exactly what this flow was asked to handle. So every action sits at the top level, and the Conditions only decide *what to report*.
+>
+> ```
+> trigger
+> Step 2   Initialize_outcome / Initialize_message
+> Step 3   Get_workspace_row / Filter_enabled
+> Step 3b  Get_policy_row / Filter_on_this_node / Get_exception_rows
+> Step 4   Condition_still_enabled     ├─ Yes: StillEnabled  │ No: Removed
+> Step 4b  Condition_excepted          ├─ Yes: StillExcepted │ No: empty
+> Step 5   Run_rebuild
+>          Condition_rebuild_ok        ├─ Yes: append counts │ No: Failed
+> Step 6   (nothing to build — rationale only)
+> Step 7   Respond
+> ```
+>
+> **`Condition_excepted` is a sibling of `Condition_still_enabled`, not a child of either branch.** It has to overwrite `outcome` whichever way Step 4 went — `StillEnabled` → `StillExcepted` on one path, `Removed` → `StillExcepted` on the other. Nested inside one branch it would correct only half the cases, and the half it missed would report `Removed` for a workspace that can still create anything.
+>
+> Every branch in this flow contains **only `Set variable` actions**. If you find yourself putting a `List rows`, a `Run a Child Flow` or the Respond inside one, the structure has drifted.
+
 ---
 
 ## Step 3 — Find the workspace row
@@ -141,6 +164,10 @@ Two questions, and `StillExcepted` needs **both** answered yes.
 
 **No capacity condition on that filter, because the table has no capacity column** ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3). An exception is a statement about the workspace; `Filter_on_this_node` is what ties it to the capacity the caller named. Checking only the exception table would report `StillExcepted` for a workspace that moved away last week and is no longer in this capacity's rule 3 at all.
 
+> **No `Filter array` is needed after this action, and adding one would do nothing.** Both dimensions the table can express are already in the server-side filter, so every returned row is an active exception for this workspace. The capacity question is answered on the *workspace* rows by `Filter_on_this_node`, and the `And` in Step 4b is the join.
+>
+> Compare [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5l, which does need a real join query: there the exception list is tenant-wide and has to be intersected with the capacity's workspaces. Here the workspace is pinned by the trigger input, so the same intersection collapses to two `empty(...)` checks.
+
 > **An empty policy row makes `Filter_on_this_node` empty too**, so the outcome falls through to `Removed` and Step 5's rebuild returns the `Failed` that explains the capacity is unregistered. Do not add a second early exit for it here; one flow should own that message.
 
 ---
@@ -175,7 +202,7 @@ Two questions, and `StillExcepted` needs **both** answered yes.
 
 ### Step 4b — the exception overrides both answers
 
-`Condition_excepted` — a second **Condition**, after the first, with **two** rows ANDed:
+`Condition_excepted` — a second **Condition**, **at the top level immediately after `Condition_still_enabled`**, not inside either of its branches. Two rows ANDed:
 
 | Left | Operator | Right |
 |---|---|---|
@@ -184,7 +211,7 @@ Two questions, and `StillExcepted` needs **both** answered yes.
 
 **Yes** → overwrite `outcome` with `StillExcepted` and set the message to: `This workspace has an active policy exception, so it can still create any item type on this capacity regardless of whether OAP is enabled. The rules were republished as they stand. Deactivate its Policy Exceptions row and rebuild to stop that.`
 
-**No** → leave whatever Step 4 decided.
+**No** → **leave the branch completely empty.** Step 4 has already set `outcome` and `message`; this branch's job is to not touch them. A `Set variable` here would clobber `StillEnabled` on the path where Step 4 correctly set it.
 
 > **Both conditions, not just the first.** An exception row for a workspace that has already left this capacity is not this capacity's problem — the rebuild will not put it in rule 3, and reporting `StillExcepted` would send someone to deactivate a row that is doing no harm here and may be doing something useful elsewhere.
 
@@ -204,17 +231,32 @@ Two questions, and `StillExcepted` needs **both** answered yes.
 
 ### Yes
 
-Leave `outcome` as Step 4 set it — `Removed`, `StillEnabled` or `StillExcepted` — and append the counts to the message: `concat(variables('message'), ' Policy rules updated: ', body('Run_rebuild')?['workspacecount'], ' workspace(s) allowed on this capacity.')`
+Leave `outcome` as Step 4 set it — `Removed`, `StillEnabled` or `StillExcepted` — and append the counts to the message.
 
-**Do not overwrite `outcome` with `Removed` here.** The rebuild succeeding says nothing about whether the workspace actually came out; that was decided in Step 4, and flattening the three would turn a warning into a false confirmation.
+`Append_rebuild_counts` — **Append to string variable**, *not* Set variable:
+
+| Field | Value |
+|---|---|
+| Name | `message` |
+| Value | `concat(' Policy rules updated: ', body('Run_rebuild')?['workspacecount'], ' workspace(s) allowed on this capacity.')` |
+
+> **`Set variable` cannot reference the variable it assigns.** `message` = `concat(variables('message'), …)` fails at runtime with *"Self reference is not supported when updating the value of the variable"*. **Append to string variable** exists for exactly this, and it takes only the text to add — the existing value is implicit, so there is no `variables('message')` in the expression at all.
+>
+> Note the leading space inside the `concat`. Step 4's messages end with a full stop and no trailing space, so the join has to supply it.
+
+**Do not overwrite `outcome` here.** The rebuild succeeding says nothing about whether the workspace actually came out; that was decided in Step 4, and flattening the three would turn a warning into a false confirmation.
 
 ### No
 
-`outcome` = `Failed`, `message` = `concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' If the workspace has already been moved or disabled in Dataverse, the nightly rebuild will apply it.')`
+Two **Set variable** actions — `outcome` = `Failed`, and `message` set outright rather than appended, because the Step 4 text no longer applies:
+
+`concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' If the workspace has already been moved or disabled in Dataverse, the nightly rebuild will apply it.')`
 
 ---
 
 ## Step 6 — Why a failure here is not rolled back
+
+> **Nothing is built in this step.** It explains the failure message Step 5's *No* branch already sets. Skip to Step 7 if you are following along in the designer.
 
 There is nothing to roll back — this flow writes nothing. But the *reporting* still matters, because Dataverse and Fabric now disagree and the operator needs to know which way.
 

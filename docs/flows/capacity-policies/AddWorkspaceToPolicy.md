@@ -51,6 +51,32 @@ Both required, and both are GUIDs. Getting them the wrong way round is caught �
 | `Initialize_outcome` | `outcome` | String | `Failed` |
 | `Initialize_message` | `message` | String | *(empty)* |
 
+Both at the **top level**, before any Condition. `Initialize variable` is the one action Power Automate refuses to place inside a Condition.
+
+> ### The shape of this flow — it nests, and there is no Terminate
+>
+> Every guard here is an early exit that **sets two variables and nothing else**. There is a single `Respond` at the end that every path must reach, so a guard cannot stop the run — it can only fail to contain the work.
+>
+> ```
+> trigger
+> Step 2   Initialize_outcome / Initialize_message
+> Step 3   Get_workspace_row
+>          Condition_workspace_found
+>            ├─ No:  2 × Set variable            ← NotFound, no rebuild
+>            └─ Yes: Step 4a  Get_node_row
+>                          4b  Condition_node_matches
+>                                ├─ No:  2 × Set variable   ← WrongCapacity
+>                                └─ Yes: 4c  Condition_enabled
+>                                            ├─ No:  2 × Set variable   ← NotEnabled
+>                                            └─ Yes: Step 5  Run_rebuild
+>                                                          Condition_rebuild_ok
+> Step 6   Respond                            ← top level, reached by every path
+> ```
+>
+> **So yes — 4c is inside 4b's Yes branch, and 4a/4b are inside Step 3's Yes branch.** Three levels by the time you reach Step 5. That is unavoidable without Terminate actions, and Terminate is wrong here for the same reason it is wrong in [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md): it would end the run before Step 6 and the caller would get nothing at all rather than `NotFound` or `WrongCapacity`.
+>
+> **Step 6 is the only action at the top level after Step 3.** Everything else lives on a branch.
+
 ---
 
 ## Step 3 — Find the workspace row
@@ -96,7 +122,9 @@ Resolves the caller's capacity id to the Node row's **primary key**, `ubsppcoe_n
 |---|---|---|
 | `first(body('Get_workspace_row')?['value'])?['_ubsppcoe_nodeid_value']` | is equal to | `first(body('Get_node_row')?['value'])?['ubsppcoe_nodeid']` |
 
-**No** → `outcome` = `WrongCapacity`, `message` = `This workspace is not assigned to that capacity, so it will not appear in that capacity's rules.` Stop.
+**No** → `outcome` = `WrongCapacity`, `message` = `This workspace is not assigned to that capacity, so it will not appear in that capacity's rules.` Stop — two **Set variable** actions and nothing else on that branch.
+
+**4c goes in the Yes branch.**
 
 > **A Dataverse lookup stores the target's primary key, and on `ubsppcoe_Node` that key is *not* the capacity id.** `ubsppcoe_nodeuniqueid` holds the capacity id, but it is an ordinary column — so `_ubsppcoe_nodeid_value` is a Node row GUID and cannot be compared against the trigger input directly. Step 4a exists solely to translate one into the other.
 >
@@ -112,7 +140,7 @@ Resolves the caller's capacity id to the Node row's **primary key**, `ubsppcoe_n
 |---|---|---|
 | `first(body('Get_workspace_row')?['value'])?['ubsppcoe_oapenabled']` | is equal to | `true` |
 
-**No** → `outcome` = `NotEnabled`, `message` = `This workspace is registered on the capacity but does not have OAP enabled, so it cannot be whitelisted. That flag is set by the platform team's process, not by this app.` Stop — **no rebuild**.
+**No** → `outcome` = `NotEnabled`, `message` = `This workspace is registered on the capacity but does not have OAP enabled, so it cannot be whitelisted. That flag is set by the platform team's process, not by this app.` Stop — **no rebuild**, two **Set variable** actions and nothing else on that branch.
 
 > **`false` and null both take the No branch, and that is correct.** `ubsppcoe_oapenabled` is nullable, so a row nobody has ever touched compares unequal to `true` exactly as an explicit `false` does. Neither is whitelisted, neither is added to any rule explicitly, and the message does not distinguish them — there is nothing the caller could do differently.
 
@@ -124,7 +152,7 @@ Resolves the caller's capacity id to the Node row's **primary key**, `ubsppcoe_n
 >
 > This flow does not check for that, deliberately: it is about whitelisting, the answer is still "no, and here is why", and adding a query for a case that changes nothing about the outcome buys a second sentence and a second failure mode. The place that needs to know is [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md), where the same fact turns a removal into a false confirmation.
 
-Everything below goes in the **Yes** branch.
+Everything below goes in the **Yes** branch — Step 5, but **not** Step 6, which stays at the top level so every branch reaches it.
 
 ---
 
