@@ -55,6 +55,20 @@ Nightly rather than weekly, because the interval is the **worst-case delay on a 
 
 ---
 
+## Step 1b — Variables
+
+One `Initialize variable`, **at the top level**, before Step 2.
+
+| Rename to | Name | Type | Value |
+|---|---|---|---|
+| `Initialize_failures` | `failures` | **Array** | *(leave empty)* |
+
+**It has to be here, not next to the loop that fills it.** `Initialize variable` is the one action Power Automate refuses to place inside an `Apply to each` — the designer offers it and then fails validation on save. Step 3b appends to it from inside the loop, which is allowed; declaring it there is not.
+
+**Array, not String.** Step 4 reads `length(variables('failures'))`, and `Append to array variable` will not bind to a String variable.
+
+---
+
 ## Step 2 — The capacities to process
 
 `List_policy_rows` — Dataverse **List rows**:
@@ -110,7 +124,7 @@ Configure this action's **run after** so the loop continues past a failure — l
 @{concat(items('For_each_capacity')?['ubsppcoe_capacityname'], ' (', items('For_each_capacity')?['ubsppcoe_capacityid'], '): ', coalesce(body('Run_rebuild')?['message'], 'child flow failed'))}
 ```
 
-Declare `failures` as an empty Array variable before the loop.
+Declared in Step 1b, because `Initialize variable` cannot sit inside the loop.
 
 The child flow already stamps `last_rebuild` and `last_error` on each row, so per-capacity detail is queryable without reading run history. The array exists only for the summary in Step 4.
 

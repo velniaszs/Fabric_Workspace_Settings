@@ -275,6 +275,18 @@ Build instructions are one file per flow in [flows/capacity-policies/](docs/flow
 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | Recurrence | Nightly convergence of every capacity to the tables |
 | [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) | Recurrence | Detects drift the rebuild cannot fix |
 
+### Plus three migration flows, which are not part of BAU
+
+Built for cutover, run by hand, then **deleted**. The `MIG_` prefix marks them as disposable — see §8.
+
+| Flow | Trigger | Purpose |
+|---|---|---|
+| [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) | Manual (child) | Creates and registers one capacity's policy set. **No rules, no activation** |
+| [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) | Manual | Loops `GET /v1/capacities` and calls the above |
+| [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) | Manual | Activates the estate. `Report` mode is the dry run |
+
+Migration's **rebuild** phase needs no flow of its own — `RebuildAllCapacityPolicies` already does it.
+
 **No flow writes a whitelist, because there is no whitelist to write.** Membership is derived from `OapEnabled` and `Node` (§3), so flows 3 and 4 are **read-only against Dataverse**: they check that the state the caller assumes is actually true, then republish the rules. **No flow writes `PolicyException` either** — that table is ours, but rows are created by hand or by the app, and every flow here only reads it.
 
 ### Why add and remove still exist as separate flows
@@ -552,7 +564,7 @@ Ordered by what they block. **No column name blocks the build any more** — Q19
 |---|---|---|
 | **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist | Pre-launch |
 | **Q45** | Which identity does the connector connection authenticate as, and who owns it? Every Fabric role in §5 attaches to that identity, so nothing can be granted until it is decided | **Flow build** |
-| **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`, and who raises the corrections, given we cannot make them ourselves (§3)? | Cutover |
+| **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`? **Narrowed 2026-09-10:** this applies to the **script** migration path only. Under a flow-driven migration no CSV is read, `ubsppcoe_Workspace` is the source of truth from the first publish, and the question does not arise. Seeding `PolicyException` still does, on both paths | Cutover |
 | **Q16** | Nothing triggers a rebuild when the owning system changes `ubsppcoe_oapenabled` or moves a `Node` — **or when somebody edits `PolicyException`, which is our own table**. Nightly convergence is currently the only backstop. Acceptable, or does this need a Dataverse modified-row trigger? | Post-launch |
 | **Q33** | Taking an exception away is not live until a rebuild runs (§3). Is "deactivate the row and force a rebuild" a good enough procedure, or does it need a flow of its own after all? | Post-launch |
 | **Q35** | An exception follows its workspace to a new capacity with nobody on that capacity approving it (§3). Acceptable, or does `PolicyException` need a `capacity` lookup and a re-approval step on move? | Post-launch |
@@ -578,13 +590,67 @@ One document per flow in [flows/capacity-policies/](docs/flows/capacity-policies
 
 Read-only first, one capacity before many — the order `Migration-Steps.md` already prescribes for the scripts, and it applies unchanged here.
 
+> ### The three migration flows
+>
+> **Decided 2026-09-10.** Migration is flow-driven, not script-driven, and lives in three disposable flows carrying a **`MIG_`** prefix. Steps 1–6 above are unchanged; these replace steps 7 and 8.
+>
+> | # | Build | Purpose |
+> |---|---|---|
+> | 7 | [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) | Child, manual trigger. Creates and registers **one** capacity's policy set. No rules, no activation |
+> | 8 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) | The loop. Walks `GET /v1/capacities` and calls the child. Run by hand, in tranches |
+> | 9 | *Seed `Policy Exceptions`* | Human. Must precede any rebuild |
+> | 10 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | **Already built.** Doubles as migration's rebuild phase — no changes needed |
+> | 11 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) | Puts deny-all into force. Has a `Report` dry-run mode |
+> | 12 | [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) | Verification surface, once there is something to verify |
+>
+> **Why copies rather than a `mode` input on the BAU flows.** A Power Apps (V2) trigger cannot be called by `Run a Child Flow`, so *something* with a manual trigger has to exist. Given that, a separate copy beats branching a tested flow: nothing built and verified for BAU has to be re-tested, and the `MIG_` prefix marks the whole set as disposable. **All three are turned off and deleted after cutover**, leaving no residue.
+>
+> **Register, rebuild and activate are three separate runs, deliberately.** Everything up to activation is inert — policy sets with no rules, deactivated, change nobody's access — so a half-finished or wholly wrong migration is undone by deleting rows and items. That separation is what replaces the `-WhatIf` the PowerShell path had, and it gives the exceptions seeding a window to happen in.
+
 ### Cutover
 
-Migration and BAU must not overlap on the same capacity. For each capacity, in order:
+Migration and BAU must not overlap on the same capacity.
+
+> ### Two migration paths, and only one needs a reconciliation
+>
+> **Decided 2026-09-10: migration is flow-driven.** The numbered steps below describe the superseded **script** path, kept because the scripts remain the authority on API payloads. Under the flow path, **step 3 disappears entirely.**
+>
+> The reconciliation is an artefact of the script, not of migration. `migrate_policy_sets.ps1` builds its whitelists from `fabric_workspaces.csv`, so a script migration leaves Fabric holding CSV-derived state while Dataverse holds `ubsppcoe_oapenabled`. Those two can disagree, and the first flow-driven rebuild resolves it in Dataverse's favour without a diff — which is what step 3 exists to make visible first.
+>
+> Migrate through the flows and no CSV is ever read. Rules are built from `ubsppcoe_oapenabled` on the very first publish, so Fabric's state **is** the table by construction and there is nothing to reconcile. `ubsppcoe_Workspace` was always the source of truth for that flag; the CSV was only ever a snapshot of it taken at an unknown time.
+>
+> Step 4 does **not** disappear. `Policy Exceptions` has no upstream — nothing derives those rows, so they must be seeded whichever path is taken, and before the first rebuild.
+>
+> **The flow path, in full:**
+>
+> | # | Do | Reversible? |
+> |---|---|---|
+> | 1 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) — in tranches, checking the first five | Yes — delete the items and rows |
+> | 2 | Seed `Policy Exceptions` from `fabric_workspaces_exceptions.csv`, `workspace_id` column only | Yes |
+> | 3 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | Yes — nothing is enforced yet |
+> | 4 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) in `Report` mode, and read the list | — |
+> | 5 | The same in `Activate` mode, stopping after five to verify | **No.** Deny-all is now in force |
+> | 6 | Delete the three `MIG_` flows | — |
+>
+> Steps 1 to 3 change nobody's access. Step 5 changes everyone's.
+
+> ### The inventory tables contain rows Fabric no longer has
+>
+> Raised 2026-09-10. `ubsppcoe_Node` and `ubsppcoe_Workspace` are the platform team's, and neither is guaranteed to be pruned when a capacity or workspace is deleted. The two cases behave differently.
+>
+> **A Node row for a dead capacity is already handled.** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 4 checks `GET /v1/capacities` and returns `Skipped` unless the capacity exists, is `Active` and is an F-SKU — before anything is created. A migration loop inherits that guard for free, but its summary must separate `Skipped` from `Failed`, or a decommissioned estate reads as a broken run.
+>
+> **A Workspace row for a deleted workspace is harmless but not free.** Its GUID is published into `predicate.values` unchecked, where Fabric accepts it as well-formed and it never matches. The costs are a `workspacecount` that overstates reality, and dead entries consuming 49-per-rule chunk slots — eventually an extra rule that grants nothing.
+>
+> **Decision 2026-09-10: `ubsppcoe_Workspace` is trusted as-is. No flow verifies a workspace still exists in Fabric.** The alternative is one Fabric call per workspace per capacity per night, which makes the rebuild depend on read throughput and fails closed on a transient `429` — turning a cosmetic problem into a denied capacity. Pruning the inventory is the platform team's business, and we may not write those tables anyway (§3).
+>
+> **So drive the migration loop off `GET /v1/capacities`, not off `ubsppcoe_Node`.** Same guard, better reporting: iterating live capacities yields an explicit list of those with **no** Node row, which is the actionable gap — those are the ones that fail at Step 4b and stay permanently un-rebuildable. Iterating Node rows only tells you which ones to ignore.
+
+For each capacity, in order:
 
 1. `migrate_policy_sets.ps1` creates and activates the policy set.
-2. **Seed `CapacityPolicy`** with the migrated `policy_set_id`.
-3. **Reconcile `ubsppcoe_oapenabled` against `fabric_workspaces.csv`** and get the differences signed off — both directions: CSV entries whose row is `false` or null, and `true` rows absent from the CSV.
+2. **Seed `CapacityPolicy`** with the migrated `policy_set_id` **and the `node` lookup** — bound to `ubsppcoe_nodeid`, not the capacity id (§1). A blank lookup registers the capacity and makes it permanently un-rebuildable.
+3. **Reconcile `ubsppcoe_oapenabled` against `fabric_workspaces.csv`** and get the differences signed off — both directions: CSV entries whose row is `false` or null, and `true` rows absent from the CSV. **Script path only.**
 4. **Seed `PolicyException` from `fabric_workspaces_exceptions.csv`**, if the migration used one. Take the `workspace_id` column only — the CSV's `capacity_id` has no counterpart in the table, because the capacity is derived from the workspace's `Node` (§3). **Check the two agree before discarding it:** a CSV row whose workspace now sits under a different Node is an exception that is about to move capacity, quietly, on the first rebuild. Nothing derives these rows, so a missed one is an unrestricted workspace that the first flow-driven rebuild silently restricts — the reverse of the risk in step 3, and just as invisible.
 5. Only then let the flows manage that capacity.
 
