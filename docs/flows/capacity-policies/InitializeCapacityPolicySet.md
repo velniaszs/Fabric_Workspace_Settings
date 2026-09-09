@@ -202,7 +202,9 @@ Three separate reasons, one outcome:
 | Filter rows | `ubsppcoe_nodeuniqueid eq @{triggerBody()['text']}` |
 | Row count | `1` |
 
-**The GUID is unquoted** — `ubsppcoe_nodeuniqueid` is a unique-identifier column, and the capacity id *is* the Node row key ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+**The GUID is unquoted** — `ubsppcoe_nodeuniqueid` is a unique-identifier column holding the Fabric capacity id ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+
+**This step exists to fetch `ubsppcoe_nodeid`, the Node row's primary key.** That is a *different* GUID from the capacity id, and it is what 8a's lookup must bind to. Do not put anything in **Select columns** unless you include `ubsppcoe_nodeid` explicitly.
 
 **List rows, not *Get a row by ID*.** A `Get a row by ID` against a missing row fails the action with a `404`, which then needs a `Configure run after` to recover from. An empty `value` array is far easier to branch on.
 
@@ -357,16 +359,18 @@ Then the columns:
 |---|---|---|
 | Capacity name | `ubsppcoe_capacityname` | `triggerBody()['text_1']` |
 | Capacity ID | `ubsppcoe_capacityid` | `triggerBody()['text']` |
-| **Node** | `ubsppcoe_node` | `/ubsppcoe_nodes(@{triggerBody()['text']})` |
+| **Node** | `ubsppcoe_node` | `concat('/ubsppcoe_nodes(', first(body('Get_node_row')?['value'])?['ubsppcoe_nodeid'], ')')` |
 | Policy set ID | `ubsppcoe_policysetid` | `variables('policySetId')` |
 | Policy set name | `ubsppcoe_policysetname` | `outputs('Compose_name_final')` |
 | Status | `ubsppcoe_status` | `Inactive` |
 
 > **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Step 4b exists solely to make this line safe to write.
 >
-> **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's key. The capacity id works as that key because it *is* the Node row key. If the connector rejects it, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
+> **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's **primary key**. That key is `ubsppcoe_nodeid` — display name *Node*, the only unique-identifier column on the table. Step 4b exists to fetch it. If the connector rejects the path, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
 >
-> **Type this one straight into the field — not into the ƒx tab.** Every other row in the table above is a bare expression, so the habit is to open **Expression** and paste. This row is a *string* with an expression interpolated into it, and `/ubsppcoe_nodes(@{...})` is not valid expression syntax — the editor rejects it as invalid. Paste it into the column's own box, where `@{}` is interpolation. If you would rather stay in the ƒx tab, the equivalent is `concat('/ubsppcoe_nodes(', triggerBody()['text'], ')')`.
+> **The key is *not* the capacity id.** `ubsppcoe_nodeuniqueid` holds the capacity id, but it is an ordinary column, not the row key — so binding `/ubsppcoe_nodes(<capacityId>)` fails with `Entity 'ubsppcoe_Node' With Id = … Does Not Exist`. Confirmed against a real environment 2026-09-09, correcting an assumption that had spread through several documents.
+>
+> **This value goes in the ƒx tab**, unlike the string form used elsewhere in this table — it is a pure expression with no `@{}` interpolation.
 
 > **`ubsppcoe_policysetname` is written here and nowhere else.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) uses it to spot a policy set renamed by hand without spending a `GET` per set, and the rebuild never touches it. Leave it blank and that check silently compares against nothing.
 

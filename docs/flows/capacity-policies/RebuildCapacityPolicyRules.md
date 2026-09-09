@@ -42,7 +42,8 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 | Purpose | Name used below | Status |
 |---|---|---|
 | Capacity table | `ubsppcoe_Node` | Confirmed |
-| Node row key — **and the Fabric capacity GUID** | `ubsppcoe_nodeuniqueid` | Confirmed 2026-09-07 |
+| Node row key | `ubsppcoe_nodeid` | Confirmed 2026-09-09 |
+| **Fabric capacity GUID** on the Node row | `ubsppcoe_nodeuniqueid` | Corrected 2026-09-09 — an ordinary column, **not** the row key |
 | Workspace table | `ubsppcoe_Workspace` | Confirmed |
 | Workspace row key | `ubsppcoe_workspaceuniqueid` | Confirmed 2026-09-07 |
 | **Fabric workspace GUID** on the workspace row | `ubsppcoe_workspaceid` | Confirmed 2026-09-07 |
@@ -51,7 +52,9 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 
 > **Confirm every placeholder in the maker portal before you build Step 5.** Settings → Tables → the table → Columns, and read the **Logical name** column. A wrong name in a `Filter rows` expression does not fail loudly — Dataverse returns a `400` for an unknown column, but an expression that resolves to blank returns **every row**, which would whitelist every workspace in the tenant on one capacity.
 
-> **The two tables treat their Fabric GUID in opposite ways. Read this twice.** On `ubsppcoe_Node` the row key **is** the Fabric capacity GUID, so `nodeRowId` below is also a capacity id. On `ubsppcoe_Workspace` they are separate and named the wrong way round: `ubsppcoe_workspaceid` looks like a row key and **is not** — it is the **Fabric workspace GUID**, and it is the column Step 5 filters and selects. The row key `ubsppcoe_workspaceuniqueid` never leaves Dataverse. Publishing row keys into `predicate.values` would be accepted by Fabric as well-formed GUIDs and then match nothing, denying a whole capacity with no error anywhere.
+> **Both tables separate their Fabric GUID from their row key. Read this twice.** On `ubsppcoe_Node` the row key is `ubsppcoe_nodeid` and the capacity GUID sits in `ubsppcoe_nodeuniqueid`, so **`nodeRowId` below is a Node row GUID, not a capacity id**. On `ubsppcoe_Workspace` they are separate and named the wrong way round: `ubsppcoe_workspaceid` looks like a row key and **is not** — it is the **Fabric workspace GUID**, and it is the column Step 5 filters and selects. The row key `ubsppcoe_workspaceuniqueid` never leaves Dataverse. Publishing row keys into `predicate.values` would be accepted by Fabric as well-formed GUIDs and then match nothing, denying a whole capacity with no error anywhere.
+>
+> **This flow needed no change when that was corrected on 2026-09-09.** It already routes the value through the `node` lookup rather than reusing the trigger input — see the note at Step 4.
 
 > **The capacity id is never filtered against a Node row here.** `Capacity Policies` carries a `node` lookup, so Step 4 reads the policy set id and the Node row GUID in one call. Confirming the Node row exists happens once, in [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), when that row is created.
 
@@ -248,13 +251,13 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 
 > **One read, three values.** `Capacity Policies` carries a `node` lookup to `ubsppcoe_Node` ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3), so this row already holds the Node row GUID. There is no second query against the Node table — confirming the Node exists happens once, in flow 1, when the row is created.
 >
-> **`nodeRowId` will equal `triggerBody()['text']`**, because the Node row key is the Fabric capacity GUID. Use the variable anyway rather than the trigger input: it is the value that proves a Node row was linked, and if the platform team ever stops keying Nodes on the capacity id, this flow keeps working and only flow 1 needs changing.
+> **`nodeRowId` is a Node row GUID and is *not* equal to `triggerBody()['text']`.** Using the variable rather than the trigger input is what makes this flow correct: the workspace table's `Node` lookup stores the Node row key, so only a value that came from a lookup can be compared against it. **Corrected 2026-09-09** — the two were previously documented as the same GUID, and the advice to use the variable anyway is what kept this flow working.
 >
 > `policyRowId` is this row's own key, and Step 10a updates the row with it — reading it here saves repeating the `first(...)` expression at the far end of the flow.
 >
 > Read the Node value from the **`_ubsppcoe_node_value`** form, with the leading underscore and the `_value` suffix. `ubsppcoe_node` on a `List rows` result is not the GUID; it is either absent or an expanded object, depending on what was selected.
 >
-> **This is `Capacity Policies`.`_ubsppcoe_node_value` — note the missing `id`.** The workspace table's lookup is `ubsppcoe_nodeid`, read as `_ubsppcoe_nodeid_value`, and Step 5 uses that one. Two different columns four characters apart, both resolving to the same capacity GUID; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
+> **This is `Capacity Policies`.`_ubsppcoe_node_value` — note the missing `id`.** The workspace table's lookup is `ubsppcoe_nodeid`, read as `_ubsppcoe_nodeid_value`, and Step 5 uses that one. Two different columns four characters apart, both holding the same **Node row GUID** — which is what makes Step 5b's comparison valid; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
 
 **Leave the *No* branch empty and continue at the top level.** Step 5 onwards are siblings of this Condition, not children of it — the *Yes* branch terminates, so nothing after it runs on that path. See the shape box in Step 1.
 
@@ -828,15 +831,15 @@ The build order deliberately puts this flow **before** [InitializeCapacityPolicy
 
 > ### Checking whether a capacity has a Node row
 >
-> **It is a lookup by row key, not a filter.** `ubsppcoe_nodeuniqueid` *is* the Fabric capacity GUID, so there is no "capacity id" column to search on — which is the first thing that confuses people looking for one.
+> **It is a filter, not a lookup by row key.** `ubsppcoe_nodeuniqueid` holds the Fabric capacity GUID but is an ordinary column, so the capacity id has to be searched for — addressing `ubsppcoe_nodes(<capacity-guid>)` asks for a *row key* of that value and returns `404` even when the capacity does have a Node row. **Corrected 2026-09-09.**
 >
 > In a browser signed into the environment:
 >
 > ```
-> https://<org>.crm<n>.dynamics.com/api/data/v9.2/ubsppcoe_nodes(<capacity-guid>)?$select=ubsppcoe_nodename
+> https://<org>.crm<n>.dynamics.com/api/data/v9.2/ubsppcoe_nodes?$filter=ubsppcoe_nodeuniqueid eq <capacity-guid>&$select=ubsppcoe_nodename
 > ```
 >
-> `200` means the row exists; `404` means it does not.
+> A non-empty `value` array means the row exists; an empty one means it does not. The `ubsppcoe_nodeid` in the response is the row key — the value flow 1 binds its `node` lookup to.
 >
 > **Finding the instance URL:** make.powerapps.com → gear → **Session details** → *Instance url*, or admin.powerplatform.microsoft.com → **Environments** → your environment → *Environment URL*. **Do not guess the `crm<n>` part** — it is regional (`crm` North America, `crm4` EMEA, `crm5`/`crm6` APAC, and others). The `make.powerapps.com/environments/<guid>/…` address is the **environment ID**, a different identifier, and will not work against the Web API.
 >

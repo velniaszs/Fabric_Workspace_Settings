@@ -126,7 +126,9 @@ Two questions, and `StillExcepted` needs **both** answered yes.
 | From | `coalesce(body('Get_workspace_row')?['value'], createArray())` |
 | Condition | `item()?['_ubsppcoe_nodeid_value']` **is equal to** `first(body('Get_policy_row')?['value'])?['_ubsppcoe_node_value']` |
 
-> **Those two names differ by three characters, and that is not a typo.** The left side is **`_ubsppcoe_nodeid_value`** — the `Node` lookup on a `ubsppcoe_Workspace` row. The right side is **`_ubsppcoe_node_value`** — our own lookup on the `ubsppcoe_CapacityPolicy` row. Different tables, different columns, and both resolve to the same capacity GUID, which is what makes the comparison meaningful: it asks *is this workspace on the capacity the caller named*. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
+> **Those two names differ by three characters, and that is not a typo.** The left side is **`_ubsppcoe_nodeid_value`** — the `Node` lookup on a `ubsppcoe_Workspace` row. The right side is **`_ubsppcoe_node_value`** — our own lookup on the `ubsppcoe_CapacityPolicy` row. Different tables, different columns, and both hold the same **Node row GUID**, which is what makes the comparison meaningful: it asks *is this workspace on the capacity the caller named*. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
+>
+> **Neither side is a capacity id**, and comparing either against the trigger input would never match — the Node row key is `ubsppcoe_nodeid`, while the capacity GUID lives on the Node row in `ubsppcoe_nodeuniqueid`. Lookup-against-lookup is the only correct form here. Confirmed 2026-09-09, when the same mistake was found in `AddWorkspaceToPolicy` Step 4a; **this flow was already right.**
 
 `Get_exception_rows` — Dataverse **List rows**:
 

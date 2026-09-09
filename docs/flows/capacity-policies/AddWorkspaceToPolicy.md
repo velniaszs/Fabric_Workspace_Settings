@@ -80,21 +80,33 @@ Everything below goes in the **Yes** branch.
 
 ## Step 4 — Is it on the right capacity, and is it enabled?
 
-### 4a. `Condition_node_matches` — **Condition**
+### 4a. `Get_node_row` — Dataverse **List rows**
+
+| Field | Value |
+|---|---|
+| Table name | `Nodes` (`ubsppcoe_Node`) |
+| Filter rows | `ubsppcoe_nodeuniqueid eq @{triggerBody()['text']}` |
+| Row count | `1` |
+
+Resolves the caller's capacity id to the Node row's **primary key**, `ubsppcoe_nodeid`. Leave **Select columns** empty, or include `ubsppcoe_nodeid` explicitly.
+
+### 4b. `Condition_node_matches` — **Condition**
 
 | Left (expression) | Operator | Right |
 |---|---|---|
-| `first(body('Get_workspace_row')?['value'])?['_ubsppcoe_nodeid_value']` | is equal to | `triggerBody()['text']` |
+| `first(body('Get_workspace_row')?['value'])?['_ubsppcoe_nodeid_value']` | is equal to | `first(body('Get_node_row')?['value'])?['ubsppcoe_nodeid']` |
 
 **No** → `outcome` = `WrongCapacity`, `message` = `This workspace is not assigned to that capacity, so it will not appear in that capacity's rules.` Stop.
 
-> **There is no query against `ubsppcoe_Node` here, and there does not need to be.** The Node row key **is** the Fabric capacity GUID ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1), so the workspace's `Node` lookup value is already a capacity id and compares straight against the trigger input.
+> **A Dataverse lookup stores the target's primary key, and on `ubsppcoe_Node` that key is *not* the capacity id.** `ubsppcoe_nodeuniqueid` holds the capacity id, but it is an ordinary column — so `_ubsppcoe_nodeid_value` is a Node row GUID and cannot be compared against the trigger input directly. Step 4a exists solely to translate one into the other.
 >
-> What this drops is the old check that the capacity had a Node row at all. That is no loss: a capacity with no Node row has no workspaces pointing at it, so every call for it returns `WrongCapacity` — and if it also has no `Capacity Policies` row, Step 5's rebuild says so plainly.
+> Corrected 2026-09-09. The earlier version compared the lookup straight against `triggerBody()['text']`, which never matches — **every** call returned `WrongCapacity`.
+>
+> A capacity with no Node row makes 4a return nothing, the comparison fails, and the caller gets `WrongCapacity`. That is the right answer: a capacity with no inventory record has no workspaces pointing at it either.
 
 > **This check is the reason the two GUIDs cannot be swapped by accident.** Both inputs are GUIDs, so passing them the wrong way round would otherwise produce a syntactically valid pair, a successful rebuild of the **wrong capacity**, and a confident success message. Rebuilding a policy the caller never asked about is the worst outcome available here, and it is a one-line mistake to make.
 
-### 4b. `Condition_enabled` — **Condition**
+### 4c. `Condition_enabled` — **Condition**
 
 | Left | Operator | Right |
 |---|---|---|

@@ -83,7 +83,8 @@ So: **two existing tables are read, four new tables are created** — `CapacityP
 | Table | Column | Purpose here |
 |---|---|---|
 | `ubsppcoe_Node` | `ubsppcoe_nodename` | Primary name — the Node's display name. **Not** the capacity id |
-| `ubsppcoe_Node` | row key — `ubsppcoe_nodeuniqueid` | **This is the Fabric capacity id.** The platform team supplies it on create |
+| `ubsppcoe_Node` | row key — `ubsppcoe_nodeid` | Dataverse-generated. What both `Node` lookups store. **Not** the capacity id |
+| `ubsppcoe_Node` | `ubsppcoe_nodeuniqueid` | **This is the Fabric capacity id.** An ordinary column, not the row key |
 | `ubsppcoe_Workspace` | `ubsppcoe_workspacename` | Primary name — the workspace's display name |
 | `ubsppcoe_Workspace` | workspace GUID column | The Fabric workspace id — **`ubsppcoe_workspaceid`**, which is *not* the row key |
 | `ubsppcoe_Workspace` | `ubsppcoe_nodeid` — the `Node` lookup | Which capacity the workspace belongs to. Filtered as `_ubsppcoe_nodeid_value` |
@@ -101,10 +102,10 @@ So: **two existing tables are read, four new tables are created** — `CapacityP
 >
 > The only Dataverse tables these flows write are the **new** ones this project creates — `CapacityPolicy` and `PolicyDrift`. `PolicyException` is ours too, but no flow writes it either — see below. *(See Q25: the instruction was "we do not insert or change any Dataverse data", and this design reads it as covering the platform team's tables. Writing our own state tables is still assumed, because the policy set id has to be stored somewhere. If it was meant literally, say so — the consequence is resolving every policy set from Fabric on every run, which §5 explains does not fit the Power Apps budget.)*
 
-> **The two tables treat their Fabric GUID in opposite ways, and both are surprising.** Three consequences the flows must respect:
+> **Both tables separate their Fabric GUID from their row key, and both name them confusingly.** Three consequences the flows must respect:
 >
-> - **A capacity id *does* resolve to a Node row directly**, because `ubsppcoe_nodeuniqueid` is the Fabric capacity GUID. `Get a row by ID`, one call — not a `List rows` against some separate capacity column.
-> - **The `Node` lookup on a workspace therefore holds a capacity id.** Filtering workspaces by capacity is `_ubsppcoe_nodeid_value eq <capacityId>`, an unquoted GUID against the underscore-prefixed navigation column. Not `ubsppcoe_nodeid eq '…'`, which is not a queryable column and returns a `400`.
+> - **A capacity id does *not* resolve to a Node row directly.** `ubsppcoe_nodeuniqueid` holds the capacity GUID but is an ordinary column, so it takes a `List rows` filtered on `ubsppcoe_nodeuniqueid eq <capacityId>` — never `Get a row by ID`, which looks up `ubsppcoe_nodeid` and finds nothing. *(Corrected 2026-09-09; every earlier revision claimed the opposite.)*
+> - **The `Node` lookup on a workspace holds a Node row GUID, not a capacity id.** Filtering workspaces by capacity is `_ubsppcoe_nodeid_value eq <nodeRowId>`, an unquoted GUID against the underscore-prefixed navigation column — so the capacity must be resolved to its Node row first. Not `ubsppcoe_nodeid eq '…'`, which is not a queryable column and returns a `400`.
 > - **On the workspace table the two are separate, and named the wrong way round.** The row key is `ubsppcoe_workspaceuniqueid`; the Fabric workspace GUID is **`ubsppcoe_workspaceid`**. Everything published into `predicate.values` comes from the latter. A row key sent instead is a well-formed GUID that Fabric accepts and never matches — a denied capacity with no error anywhere. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1.
 
 ### The membership rule
@@ -352,7 +353,7 @@ Called by the capacity-provisioning Power App immediately after it creates a cap
 
 1. Resolve the capacity — `GET /v1/capacities`; confirm it exists, is `Active`, and the SKU matches `F*`. A non-Fabric SKU returns `Skipped`, not `Failed`.
 2. Row already in `CapacityPolicy` with a `policy_set_id` → `AlreadyExists`, stop.
-3. **Resolve the `ubsppcoe_Node` row** for this capacity — a direct `Get a row by ID` on the capacity GUID, since that is the Node row key. No row → `Failed`. This is the only flow that does this lookup; every later flow reads the resulting `node` lookup instead.
+3. **Resolve the `ubsppcoe_Node` row** for this capacity — a `List rows` filtered on `ubsppcoe_nodeuniqueid eq <capacityId>`, which yields the row key `ubsppcoe_nodeid`. No row → `Failed`. That key is what the `node` lookup is bound to; every later flow reads the resulting lookup instead. [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) is the only other flow that resolves it directly.
 4. `POST /v1/workspaces/{holderWs}/policySets` with `{ displayName: "pol_<sanitised name>", description, creationPayload: { scope: { type: "Capacity", id: capacityId } } }`.
 5. Handle **202** — create is a long-running operation. Poll `GET /v1/operations/{x-ms-operation-id}` to a terminal state, then read the result. A `201` carries the policy set directly.
 6. Write the `CapacityPolicy` row: `capacity_id`, `capacity_name`, the **`node` lookup**, `policy_set_id` and `policy_set_name`.
@@ -479,7 +480,7 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 | Item types | `PolicyItemType` table | |
 | Exceptions — rule 3 | `PolicyException` table | Ours, written by hand or by the app. No flow writes it |
 | Desired state | `ubsppcoe_Workspace` — `Node` lookup + `ubsppcoe_oapenabled` | Existing table, owned elsewhere |
-| Capacity → Node row | `ubsppcoe_Node` — the row key **is** the capacity GUID | Existing table, owned elsewhere |
+| Capacity → Node row | `ubsppcoe_Node` — filter `ubsppcoe_nodeuniqueid` to get the key `ubsppcoe_nodeid` | Existing table, owned elsewhere |
 | Policy set map | `CapacityPolicy` table | |
 
 The two limits are environment variables so that a service-side change does not need a flow edit.
@@ -506,7 +507,7 @@ Environment variables travel with a solution export; their **values** may not. S
 | # | Question | Answer |
 |---|---|---|
 | Q12 | Where does the workspace whitelist live? | **The existing `ubsppcoe_Workspace` table.** `Node` lookup gives the capacity, `ubsppcoe_oapenabled` = `true` gives membership. `CapacityWorkspace` is dropped — see §3 |
-| Q13 | Are the Fabric GUIDs the row keys? | **On `ubsppcoe_Node`, yes** — `ubsppcoe_nodeuniqueid` is the capacity GUID, so a capacity resolves to a Node row in one direct read. **On `ubsppcoe_Workspace`, no** — the key is `ubsppcoe_workspaceuniqueid` and the Fabric id is `ubsppcoe_workspaceid`. Revised 2026-09-07; see Q40 and Q41 |
+| Q13 | Are the Fabric GUIDs the row keys? | **No, on neither table.** On `ubsppcoe_Node` the key is `ubsppcoe_nodeid` and the capacity GUID sits in `ubsppcoe_nodeuniqueid`. On `ubsppcoe_Workspace` the key is `ubsppcoe_workspaceuniqueid` and the Fabric id is `ubsppcoe_workspaceid`. Both need a `List rows` + filter. **Revised 2026-09-09** — the 2026-09-07 revision said the Node key *was* the capacity GUID, and that was wrong; see Q40 and Q41 |
 | Q14 | What about `ubsppcoe_oapenabled` = `false`, or null? | **No rule at all.** Not a deny rule, not an explicit entry in rule 1 — simply absent from the whitelist, and rule 1's deny-all is what catches it. `false` and null are treated identically |
 | Q15 | An exception column and rule 3? | **Reinstated, revised.** Rule 3 is being built — but as `PolicyException`, a table this project owns, **not** a column on `ubsppcoe_Workspace`. See §3 and Q30–Q32 |
 | Q20 | Should the flows return `policy_set_id`? | **Yes** — flows 0 and 1 return it. It is already in a variable, so it is free, and it puts the set that was written on the run record beside the outcome. **Not** flows 3 and 4: it would be blank on their two most common outcomes |
@@ -534,7 +535,7 @@ Environment variables travel with a solution export; their **values** may not. S
 | Q40 | What are the row keys and the Fabric workspace GUID column? | **Row keys are `ubsppcoe_nodeuniqueid` and `ubsppcoe_workspaceuniqueid`. The Fabric workspace GUID is `ubsppcoe_workspaceid`** — the opposite of the Dataverse convention, and the opposite of what this document assumed until now. Every filter and every value published to Fabric uses `ubsppcoe_workspaceid` |
 | Q41 | And the Fabric capacity GUID on `ubsppcoe_Node`? | **It is the row key, `ubsppcoe_nodeuniqueid`.** There is no separate column. A capacity id resolves to a Node row with `Get a row by ID`, and `_ubsppcoe_nodeid_value` on a workspace row is therefore itself a capacity id — workspaces can be filtered by capacity in one hop |
 | Q42 | What prefix do the four new tables use? | **`ubsppcoe_`, the same as the platform team's.** Not `crbab_`, which belongs to the workspace-settings canvas app and is unrelated to policy rules. The consequence is that **the prefix no longer indicates ownership**: state every read-only rule by table name. Two logical names — `ubsppcoe_workspaceid` and `ubsppcoe_workspacename` — now exist on two tables each, both times meaning the same thing, so the collisions are harmless; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0 |
-| Q43 | What is the `Node` lookup on `ubsppcoe_Workspace`? | **`ubsppcoe_nodeid`, filtered and read as `_ubsppcoe_nodeid_value`.** This closes Q19 — no name is outstanding. Note the near miss with `ubsppcoe_nodeuniqueid` (the Node row key) and with our own `ubsppcoe_node` on `CapacityPolicy`: three similar names, all resolving to the same capacity GUID |
+| Q43 | What is the `Node` lookup on `ubsppcoe_Workspace`? | **`ubsppcoe_nodeid`, filtered and read as `_ubsppcoe_nodeid_value`.** This closes Q19 — no name is outstanding. Note the near miss with `ubsppcoe_nodeuniqueid` (an ordinary column on the Node row holding the **capacity** GUID) and with our own `ubsppcoe_node` on `CapacityPolicy`. The two lookups hold the **Node row** GUID; `ubsppcoe_nodeuniqueid` does not. Revised 2026-09-09 |
 
 ### Decisions taken 2026-09-08
 
