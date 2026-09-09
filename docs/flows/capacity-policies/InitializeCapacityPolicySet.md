@@ -391,7 +391,22 @@ With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows
 | Method | `POST` |
 | URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
 | Header `Content-Type` | `application/json` |
-| Body | `{ "scopeId": "@{triggerBody()['text']}", "scopeType": "Capacity" }` |
+
+Body:
+
+```json
+{
+  "scopeType": "Capacity",
+  "scopeId": "@{triggerBody()['text']}",
+  "capacityId": "@{triggerBody()['text']}"
+}
+```
+
+> **`capacityId` is required, and it is not in the published API reference.** The reference documents `scopeType` and `scopeId` only; the preview service additionally validates `capacityId` and rejects the call with **`PropertyCannotBeDefault — property capacityId is not expected to have its default value`** when it is absent. Send all three for capacity scope — unknown properties are ignored, so there is no cost to the redundancy.
+>
+> Confirmed against the live service 2026-09-09, and already documented in `activate_policy_set.ps1` in `C:\GIT\ubs-policies`. That script is the authority for these payloads; the reference markdown beside it is not.
+>
+> **The activation scope type must match the policy set's own scope type**, or the call fails with `InvalidActivationScope`. Step 6 creates the set with `scope.type = Capacity`, so `Capacity` is correct here — but if that ever changes, both must change together.
 
 ⋯ → **Configure run after** `Run_rebuild` on **is successful** only. Activating rules that failed to build would put an unknown rule set into force.
 

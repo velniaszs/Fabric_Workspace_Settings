@@ -358,7 +358,7 @@ Called by the capacity-provisioning Power App immediately after it creates a cap
 5. Handle **202** — create is a long-running operation. Poll `GET /v1/operations/{x-ms-operation-id}` to a terminal state, then read the result. A `201` carries the policy set directly.
 6. Write the `CapacityPolicy` row: `capacity_id`, `capacity_name`, the **`node` lookup**, `policy_set_id` and `policy_set_name`.
 7. Call `RebuildCapacityPolicyRules`. A brand-new capacity normally has no OAP-enabled workspaces yet, so that emits **rule 1 alone** — the intended default, and it exercises the empty path on day one.
-8. Activate — `POST /v1/workspaces/{holderWs}/policySets/{id}/activate`, body `{ scopeId: capacityId, scopeType: "Capacity" }`. Tolerate `PolicySetIsAlreadyActive`. `PolicySetActivationConflict` means another set already owns the capacity and needs `allowReplace` — do **not** pass it blindly; surface it and let a human decide.
+8. Activate — `POST /v1/workspaces/{holderWs}/policySets/{id}/activate`, body `{ scopeType: "Capacity", scopeId: capacityId, capacityId: capacityId }`. **`capacityId` is undocumented but required** — without it the preview service returns `PropertyCannotBeDefault`; see `activate_policy_set.ps1`. Tolerate `PolicySetIsAlreadyActive`. `PolicySetActivationConflict` means another set already owns the capacity and needs `allowReplace` — a **query parameter**, `?allowReplace=True`, not a body property. Do **not** pass it blindly; surface it and let a human decide.
 
 > **Step 3 must come before step 4.** Creating the policy set first and then discovering there is no Node row leaves an orphaned set in Fabric that nothing maps back to. Resolve the cheap, reversible thing before the expensive, irreversible one.
 
