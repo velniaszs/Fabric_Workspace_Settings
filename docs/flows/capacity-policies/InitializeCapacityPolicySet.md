@@ -66,14 +66,18 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 > ```
 > trigger
 > Step 2   Initialize_policySetId / Initialize_outcome / Initialize_message
+>          Initialize_operationId / Initialize_opStatus
 > Step 3   Get_policy_row
 >          Condition_already_exists
 >            ├─ Yes:  3 × Set variable          ← AlreadyExists, then nothing else
->            └─ No:   Step 4  Get_capacities
->                            Filter_capacity
->                            Condition_eligible
->                              ├─ Yes: Steps 5, 6, 7, 8
->                              └─ No:  2 × Set variable   ← Skipped
+>            └─ No:   Step 4   Get_capacities
+>                             Filter_capacity
+>                             Condition_eligible
+>                               ├─ Yes: Step 4b  Get_node_row
+>                               │                Condition_node_missing
+>                               │                  ├─ Yes: 2 × Set variable  ← Failed, no Node row
+>                               │                  └─ No:  Steps 5, 6, 7, 8
+>                               └─ No:  2 × Set variable         ← Skipped
 > Step 9   Respond                              ← top level, reached by every path
 > ```
 >
@@ -176,6 +180,51 @@ Three separate reasons, one outcome:
 | Not in the list | Either it does not exist, or **the connection's identity** is not an admin on it — indistinguishable from here, and both mean this flow cannot proceed |
 | Not `Active` | A paused capacity cannot host a working policy set |
 | SKU is not `F*` | **Only Fabric capacities can hold a policy set.** Power BI SKUs — `P`, `A`, `EM`, `PP` — are a normal thing to encounter, not an error. `Skipped`, not `Failed` |
+
+---
+
+## Step 4b — Resolve the Node row
+
+**Inside Step 4's Yes branch, before Step 5.** This is the only flow that looks a capacity up in `ubsppcoe_Node`; every other flow reads the `node` lookup this step makes possible.
+
+`Get_node_row` — Dataverse **List rows**:
+
+| Field | Value |
+|---|---|
+| Table name | `Nodes` (`ubsppcoe_Node`) |
+| Filter rows | `ubsppcoe_nodeuniqueid eq @{triggerBody()['text']}` |
+| Row count | `1` |
+
+**The GUID is unquoted** — `ubsppcoe_nodeuniqueid` is a unique-identifier column, and the capacity id *is* the Node row key ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+
+**List rows, not *Get a row by ID*.** A `Get a row by ID` against a missing row fails the action with a `404`, which then needs a `Configure run after` to recover from. An empty `value` array is far easier to branch on.
+
+`Condition_node_missing` — **Condition**:
+
+| Left (expression) | Operator | Right |
+|---|---|---|
+| `empty(body('Get_node_row')?['value'])` | is equal to | `true` |
+
+**Yes branch** — two **Set variable** actions and nothing else:
+
+| Rename to | Name | Value |
+|---|---|---|
+| `Set_outcome_no_node` | `outcome` | `Failed` |
+| `Set_message_no_node` | `message` | `This capacity has no inventory record, so its workspaces cannot be determined. Ask the platform team to add a Node row, then run this again.` |
+
+**No branch** — **Steps 5 to 8 go inside it.**
+
+> ### Why this comes before the policy set is created
+>
+> **Resolve the cheap, reversible thing before the expensive, irreversible one.** Creating the policy set first and *then* discovering there is no Node row leaves a live policy set in the holder workspace that nothing in Dataverse maps back to — [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) reports it as `Untracked` and somebody cleans it up by hand.
+>
+> `Failed`, not `Skipped`: a missing Node row is a gap in the inventory that someone can close, unlike a P-SKU capacity which never becomes eligible.
+
+> ### What this step exists to prevent
+>
+> Without it the flow writes a `Capacity Policies` row with a **blank `node` lookup**. The `Run_rebuild` in 8b then hits [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a, which fails closed by design — and so does every rebuild afterwards, for the life of that capacity, until someone sets the lookup by hand.
+>
+> The capacity would be registered, activated and permanently un-rebuildable, with `Created` reported to the caller.
 
 ---
 
@@ -289,12 +338,26 @@ The created item is at `/result`, not on the operation itself. The operation onl
 
 ### 8a. `Add_policy_row` — Dataverse **Add a new row**
 
-| Column | Value |
+| Field | Value |
 |---|---|
-| `ubsppcoe_capacityid` | `triggerBody()['text']` |
-| `ubsppcoe_capacityname` | `triggerBody()['text_1']` |
-| `ubsppcoe_policysetid` | `variables('policySetId')` |
-| `ubsppcoe_status` | `Inactive` |
+| Table name | **`Capacity Policies`** (`ubsppcoe_CapacityPolicy`) |
+
+Then the columns:
+
+| Column | Logical name | Value |
+|---|---|---|
+| Capacity name | `ubsppcoe_capacityname` | `triggerBody()['text_1']` |
+| Capacity ID | `ubsppcoe_capacityid` | `triggerBody()['text']` |
+| **Node** | `ubsppcoe_node` | `/ubsppcoe_nodes(@{triggerBody()['text']})` |
+| Policy set ID | `ubsppcoe_policysetid` | `variables('policySetId')` |
+| Policy set name | `ubsppcoe_policysetname` | `outputs('Compose_name_final')` |
+| Status | `ubsppcoe_status` | `Inactive` |
+
+> **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Step 4b exists solely to make this line safe to write.
+>
+> **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's key. The capacity id works as that key because it *is* the Node row key. If the connector rejects it, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
+
+> **`ubsppcoe_policysetname` is written here and nowhere else.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) uses it to spot a policy set renamed by hand without spending a `GET` per set, and the rebuild never touches it. Leave it blank and that check silently compares against nothing.
 
 **Write the row before activating.** If activation fails, the policy set still exists in Fabric and must be recorded, or the next run creates a second one and `SyncCapacityPolicySets` reports a `Conflict` nobody caused.
 
@@ -302,7 +365,9 @@ The created item is at `/result`, not on the operation itself. The operation onl
 
 With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows for a policy row that was created seconds ago, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
 
-> **A brand-new capacity may have no `ubsppcoe_Node` row yet, and the rebuild fails closed on that** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5b. The policy set is still created and recorded, so this is recoverable: add the Node row and rerun. But if provisioning routinely creates the capacity before its inventory record, expect this step to fail on first run, and decide whether the provisioning app should order the two the other way round.
+> **A capacity with no `ubsppcoe_Node` row never reaches this step** — Step 4b stops it and returns `Failed` before anything is created in Fabric. What can still happen here is a Node row that exists but has **no OAP-enabled workspaces yet**, which is the normal state for a freshly provisioned capacity and produces rule 1 alone.
+>
+> If provisioning routinely creates the capacity before its inventory record, expect `Failed` from Step 4b on first run, and decide whether the provisioning app should order the two the other way round.
 
 ### 8c. `Activate` — **Invoke an HTTP request**
 
@@ -368,6 +433,8 @@ Every output **Text**. A field typed Number or Boolean fails schema validation a
 | 2 | Run again on the same capacity | `AlreadyExists`, no second policy set |
 | 3 | A P-SKU capacity | `Skipped`, no Fabric write attempted |
 | 4 | A capacity ID that does not exist | `Skipped` with a message saying it was not found or not administered |
+| 5 | **An F-SKU capacity with no `ubsppcoe_Node` row** | `Failed` from Step 4b, and **no policy set created** — check the holder workspace to confirm nothing was left behind |
+| 6 | **Open the `Capacity Policies` row test 1 created** | `Node` is populated, `Policy set name` matches the set in the portal. A blank `Node` means 8a's lookup did not bind, and every future rebuild of that capacity will fail |
 | 5 | A capacity whose display name contains `/` or `:` | Created with `_` in place of them |
 | 6 | Revoke Capacity Admin, then run | Row written, `status = Inactive`, `last_error` populated, outcome reports the failure. **The policy set must still be registered** |
 | 7 | Force a `202` if you can | The `/result` path resolves the correct policy set ID |
