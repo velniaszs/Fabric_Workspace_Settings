@@ -178,7 +178,21 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **`ubsppcoe_itemtype` is passed to Fabric unchanged.** No mapping, no casing fix, no trimming. A typo here produces a rule Fabric accepts and never matches.
 
-**Seed from `fabric_item_types.csv`** in `C:\GIT\ubs-policies` before building the rebuild flow. An empty table means rule 2 is emitted with an empty `item.type` list, which Fabric rejects.
+**Seed from [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv)** — 14 rows, ready to import. An empty table means rule 2 is emitted with an empty `item.type` list, which Fabric rejects.
+
+> ### One row per `ubsppcoe_itemtype`, and the source file is not
+>
+> That CSV is derived from `fabric_item_types.csv` in `C:\GIT\ubs-policies`, which has **22 rows for 14 distinct item types** — nine of them (`Mirrored Azure SQL Database`, `Mirrored Snowflake`, `Mirrored Oracle`, `Mirrored SAP` and the rest) all carry the single API enum `MirroredDatabase`.
+>
+> **Importing all 22 would break `ubsppcoe_active`.** The flag is per row, so clearing it on *Mirrored Snowflake* would remove nothing — the other eight rows still contribute `MirroredDatabase` to the rule. An admin would deactivate a type, see it still governed, and have no way to tell why.
+>
+> The deduplicated file collapses those nine into one row named *Mirrored Database (all sources)*. Retiring a type now does what it says. **Do not re-import the raw file over it.**
+>
+> The rebuild's `union` in Step 5g would have deduplicated the *published values* either way — this is about the table being honest, not about the rules being wrong.
+
+#### Importing it
+
+**Tables → `Policy Item Types` → Import → Import data from Excel**, then switch the file type to CSV. The headers are logical names and map automatically. `ubsppcoe_active` is a Yes/No column, so the literal `Yes` in the file is what the importer expects — not `true` or `1`.
 
 **This table has no effect on rule 3.** Exception rules carry no `item.type` condition at all, so retiring or adding a governed type changes nothing for excepted workspaces.
 
@@ -269,7 +283,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 3. **On each *New table* screen, set the primary column before saving** — expand **Advanced options** to set its logical name. This is the one thing you cannot change afterwards (§0).
 4. Add the remaining columns with **+ New column**. Everything marked *Add manually* in §2–§5; nothing marked *Automatic*.
 5. Set both `ubsppcoe_active` columns to default **No**.
-6. Seed `ubsppcoe_PolicyItemType` from `fabric_item_types.csv`.
+4. Seed `ubsppcoe_PolicyItemType` from [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv) — **not** from the raw `fabric_item_types.csv`, which has nine rows sharing one item type (§3).
 7. Seed `ubsppcoe_PolicyException` from `fabric_workspaces_exceptions.csv`, if one is in use.
 8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1.
 9. Only then start on [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.

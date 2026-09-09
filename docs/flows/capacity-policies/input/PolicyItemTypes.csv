@@ -1,0 +1,15 @@
+ubsppcoe_itemname,ubsppcoe_itemtype,ubsppcoe_active
+Lakehouse,Lakehouse,Yes
+Warehouse,Warehouse,Yes
+Eventhouse,Eventhouse,Yes
+Notebook,Notebook,Yes
+Spark Job Definition,SparkJobDefinition,Yes
+Dataflow Gen2 (with and without CICD),Dataflow,Yes
+Pipeline,DataPipeline,Yes
+Copy Job,CopyJob,Yes
+Mirrored Database (all sources),MirroredDatabase,Yes
+Variable Library,VariableLibrary,Yes
+Environment,Environment,Yes
+Graph Queryset,GraphQuerySet,Yes
+Graph Model,GraphModel,Yes
+KQL Queryset,KQLQueryset,Yes

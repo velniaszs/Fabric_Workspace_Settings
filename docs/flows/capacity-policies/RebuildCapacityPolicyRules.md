@@ -123,7 +123,29 @@ Add one input: **+ Add an input** → **Text**, titled `capacityId`. Referenced 
 > | Step 6 `Condition_too_many_rules` | Yes | a sibling after it |
 > | Step 5k `Condition_has_candidates` | **No** | **genuinely nested** — 5l, 5m and 5n live in its *No* branch |
 >
-> **5k is the one real branch**, and it is the exception that proves the rule: it has no Terminate, so its contents must be inside it.
+> **5k is the only Condition whose branch holds anything.** It has no Terminate, so its contents must be inside it.
+>
+> Two `Apply to each` loops also nest their contents, for the ordinary reason that loops do — Steps 7 and 7c. Everything else in the flow is a sibling at the top level:
+>
+> ```
+> trigger
+> Step 3   12 × Initialize variable
+> Step 4   Get_policy_row
+>          Condition_policy_exists          ── Yes: Respond + Terminate │ No: empty
+>          Set_policySetId / Set_nodeRowId / Set_policyRowId
+> Step 5   Condition_node_linked            ── Yes: Respond + Terminate │ No: empty
+>          5b … 5j
+>          Condition_has_candidates         ── No: 5l, 5m, 5n
+> Step 6   Set_chunkCount / Set_exceptionChunkCount
+>          Condition_too_many_rules         ── Yes: Respond + Terminate │ No: empty
+> Step 7   For_each_whitelist_chunk         ── Compose + Append
+> Step 7c  For_each_exception_chunk         ── Compose + Append
+> Step 8   Compose_rule1 / Compose_body
+> Step 9   Replace_rules
+> Step 10  Update_policy_row / Respond_rebuilt
+> ```
+>
+> **Steps 8–10 must sit after the loops, not inside them.** `Compose_body` reads `whitelistRules` and `exceptionRules`, which are only complete once both loops have finished. Dropped inside a loop it would run once per chunk against a half-filled array, and publish a policy set missing its later rules.
 >
 > **The Terminate actions are load-bearing.** The flat structure is safe *only* because they are there. Delete one while tidying up and the flow carries straight on past a failed guard — rebuilding a capacity from data it has just declared unusable, which is exactly what the guards exist to prevent.
 
@@ -518,6 +540,12 @@ This flow does not manage capacity size — it splits into as many rules as the 
 
 ### 7a. `Compose_whitelist_rule` — **Compose**, inside the loop
 
+> **Paste the block below straight into the `Inputs` box as plain text.** Do **not** open the expression editor (`fx`) and do not build it from dynamic content — the expression editor takes one expression, so a pasted JSON literal fails there for the same reason it failed in a `Select` map. Compose's `Inputs` accepts raw JSON, and the runtime evaluates the `@` tokens inside it.
+>
+> **Then check it with Peek code**, because the designer sometimes escapes a typed `@` as `@@`, which turns a live expression into literal text. In the peeked JSON you want to see `"values": "@take(...)"` — one `@`, and the expression *inside* the quotes. Two `@` means it will publish the word `@take(...)` to Fabric.
+>
+> The same applies to `Compose_exception_rule` and to both Composes in Step 8.
+
 ```json
 {
   "displayName": "@{if(greater(variables('chunkCount'), 1), concat('Approved item types for whitelisted workspaces (', string(add(items('For_each_whitelist_chunk'), 1)), '/', string(variables('chunkCount')), ')'), 'Approved item types for whitelisted workspaces')}",
@@ -605,6 +633,8 @@ Same shape as Step 7: a loop, a `Compose`, an append.
 ---
 
 ## Step 8 — Build rule 1 and the request body
+
+Both actions here are **Compose**, and both take pasted JSON in `Inputs` — same method and same `@@` check as Step 7a.
 
 ### 8a. `Compose_rule1` — **Compose**
 
@@ -741,6 +771,27 @@ A caller reading a field that the branch it happened to take never declared gets
 ---
 
 ## To verify after building
+
+### What has to exist before the first run
+
+**This flow never creates a policy set.** It rewrites the rules of one that already exists, addressed by `policySetId`. With nothing seeded, the very first thing you hit is the Step 4 guard — which is test 6, not test 1.
+
+The build order deliberately puts this flow **before** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), the flow that would normally create and register the set. So for now, seed it by hand:
+
+| # | What | How |
+|---|---|---|
+| 1 | A **throwaway capacity that already has a `ubsppcoe_Node` row** | Pick an existing one. **Do not create the Node row** — that table belongs to the platform team and nothing in this project writes it (§0). If no spare capacity has one, that is a request to them, not a workaround |
+| 2 | A **policy set** in the holder workspace, scoped to that capacity | `POST /v1/workspaces/{holderWs}/policySets` by hand, or the Fabric portal. **Leave it deactivated** |
+| 3 | A row in **`Capacity Policies`** | `ubsppcoe_capacityid` = the capacity GUID · `ubsppcoe_policysetid` = the new set's GUID · `ubsppcoe_node` = the Node row from 1 |
+| 4 | At least one active row in **`Policy Item Types`** | Import [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv). Only needed once a workspace is whitelisted — see the warning below |
+
+**Rules: none needed.** A freshly created policy set has no rules at all, and that is the right starting point — `replaceByPolicy` overwrites whatever is there, including nothing. Test 1 then proves the flow puts the deny-all baseline in.
+
+**Names: irrelevant to this flow.** It addresses the policy set by GUID and never reads or writes its display name. `pol_<capacity>` is a convention that flow 1 applies at creation, and `ubsppcoe_policysetname` on the row is only read by the drift scan and the app. Call your test set anything.
+
+> **Leave the policy set deactivated while testing.** Rule 1 is a deny-all baseline, so an *activated* set with the rules this flow publishes will genuinely stop item creation on that capacity. Deactivated, every rule is written and visible in the portal and nothing is enforced — which is all you need to verify tests 1–18. Activation is flow 1's job, on a capacity you have decided to govern.
+
+> **Seed `Policy Item Types` before testing anything with a whitelisted workspace.** With no active item types, rule 2 is emitted with an empty `item.type` array and Fabric rejects the whole call — taking the rebuild down for a reason that looks like a bug in the rule builder. Test 1 has zero whitelisted workspaces so it passes regardless; test 2 is where an unseeded table bites.
 
 | # | Test | Expect |
 |---|---|---|
