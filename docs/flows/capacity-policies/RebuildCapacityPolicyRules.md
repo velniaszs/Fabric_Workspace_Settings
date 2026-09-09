@@ -433,15 +433,37 @@ Step 6 onwards resume at the top level, outside this Condition.
 | Field | Value |
 |---|---|
 | Table name | `Workspaces` (`ubsppcoe_Workspace`) |
-| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and ubsppcoe_workspaceid in (@{concat('''', join(variables('exceptionCandidates'), ''','''), '''')})` |
+| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and (ubsppcoe_workspaceid eq '@{join(variables('exceptionCandidates'), ''' or ubsppcoe_workspaceid eq ''')}')` |
 | Select columns | `ubsppcoe_workspaceid` |
 | Row count | `5000` |
 
 **This is the join that decides which capacity an exception applies to.** An excepted workspace whose `Node` is another capacity — or whose row was deleted — matches nothing here and is absent from this capacity's rule 3. That is what makes a capacity move need no cleanup: the old capacity's next rebuild drops it, the new capacity's next rebuild picks it up.
 
-The `concat`/`join` builds `'guid','guid','guid'` for the `in` operator. Quoting is the whole difficulty: `''''` is a single literal apostrophe, and `''','''` is `','` — check the built filter in the run history's action inputs the first time, not the expression in the designer.
+> ### The parentheses around the `or` chain are load-bearing
+>
+> Without them the filter reads `A and B or C or D`, which OData groups as **`(A and B) or C or D`**. The Node condition would then constrain only the first candidate, and **every other excepted workspace in the tenant would match regardless of which capacity it is on** — publishing other capacities' workspaces into this capacity's rule 3.
+>
+> It fails silently and the filter still looks plausible. This is the single most dangerous expression in the flow.
 
-> **`in` is a Dataverse `$filter` operator and the connector passes it through.** If your environment rejects it, build a chain of `or` clauses with the same `join` technique instead: `join(variables('exceptionCandidates'), ''' or ubsppcoe_workspaceid eq ''')`. Same result, longer string.
+The `join` builds `g1' or ubsppcoe_workspaceid eq 'g2`, which the surrounding literal apostrophes close into a valid chain. Quoting is the whole difficulty: **`''` inside an expression string is one literal apostrophe**, so the separator `''' or ubsppcoe_workspaceid eq '''` produces `' or ubsppcoe_workspaceid eq '`.
+
+**Check the built string on the first run** — open 5l → **Inputs → Filter rows**. With two candidates you want exactly:
+
+```
+_ubsppcoe_nodeid_value eq 6f9a… and (ubsppcoe_workspaceid eq 'g1' or ubsppcoe_workspaceid eq 'g2')
+```
+
+Doubled or missing apostrophes mean the `'''` quoting is off. Read this from the run history, never from the expression in the designer.
+
+> ### Why this is an `or` chain and not `in`
+>
+> `in` is a documented Dataverse `$filter` operator and reads far better, but **it is rejected in this environment — confirmed 2026-09-09.** The connector answers **`501 NotImplemented`**.
+>
+> The symptom is nastier than a plain failure: `501` is a `5xx`, so the action's default retry policy keeps retrying something that can never succeed. It presents as a `List rows` sitting at *0 seconds duration* with a growing retry count for half an hour, rather than as an error.
+>
+> **While debugging any Dataverse filter, set that action's Retry Policy to None** (⋯ → Settings). A malformed filter is permanent, and the default policy turns a five-second failure into a thirty-minute one. Put it back afterwards.
+>
+> If a future environment does accept `in`, the equivalent is `ubsppcoe_workspaceid in (@{concat('''', join(variables('exceptionCandidates'), ''','''), '''')})` — shorter, and it needs no parentheses because `in` is a single operand.
 
 > **`ubsppcoe_oapenabled` is deliberately not in this filter.** An exception grants regardless of the flag; only the `Node` is required. Adding `and ubsppcoe_oapenabled eq true` here would silently reduce rule 3 to a subset of rule 2 and make the whole feature a no-op.
 
@@ -782,10 +804,14 @@ The build order deliberately puts this flow **before** [InitializeCapacityPolicy
 |---|---|---|
 | 1 | A **throwaway capacity that already has a `ubsppcoe_Node` row** | Pick an existing one — see below for how to tell. **Do not create the Node row** — that table belongs to the platform team and nothing in this project writes it (§0). If no spare capacity has one, that is a request to them, not a workaround |
 | 2 | A **policy set** in the holder workspace, scoped to that capacity | `POST /v1/workspaces/{holderWs}/policySets` by hand, or the Fabric portal. **Leave it deactivated** |
-| 3 | A row in **`Capacity Policies`** | `ubsppcoe_capacityid` = the capacity GUID · `ubsppcoe_policysetid` = the new set's GUID · `ubsppcoe_node` = the Node row from 1 |
+| 3 | A row in **`Capacity Policies`**, created **by hand** | Tables → Capacity Policies → Data → **+ New row**. `ubsppcoe_capacityid` = the capacity GUID · `ubsppcoe_policysetid` = the set's GUID from 2 · `ubsppcoe_node` = the Node row from 1 · `ubsppcoe_status` = `Inactive`. Leave `lastrebuild`, `lasterror` and the three counts **empty** — Step 10a fills them, and watching that happen is part of the test |
 | 4 | At least one active row in **`Policy Item Types`** | Import [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv). Only needed once a workspace is whitelisted — see the warning below |
 
 **Rules: none needed.** A freshly created policy set has no rules at all, and that is the right starting point — `replaceByPolicy` overwrites whatever is there, including nothing. Test 1 then proves the flow puts the deny-all baseline in.
+
+> **The `Node` lookup is picked by name, not by GUID.** The row selector shows `ubsppcoe_nodename`, so you need the node's name rather than the capacity id you started from. The Web API check below returns exactly that — `?$select=ubsppcoe_nodename`.
+
+> **This hand-made row will make flow 1 skip this capacity later.** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) returns `AlreadyExists` and stops when a `Capacity Policies` row already carries a `policy_set_id` — correct behaviour, but it means your test row masks the path you will want to test next. Delete it before building flow 1, or test flow 1 against a different capacity.
 
 **Names: irrelevant to this flow.** It addresses the policy set by GUID and never reads or writes its display name. `pol_<capacity>` is a convention that flow 1 applies at creation, and `ubsppcoe_policysetname` on the row is only read by the drift scan and the app. Call your test set anything.
 
