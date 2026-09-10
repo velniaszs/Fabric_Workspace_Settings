@@ -108,7 +108,7 @@ Set the group's join to **Or** and add a second row:
 |---|---|
 | Table name | `Capacity Policies` |
 | Filter rows | `ubsppcoe_status eq 'Inactive' and ubsppcoe_policysetid ne null and ubsppcoe_rulecount gt 1` |
-| Select columns | `ubsppcoe_capacitypolicyid,ubsppcoe_capacityid,ubsppcoe_capacityname,ubsppcoe_policysetid,ubsppcoe_rulecount` |
+| Select columns | `ubsppcoe_capacitypolicyid,ubsppcoe_capacityid,ubsppcoe_capacityname,ubsppcoe_policysetid,ubsppcoe_rulecount,ubsppcoe_workspacecount,ubsppcoe_exceptioncount` |
 | Sort by | `ubsppcoe_capacityname asc` |
 | Row count | `5000` |
 
@@ -145,10 +145,16 @@ Each clause earns its place:
 **Yes** — `Append_would_activate`, **Append to array variable** `wouldActivate`:
 
 ```
-@{concat(items('For_each_policy')?['ubsppcoe_capacityname'], ' (', items('For_each_policy')?['ubsppcoe_capacityid'], ') — ', string(items('For_each_policy')?['ubsppcoe_rulecount']), ' rules')}
+@{concat(items('For_each_policy')?['ubsppcoe_capacityname'], ' (', items('For_each_policy')?['ubsppcoe_capacityid'], ') — ', string(items('For_each_policy')?['ubsppcoe_rulecount']), ' rules, ', string(items('For_each_policy')?['ubsppcoe_workspacecount']), ' whitelisted workspace(s), ', string(items('For_each_policy')?['ubsppcoe_exceptioncount']), ' exception(s)')}
 ```
 
 And nothing else. **No Fabric call, no Dataverse write.**
+
+> **The workspace and exception counts are in that line for the coverage read.** They cost nothing — the rebuild already stamped them and the query already selects them — and they turn the dry run into a first look at who is about to be denied.
+>
+> A capacity showing **many rules and few whitelisted workspaces** is the shape to look for. It passes the `rulecount gt 1` filter and will activate cleanly, and it may still deny item creation to most of the teams working on it, because `workspacecount` counts only workspaces with `ubsppcoe_oapenabled = true`.
+>
+> What this still cannot tell you is the **total** number of workspaces under each capacity's Node, which is what turns these counts into a denial count. That needs a query against `ubsppcoe_Workspace` per capacity and is not built yet — so read this list as a smell test, not as sign-off.
 
 **No** — 4b, 4c and 4d go here.
 
