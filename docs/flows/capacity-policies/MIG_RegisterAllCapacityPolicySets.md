@@ -200,13 +200,52 @@ After the loop, at the top level.
 
 ### 5b. `Condition_anything_to_report` — **Condition**
 
+**At the top level, after `For_each_capacity` closes.** It reads totals that only exist once every iteration has finished; inside the loop it would fire once per capacity against a half-filled array.
+
 | Left (expression) | Operator | Right |
 |---|---|---|
 | `add(length(variables('failures')), length(variables('noNode')))` | is greater than | `0` |
 
-**Yes** → send a mail or post to Teams with `outputs('Compose_summary')`, then the two lists under their own headings. **Keep them under separate headings** — one goes to the platform team, the other does not.
+**Yes** → `Send_migration_report` — **Office 365 Outlook**, *Send an email (V2)*.
 
-**No** → empty. But unlike the nightly job, **do read the summary from the run history either way.** This is a supervised one-off, and "registered 187 of 200 with nothing to report" is a contradiction worth noticing.
+> **This adds an Office 365 Outlook connection to the flow**, which is otherwise Fabric-only. Expect the "you may break your Power Apps triggered flow" warning; it is benign here because nothing calls this flow.
+
+**Subject:**
+
+```
+@{concat('Capacity policy migration — ', string(variables('registered')), ' registered, ', string(length(variables('noNode'))), ' no Node row, ', string(length(variables('failures'))), ' failed')}
+```
+
+**The three numbers go in the subject deliberately.** This is a supervised one-off run in tranches, so the person reading it wants the shape of the result without opening anything — and a subject line that is identical on every run is one nobody reads by the fourth tranche.
+
+**Body** — switch the box to **</>** (code view) and paste:
+
+```html
+<p><b>MIG_RegisterAllCapacityPolicySets</b> completed @{utcNow()}.</p>
+<p>
+Eligible capacities (Active, F SKU): <b>@{length(body('Filter_eligible'))}</b><br>
+Registered this run: <b>@{variables('registered')}</b><br>
+No Node row: <b>@{length(variables('noNode'))}</b><br>
+Failed: <b>@{length(variables('failures'))}</b>
+</p>
+<p>Every policy set created is <b>deactivated and has no rules</b>. Nothing is enforced yet.</p>
+@{if(empty(variables('noNode')), '', concat('<h3>No Node row &mdash; for the platform team</h3><p>These capacities exist in Fabric but have no <code>ubsppcoe_Node</code> row, so their workspaces cannot be determined. Nothing was created for them. They cannot be migrated until a Node row exists.</p><p>', join(variables('noNode'), '<br>'), '</p>'))}
+@{if(empty(variables('failures')), '', concat('<h3>Failed &mdash; fix and re-run</h3><p>', join(variables('failures'), '<br>'), '</p>'))}
+<p>Re-running this flow is safe. Capacities already registered return <code>AlreadyExists</code> and are skipped, so only the entries above are retried.</p>
+<p>Next: seed <code>Policy Exceptions</code>, then run <code>RebuildAllCapacityPolicies</code>. Do not activate anything until both are done.</p>
+```
+
+Four things that body is doing, none of them decoration:
+
+**It says nothing is enforced.** The reader's first question on seeing "migration" and "failed" in a subject line is whether anything is broken. Answer it in the first screen.
+
+**It separates the two lists under their own headings**, because they go to different people. The `noNode` list is handed to the platform team verbatim; the `failures` list is yours.
+
+**It wraps each list in `if(empty(...))`** so a clean category produces no heading at all, rather than a heading over nothing. An empty "Failed" section reads as a failure at a glance.
+
+**It states the next step.** The gap between registering and activating is days, across tranches, and the ordering — exceptions before rebuild, rebuild before activation — is the part that silently changes access if it is done wrong.
+
+**No** → empty. But **read the summary from the run history either way.** This is a supervised one-off, and "registered 187 of 200 with nothing to report" is a contradiction worth noticing.
 
 > **Do not write any of this to `Policy Drift`.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, so anything written here would vanish at an interval nobody is thinking about. The same reasoning as [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §4.
 
