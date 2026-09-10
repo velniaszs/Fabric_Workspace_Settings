@@ -67,14 +67,36 @@ Four `Initialize variable` actions, **at the top level**.
 
 | Rename to | Name | Type | Value |
 |---|---|---|---|
+| `Initialize_mode` | `mode` | **String** | `toLower(trim(coalesce(triggerBody()['text'], '')))` |
 | `Initialize_activated` | `activated` | Integer | `0` |
 | `Initialize_failures` | `failures` | **Array** | *(leave empty)* |
 | `Initialize_wouldActivate` | `wouldActivate` | **Array** | *(leave empty)* |
-| `Initialize_isReport` | `isReport` | Boolean | `equals(toLower(triggerBody()['text']), 'report')` |
 
-> **`isReport` is computed once, in a variable, rather than re-evaluated in each Condition.** Two conditions read it, and a mode string compared inconsistently — one place case-sensitive, one not — is how a dry run turns into a live run.
+> **`mode` is a String, not a Boolean, and that is deliberate.** The obvious version is a Boolean `isReport` holding `equals(toLower(triggerBody()['text']), 'report')`, then a Condition comparing it to `true`. **Do not do that.** Comparing a real boolean against a right-hand box containing the text `true` is the classic silent mismatch in this editor — the same trap documented at [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 4. Two strings compared as strings cannot misfire.
 >
-> Note the polarity: **anything that is not `report` is treated as live.** A typo like `Reprot` activates. If you would rather it failed closed, add a guard after Step 2 that terminates unless the mode is exactly one of the two words.
+> `toLower` and `trim` mean `Activate`, `activate` and ` ACTIVATE ` all work. `coalesce(…, '')` keeps the expression from throwing if the input somehow arrives null.
+
+### 2b. `Condition_valid_mode` — **Condition**
+
+| Left | Operator | Right |
+|---|---|---|
+| `variables('mode')` | is equal to | `report` |
+
+Set the group's join to **Or** and add a second row:
+
+| Left | Operator | Right |
+|---|---|---|
+| `variables('mode')` | is equal to | `activate` |
+
+**No branch** — **Control** → **Terminate**, Status **`Failed`**, with the message `mode must be exactly 'Report' or 'Activate'.`
+
+**Yes branch** — leave empty; Steps 3 onward are siblings at the top level.
+
+> ### This guard exists because the flow otherwise fails open
+>
+> Without it the logic is *"report if the mode says report, activate otherwise"* — so `Reprot`, `REPOR`, an empty string or a stray space **activates the entire estate**. That is the wrong direction to fail for the only flow here that takes access away from people.
+>
+> With the guard, anything that is not one of the two exact words stops the run before Step 3 reads a single row. **Terminate is safe in this flow** because there is no `Respond` — nothing is waiting on it, unlike the child flows where a Terminate would leave the caller with a bare fault.
 
 ---
 
@@ -118,7 +140,7 @@ Each clause earns its place:
 
 | Left | Operator | Right |
 |---|---|---|
-| `variables('isReport')` | is equal to | `true` |
+| `variables('mode')` | is equal to | `report` |
 
 **Yes** — `Append_would_activate`, **Append to array variable** `wouldActivate`:
 
@@ -205,32 +227,54 @@ Tolerate `PolicySetIsAlreadyActive` — the end state is what was wanted. If it 
 
 ## Step 5 — Report
 
-After the loop, at the top level.
+After the loop, **at the top level**.
 
-`Condition_report_summary` — **Condition** on `variables('isReport')` equal to `true`.
+`Condition_report_summary` — **Condition**:
 
-**Yes** — `Compose_report`:
+| Left | Operator | Right |
+|---|---|---|
+| `variables('mode')` | is equal to | `report` |
 
-```
-@{concat(
-  'DRY RUN — nothing was activated.\n',
-  string(length(variables('wouldActivate'))), ' policy set(s) would be activated:\n\n',
-  join(variables('wouldActivate'), '\n')
-)}
-```
+Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate actions, because a dry run and a live run should not look alike in an inbox.
 
-**No** — `Compose_result`:
+### Yes — the dry run
+
+**Subject:**
 
 ```
-@{concat(
-  'Activated ', string(variables('activated')),
-  ' of ', string(length(body('List_inactive_rows')?['value'])), ' candidates.\n',
-  'Failed: ', string(length(variables('failures'))), '\n\n',
-  join(variables('failures'), '\n')
-)}
+@{concat('DRY RUN — ', string(length(variables('wouldActivate'))), ' capacity policy set(s) would be activated')}
 ```
 
-Send either to mail or Teams. **Send it on a clean run too** — unlike the nightly job, this runs once and somebody needs the record of what happened.
+**Body** — switch the box to **</>** and paste:
+
+```html
+<p><b>Nothing was activated.</b> This was a dry run of <code>MIG_ActivateAllCapacityPolicySets</code>, @{utcNow()}.</p>
+<p><b>@{length(variables('wouldActivate'))}</b> policy set(s) would be activated by running it again with mode <code>Activate</code>.</p>
+<p>Each has a rule count greater than 1, meaning its rules have been rebuilt. Activating puts the deny-all baseline into force on that capacity.</p>
+@{if(empty(variables('wouldActivate')), '<p>Nothing is pending. Either the estate is already activated, or RebuildAllCapacityPolicies has not run.</p>', concat('<p>', join(variables('wouldActivate'), '<br>'), '</p>'))}
+```
+
+### No — the live run
+
+**Subject:**
+
+```
+@{concat('Capacity policy ACTIVATION — ', string(variables('activated')), ' activated, ', string(length(variables('failures'))), ' failed')}
+```
+
+**Body:**
+
+```html
+<p><b>@{variables('activated')}</b> of <b>@{length(body('List_inactive_rows')?['value'])}</b> candidate policy set(s) were activated, @{utcNow()}.</p>
+<p><b>Item creation is now restricted on those capacities.</b> Only whitelisted workspaces may create governed item types; Power BI items are unaffected.</p>
+@{if(empty(variables('failures')), '<p>No failures.</p>', concat('<h3>Failed &mdash; still inactive, not enforced</h3><p>These capacities were left unchanged and are not governed. Their <code>last_error</code> column carries the reason.</p><p>', join(variables('failures'), '<br>'), '</p>'))}
+<p>Re-running is safe: only rows still marked <code>Inactive</code> are picked up.</p>
+<p>To reverse one capacity: <code>deactivate_policy_set.ps1</code>, then set its <code>Status</code> back to <code>Inactive</code>.</p>
+```
+
+**Send the live one on a clean run too.** Unlike the nightly job, this runs once and somebody needs the record of when the estate went under enforcement.
+
+> **Do not use `'\n'` for line breaks in these expressions.** This expression language does not interpret `\n` as a newline — it emits a literal backslash-n. In HTML use `<br>`, as above; in a plain-text Compose use `decodeUriComponent('%0A')`.
 
 ---
 
@@ -257,6 +301,7 @@ Send either to mail or Teams. **Send it on a clean run too** — unlike the nigh
 |---|---|---|
 | 1 | `Report` against a populated table | The list, a count, and **zero** Fabric calls in the run history. Check the action list, not just the output |
 | 2 | `Report` twice | Identical output. It writes nothing, so it cannot converge on anything |
+| 2b | **Mode `Reprot`, and mode left blank** | Terminates at 2b. **Nothing activated.** The fail-closed guard |
 | 3 | `Activate` on one throwaway capacity | Policy set active in the portal, row flips to `Active`, `lasterror` empty |
 | 4 | Run again immediately | **Zero candidates.** The `status eq 'Inactive'` filter is what makes this safe |
 | 5 | A row whose `ubsppcoe_rulecount` is empty | Absent from the candidate list. **The unrebuilt-capacity guard** |

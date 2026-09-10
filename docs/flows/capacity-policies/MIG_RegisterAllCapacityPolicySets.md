@@ -192,11 +192,15 @@ After the loop, at the top level.
 ```
 @{concat(
   'Registered: ', string(variables('registered')),
-  ' of ', string(length(body('Filter_eligible'))), ' eligible capacities.',
-  '\nNo Node row: ', string(length(variables('noNode'))),
-  '\nFailed: ', string(length(variables('failures')))
+  ' of ', string(length(body('Filter_eligible'))), ' eligible capacities. ',
+  'No Node row: ', string(length(variables('noNode'))), '. ',
+  'Failed: ', string(length(variables('failures'))), '.'
 )}
 ```
+
+> **Do not put `'\n'` in that expression.** This expression language does not interpret `\n` as a newline — it emits a literal backslash-n into the output. For a line break in a plain-text Compose use `decodeUriComponent('%0A')`; in the email body below, use `<br>`.
+
+Redundant once 5b's email is built, since the body computes the same numbers inline. Keep it only for the run-history record on a **cancelled** tranche, where the flow never reaches 5b and no email is sent.
 
 ### 5b. `Condition_anything_to_report` — **Condition**
 
