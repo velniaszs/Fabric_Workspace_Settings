@@ -36,7 +36,10 @@ Three reasons, and the first is the one that forces the issue.
 - Build this **before** [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), which calls it.
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
 - The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md).
-- Easiest build path: **copy `InitializeCapacityPolicySet`**, change the trigger, and delete Steps 4, 8b, 8c, 8d and 8e.
+
+> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. This is the same constraint recorded in [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) Step 1 and [GetFabricToken.md](docs/flows/nocustomcon/GetFabricToken.md).
+>
+> It is about twenty actions and every value is below, so building it from this document is quicker than fighting the platform. **Use ⋯ → *Copy to my clipboard* on the three Step 5 Composes** and paste them into the new flow — those expressions are long enough that retyping them is where a typo would come from, and they are unchanged from the BAU flow.
 
 ---
 
@@ -91,10 +94,12 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 >                                                 └─ No:  202 branch
 >                                       Step 8  Add_policy_row
 >                                               Set_outcome_registered
-> Step 9   Respond                              ← top level
+> Step 9   Respond                              ← top level, run after: succeeded + failed + skipped
 > ```
 >
 > **Step 8 is a sibling of `Condition_created_sync`, not a child of either branch.** Both branches exist only to resolve `policySetId`; they converge and the registration happens once, after. This is the mistake that cost an afternoon on the BAU flow.
+>
+> **Nothing else nests, and there is no failure branch.** A step that fails — typically `Create_policy_set` on a duplicate name — skips everything after it, and Step 9's run-after settings are what turn that into a usable answer instead of a bare fault. See Step 9.
 
 ---
 
@@ -307,13 +312,27 @@ And a second **Set variable** for `message`: `concat('Policy set created and reg
 
 ## Step 9 — Respond
 
-**Respond to a Power App or flow**, at the **top level**, run after the last action on **is successful** and **has failed**. Three **Text** outputs:
+**Respond to a Power App or flow**, at the **top level**. ⋯ → **Configure run after** on `Set_outcome_registered` with **is successful**, **has failed** *and* **is skipped** ticked. Three **Text** outputs:
 
 | Output | Value |
 |---|---|
 | `Outcome` | `variables('outcome')` |
 | `PolicySetId` | `variables('policySetId')` |
-| `Message` | `variables('message')` |
+| `Message` | the expression below |
+
+```
+if(empty(variables('message')), concat('Failed at or after policy set creation: ', coalesce(body('Create_policy_set')?['message'], body('Create_policy_set')?['errorCode'], string(outputs('Create_policy_set')?['statusCode']), 'no detail available')), variables('message'))
+```
+
+> ### These three run-after ticks are the whole error handling, and they replace a failure branch
+>
+> **Tick `is skipped`, not just the usual two.** Run-after has four states, and an action downstream of a failure is *skipped*, not *failed*. With only succeeded + failed, a failed `Create_policy_set` skips everything after it, no `Respond` fires, and the parent records the generic `'child flow failed'` — losing the reason. Across 200 capacities, where duplicate display names and permission gaps are both likely, that reason **is** the deliverable.
+>
+> **The `Message` expression is what recovers it.** `outcome` is already seeded `Failed` in Step 2, so it needs nothing. `message` is empty on any path that died mid-flow, and a failed action's `body(...)` is still readable afterwards — so the fallback pulls the API's own error text out of `Create_policy_set`. On the `AlreadyExists` and no-Node paths `message` is non-empty, so the fallback is never reached.
+>
+> **This is deliberately flatter than a `Condition` guarding the create.** A branch would work and would read more explicitly, but it means nesting Steps 7 and 8 inside it — and in this designer that is a lot of dragging for an outcome three run-after ticks already achieve.
+>
+> The BAU flow has no equivalent because a single interactive call surfaces the fault to the app directly. A loop swallows it.
 
 `outcome` values: `Registered`, `AlreadyExists`, `Failed`.
 
@@ -334,8 +353,9 @@ Run it directly from the designer for tests 1–5, then let the parent drive it.
 | 3 | Run again on the same capacity | `AlreadyExists`, and **no second policy set** |
 | 4 | A capacity with **no** Node row | `Failed`, and **nothing created in Fabric** — check the holder workspace to confirm |
 | 5 | Blank the `Node` lookup on a row, then run `RebuildCapacityPolicyRules` against it | It fails closed. Confirms what test 2 is protecting against |
-| 6 | Two capacities with the same display name | The second fails with `ItemDisplayNameAlreadyInUse` unless you added the ID suffix in 5a |
+| 6 | Two capacities with the same display name | The second returns **`Failed` with the `ItemDisplayNameAlreadyInUse` message**, not a bare flow fault. This is what 7a buys |
 | 7 | Call it from a throwaway parent with `Run a Child Flow` | The three outputs arrive and are readable. **Do this before building the real parent** |
+| 8 | Point the holder-workspace environment variable at a workspace the identity cannot write, and run | `Failed` with a permission message in `Message`, and the parent can print it |
 
 Test 1 is the one to check in the portal by eye. A policy set that arrives **activated** means Step 8c was not deleted from the copy — and that is deny-all in force on a capacity nobody approved.
 
