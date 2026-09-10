@@ -155,38 +155,31 @@ Pass, in trigger order:
 |---|---|
 | On | `coalesce(body('Run_initialize')?['outcome'], 'Failed')` |
 
-Four branches:
+Four branches plus the default:
 
 | Case | Contents |
 |---|---|
 | `Registered` | `Increment_registered` — **Increment variable** `registered` by `1` |
 | `AlreadyExists` | *(empty)* |
-| `Failed` | see below |
-| **Default** | same as `Failed` — reuse it by leaving `Failed` as the default case if the designer allows, or duplicate the append |
+| `NoNode` | `Append_no_node` — **Append to array variable** `noNode` |
+| `Failed` | `Append_failure` — **Append to array variable** `failures` |
+| **Default** | `Append_failure_unknown` — append to `failures`. Catches a child that returned nothing at all |
 
-**`Failed` branch** — a **Condition** on whether it is the Node case, then one of two appends:
-
-`Condition_no_node`:
-
-| Left (expression) | Operator | Right |
-|---|---|---|
-| `contains(coalesce(body('Run_initialize')?['message'], ''), 'No Node row')` | is equal to | `true` |
-
-**Yes** → `Append_no_node` — **Append to array variable** `noNode`:
+`Append_no_node`:
 
 ```
 @{concat(items('For_each_capacity')?['displayName'], ' (', items('For_each_capacity')?['id'], ')')}
 ```
 
-**No** → `Append_failure` — **Append to array variable** `failures`:
+`Append_failure` and `Append_failure_unknown`:
 
 ```
-@{concat(items('For_each_capacity')?['displayName'], ' (', items('For_each_capacity')?['id'], '): ', coalesce(body('Run_initialize')?['message'], 'child flow failed'))}
+@{concat(items('For_each_capacity')?['displayName'], ' (', items('For_each_capacity')?['id'], '): ', coalesce(body('Run_initialize')?['message'], 'child flow returned no message'))}
 ```
 
-> **Matching on the message text is fragile, and it is the pragmatic choice.** The clean alternative is a distinct outcome value — `NoNode` rather than `Failed` — in the child's Step 4. If you prefer that, change both: the child's `Set_outcome_no_node` to `NoNode`, and this Switch to a fifth case. It is strictly better and costs one extra branch.
+> **The child emits `NoNode` as a distinct outcome so this Switch can branch on it directly.** An earlier draft matched on the message text with `contains(…, 'No Node row')`, which works and is fragile — an edit to the wording silently reclassifies every capacity in that state. One extra Switch case removes the coupling.
 >
-> Either way, **do not let the two collapse.** The distinction is the point of §2.
+> **The Default case is not decoration.** `Run_initialize` is configured to run after **has failed**, so a child that died without responding lands here with a null body. Without a Default, that capacity is counted nowhere and the run reports a clean sweep it did not achieve.
 
 ---
 

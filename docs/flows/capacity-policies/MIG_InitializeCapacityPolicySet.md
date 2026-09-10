@@ -161,10 +161,12 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 
 | Rename to | Name | Value |
 |---|---|---|
-| `Set_outcome_no_node` | `outcome` | `Failed` |
+| `Set_outcome_no_node` | `outcome` | `NoNode` |
 | `Set_message_no_node` | `message` | `No Node row for this capacity, so its workspaces cannot be determined. Ask the platform team to add one, then re-run.` |
 
 **No branch** — Steps 5 to 8 go inside it.
+
+> **`NoNode`, not `Failed`, and the distinction is the point.** This is not something you can fix — it is a gap in the platform team's inventory, and it needs a different conversation from a duplicate name or a permissions error. The parent switches on this value directly to keep the two lists apart ([MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) §2).
 
 > **This is the finding migration exists to surface.** Nothing else in the estate reveals a capacity with no inventory record, and the consequence is severe: registered, activated, and permanently un-rebuildable, because [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a fails closed on a blank `node` lookup, for the life of that capacity.
 >
@@ -334,7 +336,7 @@ if(empty(variables('message')), concat('Failed at or after policy set creation: 
 >
 > The BAU flow has no equivalent because a single interactive call surfaces the fault to the app directly. A loop swallows it.
 
-`outcome` values: `Registered`, `AlreadyExists`, `Failed`.
+`outcome` values: `Registered`, `AlreadyExists`, `NoNode`, `Failed`.
 
 **There is no `Skipped`.** The parent filters for Active F-SKU capacities before calling, so ineligibility never reaches this flow — see §0.
 
@@ -351,7 +353,7 @@ Run it directly from the designer for tests 1–5, then let the parent drive it.
 | 1 | A throwaway F-SKU capacity with a Node row and no `Capacity Policies` row | `Registered`. One policy set in the holder workspace with **no rules** and **not activated** |
 | 2 | **Open the row it created** | `Node` populated, `Status` = `Inactive`, `Policy set name` matches the portal, `lastrebuild` and the three counts **empty** |
 | 3 | Run again on the same capacity | `AlreadyExists`, and **no second policy set** |
-| 4 | A capacity with **no** Node row | `Failed`, and **nothing created in Fabric** — check the holder workspace to confirm |
+| 4 | A capacity with **no** Node row | **`NoNode`**, and **nothing created in Fabric** — check the holder workspace to confirm |
 | 5 | Blank the `Node` lookup on a row, then run `RebuildCapacityPolicyRules` against it | It fails closed. Confirms what test 2 is protecting against |
 | 6 | Two capacities with the same display name | The second returns **`Failed` with the `ItemDisplayNameAlreadyInUse` message**, not a bare flow fault. This is what 7a buys |
 | 7 | Call it from a throwaway parent with `Run a Child Flow` | The three outputs arrive and are readable. **Do this before building the real parent** |
