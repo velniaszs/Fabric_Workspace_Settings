@@ -67,14 +67,14 @@ Four `Initialize variable` actions, **at the top level**.
 
 | Rename to | Name | Type | Value |
 |---|---|---|---|
-| `Initialize_mode` | `mode` | **String** | `toLower(trim(coalesce(triggerBody()['text'], '')))` |
+| `Initialize_mode` | `mode` | **String** | `toLower(triggerBody()['text'])` |
 | `Initialize_activated` | `activated` | Integer | `0` |
 | `Initialize_failures` | `failures` | **Array** | *(leave empty)* |
 | `Initialize_wouldActivate` | `wouldActivate` | **Array** | *(leave empty)* |
 
 > **`mode` is a String, not a Boolean, and that is deliberate.** The obvious version is a Boolean `isReport` holding `equals(toLower(triggerBody()['text']), 'report')`, then a Condition comparing it to `true`. **Do not do that.** Comparing a real boolean against a right-hand box containing the text `true` is the classic silent mismatch in this editor — the same trap documented at [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 4. Two strings compared as strings cannot misfire.
 >
-> `toLower` and `trim` mean `Activate`, `activate` and ` ACTIVATE ` all work. `coalesce(…, '')` keeps the expression from throwing if the input somehow arrives null.
+> `toLower` alone is enough: it makes `Activate`, `activate` and `ACTIVATE` all work, and 2b rejects anything else — including a stray space — by terminating. Wrapping it in `trim(coalesce(…, ''))` is defensible but buys nothing here, because the input is required and any surviving whitespace fails the guard rather than slipping through.
 
 ### 2b. `Condition_valid_mode` — **Condition**
 

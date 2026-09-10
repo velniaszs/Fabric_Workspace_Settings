@@ -606,6 +606,8 @@ Read-only first, one capacity before many — the order `Migration-Steps.md` alr
 > **Why copies rather than a `mode` input on the BAU flows.** A Power Apps (V2) trigger cannot be called by `Run a Child Flow`, so *something* with a manual trigger has to exist. Given that, a separate copy beats branching a tested flow: nothing built and verified for BAU has to be re-tested, and the `MIG_` prefix marks the whole set as disposable. **All three are turned off and deleted after cutover**, leaving no residue.
 >
 > **Register, rebuild and activate are three separate runs, deliberately.** Everything up to activation is inert — policy sets with no rules, deactivated, change nobody's access — so a half-finished or wholly wrong migration is undone by deleting rows and items. That separation is what replaces the `-WhatIf` the PowerShell path had, and it gives the exceptions seeding a window to happen in.
+>
+> **The operational sequence lives in [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md)** — what to run, in what order, what to check between phases, and how to roll each one back.
 
 ### Cutover
 
