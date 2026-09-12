@@ -327,9 +327,19 @@ Everything except 5l, 5m and 5n sits at the top level.
 | Field | Value |
 |---|---|
 | Table name | `Workspaces` (`ubsppcoe_Workspace`) |
-| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and ubsppcoe_oapenabled eq true` |
+| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and ubsppcoe_oapenabled eq true and ubsppcoe_isdeleted ne true` |
 | Select columns | `ubsppcoe_workspaceid` |
 | Row count | `5000` |
+
+> ## ⚠ The soft-delete clause is not optional — added 2026-09-12
+>
+> **`ubsppcoe_isdeleted` is a PLACEHOLDER name and will change.** The real logical name has not been supplied. **[CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 holds the authoritative list of all six places it appears** — substitute them together, in one pass.
+>
+> **Without this clause a soft-deleted workspace stays whitelisted for ever.** Deleting a workspace does not clear `ubsppcoe_oapenabled` — it sets a flag on a row that otherwise keeps every value it had. So the row still matches `_ubsppcoe_nodeid_value` and still matches `ubsppcoe_oapenabled eq true`, and every rebuild from now until the capacity is decommissioned re-publishes its GUID into rule 2.
+>
+> Fabric accepts a well-formed GUID for a workspace that no longer exists and never matches it, so **nothing fails and nothing reports it**. The rule set looks correct, the counts look correct, and the only symptom is a whitelist that grows and never shrinks.
+>
+> **`ne true`, not `eq false`.** The flag is almost certainly nullable and null is the normal state for a live workspace — `eq false` would exclude every row that has never been deleted, which is all of them.
 
 ⋯ → **Settings** → **Pagination On**, Threshold `5000`. Without it you silently get the first page only, and a capacity over the page size loses workspaces on every rebuild — a data-loss bug that looks like a Fabric problem.
 
@@ -436,11 +446,15 @@ Step 6 onwards resume at the top level, outside this Condition.
 | Field | Value |
 |---|---|
 | Table name | `Workspaces` (`ubsppcoe_Workspace`) |
-| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and (ubsppcoe_workspaceid eq '@{join(variables('exceptionCandidates'), ''' or ubsppcoe_workspaceid eq ''')}')` |
+| Filter rows | `_ubsppcoe_nodeid_value eq @{variables('nodeRowId')} and ubsppcoe_isdeleted ne true and (ubsppcoe_workspaceid eq '@{join(variables('exceptionCandidates'), ''' or ubsppcoe_workspaceid eq ''')}')` |
 | Select columns | `ubsppcoe_workspaceid` |
 | Row count | `5000` |
 
-**This is the join that decides which capacity an exception applies to.** An excepted workspace whose `Node` is another capacity — or whose row was deleted — matches nothing here and is absent from this capacity's rule 3. That is what makes a capacity move need no cleanup: the old capacity's next rebuild drops it, the new capacity's next rebuild picks it up.
+**This is the join that decides which capacity an exception applies to.** An excepted workspace whose `Node` is another capacity — or whose row is soft-deleted — matches nothing here and is absent from this capacity's rule 3. That is what makes a capacity move need no cleanup: the old capacity's next rebuild drops it, the new capacity's next rebuild picks it up.
+
+> **The soft-delete clause goes *outside* the parentheses, ANDed with the Node condition.** Inside the `or` chain it would apply to one candidate only, which is the same trap the parentheses box below describes. Placed here it constrains every candidate, exactly as the Node condition does.
+>
+> **Rule 3 needs this more than rule 2 does.** A soft-deleted workspace left in rule 3 can create **any** item type, where the same mistake in rule 2 leaks only the governed list. Both are dead GUIDs that match nothing in Fabric today — but a deleted workspace GUID is not guaranteed never to be reissued, and rule 3 is the one that would hurt.
 
 > ### The parentheses around the `or` chain are load-bearing
 >

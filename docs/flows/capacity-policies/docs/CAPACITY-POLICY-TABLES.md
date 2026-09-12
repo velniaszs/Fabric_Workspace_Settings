@@ -84,6 +84,33 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 | `ubsppcoe_Workspace` | **Fabric workspace GUID** | `ubsppcoe_workspaceid` | Text | **Confirmed 2026-09-07.** This is the Fabric id, not the row key |
 | `ubsppcoe_Workspace` | `Node` lookup | `ubsppcoe_nodeid` — read as `_ubsppcoe_nodeid_value` | Lookup → `ubsppcoe_Node` | **Corrected 2026-09-09.** Its *value* is the **Node row GUID**, not the capacity id |
 | `ubsppcoe_Workspace` | The whitelist flag | `ubsppcoe_oapenabled` | Boolean | **Confirmed 2026-09-07** |
+| `ubsppcoe_Workspace` | **Soft-delete flag** | `ubsppcoe_isdeleted` | Boolean | ⚠ **PLACEHOLDER NAME — 2026-09-12. Not confirmed.** |
+| `ubsppcoe_Node` | **Soft-delete flag** | `ubsppcoe_isdeleted` | Boolean | ⚠ **PLACEHOLDER NAME — 2026-09-12. Not confirmed.** |
+
+> ## ⚠ The two soft-delete columns are placeholders — 2026-09-12
+>
+> **Neither logical name is real.** `ubsppcoe_isdeleted` is a stand-in written into the flow documents so the logic could be specified; the platform team owns the actual names and they have not been supplied yet. The two tables may not even use the same name as each other.
+>
+> **Nothing that depends on them can be built until the real names are in.** A wrong column name gives a clean `400`, which is survivable — but an expression that resolves to blank returns **every row**, and in this design that whitelists every workspace in the tenant on one capacity (§1, the standing warning).
+>
+> ### Everywhere the name has to be substituted
+>
+> Change all six together, in one pass, and re-run the tests named in each document:
+>
+> | # | File | Where | What it does |
+> |---|---|---|---|
+> | 1 | [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Step 5b, `List_workspace_rows` | Excludes deleted workspaces from **rule 2**. Without it a deleted workspace stays whitelisted for ever |
+> | 2 | [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Step 5l, `List_exception_workspace_rows` | Excludes deleted workspaces from **rule 3** |
+> | 3 | [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | Step 1, trigger `Filter rows` | Stops a deleted workspace being treated as an addition |
+> | 4 | [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | Step 1, trigger `Filter rows` **and** `Select columns` | Makes a soft-delete fire the removal |
+> | 5 | [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Step 1, trigger `Filter rows` | Stops a decommissioned capacity being initialised |
+> | 6 | [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | Step 1, trigger `Filter rows` | The whole trigger for that flow |
+>
+> ### Two things to confirm at the same time, not afterwards
+>
+> **Is it a Boolean or a Choice?** Every filter written so far assumes Boolean and uses `ne true` / `eq true`. A Choice column needs `eq <optionsetvalue>` and the `ne true` idiom stops working entirely.
+>
+> **Is it nullable, and what does a live row hold?** All six filters use **`ne true`** rather than `eq false`, on the assumption that a row nobody has deleted holds null rather than `false` — the same three-valued reasoning as `ubsppcoe_oapenabled` (§1). If the column is in fact non-nullable and defaults to `false`, `ne true` still works; if it is nullable, `eq false` would silently drop every live row. **`ne true` is the safe form either way — do not "tidy" it to `eq false` once the real name is known.**
 
 > ### Both tables separate their Fabric GUID from their row key
 >

@@ -268,12 +268,27 @@ Build instructions are one file per flow in [flows/capacity-policies/](docs/flow
 | Flow | Trigger | Purpose |
 |---|---|---|
 | [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Manual (child) | **The only writer of rules.** Rebuilds one capacity from the tables |
-| [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Power Apps (V2) | Creates, registers, builds and activates a new capacity's policy set |
+| [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` added/modified** | Creates, registers, builds and activates a new capacity's policy set |
+| [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` soft-deleted** | Deactivates and suspends a retired capacity's policy set. **New, not agreed** |
 | [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) | Power Apps (V2) | What the app reads. One table, no Fabric calls |
-| [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | Power Apps (V2) | Verify the workspace qualifies, then rebuild |
-| [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | Power Apps (V2) | Verify it no longer qualifies, then rebuild |
+| [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled eq true`** | Publish a workspace becoming whitelisted |
+| [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled ne true` or soft-deleted** | Publish a workspace losing its whitelist |
 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | Recurrence | Nightly convergence of every capacity to the tables |
 | [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) | Recurrence | Detects drift the rebuild cannot fix |
+
+> ### Retriggered 2026-09-11 and 2026-09-12 — four flows moved off Power Apps
+>
+> `InitializeCapacityPolicySet`, `AddWorkspaceToPolicy` and `RemoveWorkspaceFromPolicy` were all called by an app. They now fire on Dataverse row changes and **derive** what the caller used to assert. `DeleteCapacityPolicySet` is new. Each flow's own document carries the conversion table and the consequences; the ones that change this design are below.
+>
+> **`ListCapacityPolicySets` is the only Power Apps flow left.** It reads, so it has a caller by definition.
+>
+> **Nothing returns an outcome to anyone any more.** The four converted flows have no `Respond`; they write a `Compose` into the run history and, on a caught failure, `ubsppcoe_lasterror`. Every "the app must show the user" instruction in these documents is now unowned — see the note in each.
+>
+> **Q16 is closed for `ubsppcoe_Workspace` and `ubsppcoe_Node`, and still open for `Policy Exceptions`.** That table has no trigger, so revoking an exception is still not live until the nightly run.
+>
+> **Q17 is closed by soft delete, partially.** A deleted workspace is now a `Modified` event that `RemoveWorkspaceFromPolicy` can act on. A workspace **moving** capacity still is not: the flag does not change, so neither flow fires, and the old capacity keeps it until the nightly run.
+>
+> **Two decisions are outstanding and both are in the flow documents rather than here.** `InitializeCapacityPolicySet` now activates a deny-all with nobody deciding, and nothing retries a capacity it skipped. `DeleteCapacityPolicySet` removes enforcement on another team's signal, and nothing restores it when they reverse that signal.
 
 ### Plus three migration flows, which are not part of BAU
 
@@ -562,6 +577,7 @@ Ordered by what they block. **No column name blocks the build any more** — Q19
 
 | # | Question | Blocks |
 |---|---|---|
+| **Q46** | **What are the real logical names of the soft-delete columns on `ubsppcoe_Workspace` and `ubsppcoe_Node`?** Both tables soft-delete rather than hard-delete (confirmed 2026-09-12), which changes the design in six places — [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 lists them. `ubsppcoe_isdeleted` is a **placeholder** written into every affected document. Also confirm whether each is a Boolean or a Choice, and what a live row holds | **Flow build** |
 | **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist | Pre-launch |
 | **Q45** | Which identity does the connector connection authenticate as, and who owns it? Every Fabric role in §5 attaches to that identity, so nothing can be granted until it is decided | **Flow build** |
 | **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`? **Narrowed 2026-09-10:** this applies to the **script** migration path only. Under a flow-driven migration no CSV is read, `ubsppcoe_Workspace` is the source of truth from the first publish, and the question does not arise. Seeding `PolicyException` still does, on both paths | Cutover |
