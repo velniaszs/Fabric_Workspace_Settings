@@ -13,7 +13,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) (design), [CA
 | Event | Run | Who triggers it |
 |---|---|---|
 | **Capacity created** | `InitializeCapacityPolicySet` | Provisioning app |
-| **Capacity deleted** | *No flow.* Manual cleanup — §2 | You |
+| **Capacity deleted** | Manual cleanup — §2. `DeleteCapacityPolicySet` is **specified but not built** | You |
 | **Workspace added and to be whitelisted** | `AddWorkspaceToPolicy` | App |
 | **Workspace deleted** | `RemoveWorkspaceFromPolicy` | App |
 | **Workspace moved between capacities** | `RemoveWorkspaceFromPolicy` on the **old**, then `AddWorkspaceToPolicy` on the **new** | App |
@@ -64,29 +64,41 @@ A `Failed` from activation still leaves the policy set **registered** — that i
 
 ## 2. A capacity is deleted
 
-**No flow does this.** It is manual, and it is the one event with no automation.
+**No flow does this yet.** It is manual, and it is the one event with no automation in place.
+
+> ### There is now a design for it — [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md)
+>
+> It fires on the `ubsppcoe_Node` soft-delete, asks `GET /v1/capacities` whether the capacity is really gone, and then either **deletes** the policy set (`status = Deleted`) or, if Fabric still has the capacity, **deactivates only** (`status = Suspended`) and reports the disagreement.
+>
+> **It is a specification, not a built flow, and §0 of that document is an open decision** — it is the only flow in the design that removes enforcement, on a signal another team controls. Until it is agreed and built, the manual steps below are the procedure.
 
 ### What happens if you do nothing
 
 | Artefact | State | Consequence |
 |---|---|---|
 | Policy set in the holder workspace | Orphaned | Clutters the workspace; counts against nothing |
-| `Capacity Policies` row | Still there | The nightly rebuild keeps attempting it |
-| `ubsppcoe_Node` row | Deleted by the platform team | Our `node` lookup goes **null** |
+| `Capacity Policies` row | Still there, `status = Active` | The nightly rebuild keeps attempting it |
+| `ubsppcoe_Node` row | **Soft-deleted** by the platform team — row and capacity GUID retained, a flag set | Our `node` lookup still resolves |
 
-That last one is what you will actually notice: a blank `node` lookup makes `RebuildCapacityPolicyRules` **fail closed** at Step 5a, so the capacity reports `Failed` in the nightly summary **every night, forever**. That is the design working — a blank Node means "we cannot see this capacity's workspaces", which must never be treated as "it has none".
+That last one is the correction that matters: the platform team's tables **soft-delete rather than hard-delete**, so the lookup does *not* go null and `RebuildCapacityPolicyRules` does *not* fail closed at Step 5a. It reads the workspaces quite happily and republishes rules to a policy set whose capacity is gone — so the capacity reports `Failed` on the **Fabric call** in the nightly summary, **every night, forever**, with a `404` that looks like an outage. See [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §4.
 
 ### Cleanup, in this order
 
-1. **Deactivate** the policy set — `deactivate_policy_set.ps1 -WorkspaceId <holder> -PolicySetId <id>` in `C:\GIT\ubs-policies`
+1. **Deactivate** the policy set — `deactivate_policy_set.ps1 -WorkspaceId <holder> -PolicySetId <id>` in `C:\GIT\ubs-policies`. **Only while the capacity still exists** — see below
 2. **Delete** the policy set item from the holder workspace
-3. **Delete** the `Capacity Policies` row
+3. **Update** the `Capacity Policies` row to `status = Deleted`
 
-**Do not delete the row first.** `SyncCapacityPolicySets` would then report the policy set as `Untracked` and someone would spend an afternoon working out whose it was.
+> ### If the capacity is already deprovisioned, skip step 1 — tested 2026-09-13
+>
+> `deactivate` on a policy set whose capacity is gone returns **`404 NotFound — Capacity '<id>' not found`** (`isRetriable: false`). The 404 is on the **capacity**, not the set: the endpoint resolves the activation scope before doing anything, and the scope no longer exists.
+>
+> **`DELETE` on the policy set still works.** The set is present and addressable; only its activation scope is missing. So cleanup after a capacity that is already gone is **delete only** — a deactivate attempt would fail every time and change nothing.
+>
+> Deactivate first only when you are getting ahead of the deprovisioning, i.e. the capacity is still in `GET /v1/capacities`.
 
-**Do not delete the policy set first either.** The next rebuild `404`s against a set that no longer exists, and the row's `lasterror` fills with something that looks like a Fabric outage.
+**Do not delete the row.** Update it. `SyncCapacityPolicySets` would report an untracked policy set if the row went before the item, and six months later the row is the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
 
-Deactivating first means that even if you are interrupted between steps, nothing is being enforced on a capacity that no longer exists.
+**Update the row after the Fabric call, not before.** A row saying `Deleted` with the item still present is an orphan that nothing will chase; a row still saying `Active` with the item gone is loud — the nightly rebuild `404`s and you come back and finish the job.
 
 ---
 
