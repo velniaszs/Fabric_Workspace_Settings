@@ -76,7 +76,7 @@ Three `Initialize variable` actions, **at the top level**, before Step 3.
 > | Bucket | Meaning | Who acts |
 > |---|---|---|
 > | `registered` | Created and registered | Nobody. This is the progress count |
-> | `noNode` | Capacity exists in Fabric, no `ubsppcoe_Node` row | **The platform team.** This list is the deliverable |
+> | `noNode` | Capacity exists in Fabric, no **live** `ubsppcoe_Node` row — missing, or `ubsppcoe_statecode` = 2 | **The platform team.** This list is the deliverable |
 > | `failures` | Anything else — a create rejected, a duplicate name, a timeout | You, before re-running |
 >
 > Collapsing `noNode` into `failures` is the easy mistake. It buries the one finding that needs a conversation with another team inside a list of things you can fix yourself, and on an estate with a stale inventory it may be the larger list.
@@ -233,7 +233,7 @@ No Node row: <b>@{length(variables('noNode'))}</b><br>
 Failed: <b>@{length(variables('failures'))}</b>
 </p>
 <p>Every policy set created is <b>deactivated and has no rules</b>. Nothing is enforced yet.</p>
-@{if(empty(variables('noNode')), '', concat('<h3>No Node row &mdash; for the platform team</h3><p>These capacities exist in Fabric but have no <code>ubsppcoe_Node</code> row, so their workspaces cannot be determined. Nothing was created for them. They cannot be migrated until a Node row exists.</p><p>', join(variables('noNode'), '<br>'), '</p>'))}
+@{if(empty(variables('noNode')), '', concat('<h3>No live Node row &mdash; for the platform team</h3><p>These capacities are Active F-SKU in Fabric, but have no usable <code>ubsppcoe_Node</code> row &mdash; either none exists, or the row is marked Deleted (<code>ubsppcoe_statecode</code> = 2). Their workspaces cannot be determined, so nothing was created for them. Each one is either an inventory gap or a capacity that was decommissioned on paper and never in Fabric.</p><p>', join(variables('noNode'), '<br>'), '</p>'))}
 @{if(empty(variables('failures')), '', concat('<h3>Failed &mdash; fix and re-run</h3><p>', join(variables('failures'), '<br>'), '</p>'))}
 <p>Re-running this flow is safe. Capacities already registered return <code>AlreadyExists</code> and are skipped, so only the entries above are retried.</p>
 <p>Next: seed <code>Policy Exceptions</code>, then run <code>RebuildAllCapacityPolicies</code>. Do not activate anything until both are done.</p>

@@ -126,6 +126,14 @@ Each clause earns its place:
 >
 > **It will also exclude a legitimately empty capacity** — one with no OAP-enabled workspaces and no exceptions, whose rebuild correctly published rule 1 alone. That is the right trade during migration: such a capacity is locked completely once activated, so it should be a deliberate decision rather than a row in a batch. Activate those individually afterwards, or leave them for the provisioning app.
 
+> ### There is no `ubsppcoe_statecode` clause here, and that is a dependency rather than an oversight
+>
+> Days pass between registration and activation. A Node row soft-deleted in that window — `ubsppcoe_statecode` set to `2` — describes a capacity that should not be activated, and **this query cannot see it**: it reads `Capacity Policies`, our own table, which carries no state from `ubsppcoe_Node`.
+>
+> **[DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) is what closes the gap**, by moving the row's `ubsppcoe_status` to `Deleted` or `Suspended`. Neither matches `eq 'Inactive'`, so the row drops out of this query without any clause here.
+>
+> **That only holds if the flow is switched on before the registration run**, and it is still marked *new, not agreed* ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8). **If it is not live, do not rely on this query** — take the `noNode` list from the registration run as the exclusion list and check it by hand before activating, because activation is the step that actually denies people access.
+
 `Compose_candidate_count` — **Compose**, `@{length(body('List_inactive_rows')?['value'])}`. So the run history answers "how many?" without expanding the array.
 
 ---
@@ -155,6 +163,10 @@ And nothing else. **No Fabric call, no Dataverse write.**
 > A capacity showing **many rules and few whitelisted workspaces** is the shape to look for. It passes the `rulecount gt 1` filter and will activate cleanly, and it may still deny item creation to most of the teams working on it, because `workspacecount` counts only workspaces with `ubsppcoe_oapenabled = true`.
 >
 > What this still cannot tell you is the **total** number of workspaces under each capacity's Node, which is what turns these counts into a denial count. That needs a query against `ubsppcoe_Workspace` per capacity and is not built yet — so read this list as a smell test, not as sign-off.
+>
+> **When that query is built it must carry `ubsppcoe_statecode eq 1`** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Without it the denominator includes soft-deleted workspaces, so the coverage gap reads worse than it is — and the one number whose whole purpose is to stop an activation would be the number that cries wolf.
+>
+> **`ubsppcoe_workspacecount` itself is already correct on this point.** `RebuildCapacityPolicyRules` Step 5b stamps it from the same filtered list it publishes into rule 2, so since 2026-09-15 it counts live, OAP-enabled workspaces only. Counts stamped by a rebuild run **before** that date include deleted workspaces and read high — if this dry run is being compared against an earlier one, re-run the rebuild first rather than reconciling the difference by hand.
 
 **No** — 4b, 4c and 4d go here.
 

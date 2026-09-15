@@ -144,10 +144,20 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 | Field | Value |
 |---|---|
 | Table name | `Nodes` (`ubsppcoe_Node`) |
-| Filter rows | `ubsppcoe_nodeuniqueid eq @{triggerBody()['text']}` |
+| Filter rows | `ubsppcoe_nodeuniqueid eq @{triggerBody()['text']} and ubsppcoe_statecode ne 2` |
 | Row count | `1` |
 
 **The GUID is unquoted.** `ubsppcoe_nodeuniqueid` is a unique-identifier column holding the Fabric capacity id.
+
+> ## ⚠ The `ne 2` clause was missing until 2026-09-15
+>
+> **`ubsppcoe_statecode` is a Choice; on `ubsppcoe_Node`, `2` = Deleted and the other ten of eleven options are live** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Unquoted integer. It is a custom column, not Dataverse's system `statecode`.
+>
+> **Without it this flow registers capacities the inventory has decommissioned.** The parent filters on what Fabric reports, and Fabric knows nothing about a soft-deleted Node row — so a capacity that is still Active and F-SKU in Fabric, but marked Deleted in `ubsppcoe_Node`, sails through the parent and lands here. The lookup would find the row, Step 8 would bind to it, and the capacity would enter the migration backlog as a normal registration.
+>
+> **It does not stop there, which is why this is worth a box.** That row is written `Inactive`, so `RebuildAllCapacityPolicies` builds rules for it and [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) then activates it — putting deny-all on a capacity the platform team has retired, with nothing anywhere reporting it. It also contradicts [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md), whose entire trigger is `ubsppcoe_statecode eq 2`: BAU deletes those policy sets, migration was creating them.
+>
+> **`ne 2`, not `eq 1`** — the same asymmetry as the BAU [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 1. `eq 1` would exclude nine live states and quietly skip most of the estate.
 
 **This step exists to fetch `ubsppcoe_nodeid`, the Node row's primary key** — a *different* GUID from the capacity id, and the one Step 8's lookup must bind to ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Leave **Select columns** empty, or include `ubsppcoe_nodeid` explicitly.
 
@@ -162,9 +172,13 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 | Rename to | Name | Value |
 |---|---|---|
 | `Set_outcome_no_node` | `outcome` | `NoNode` |
-| `Set_message_no_node` | `message` | `No Node row for this capacity, so its workspaces cannot be determined. Ask the platform team to add one, then re-run.` |
+| `Set_message_no_node` | `message` | `No live Node row for this capacity — either none exists, or its row is marked Deleted. Its workspaces cannot be determined. Ask the platform team which it is, then re-run.` |
 
 **No branch** — Steps 5 to 8 go inside it.
+
+> **`NoNode` covers two different findings, and the message says so because the flow cannot tell them apart.** With `ne 2` in the filter, a missing row and a deleted row both return empty. They mean opposite things — an inventory gap versus a capacity that is *supposed* to be gone — and the platform team's answer differs accordingly: add a row, or explain why Fabric still has an Active capacity they have decommissioned. The second is the more interesting finding.
+>
+> **Splitting them into two outcomes is a reasonable enhancement and is deliberately not built.** It needs the filter relaxed back to `ubsppcoe_nodeuniqueid` alone, a second Condition on the returned row's `ubsppcoe_statecode`, a fifth outcome, and a fifth `Switch` case plus a third bucket in the parent. For a disposable migration tool the message text buys most of the value for none of that.
 
 > **`NoNode`, not `Failed`, and the distinction is the point.** This is not something you can fix — it is a gap in the platform team's inventory, and it needs a different conversation from a duplicate name or a permissions error. The parent switches on this value directly to keep the two lists apart ([MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) §2).
 
@@ -354,6 +368,7 @@ Run it directly from the designer for tests 1–5, then let the parent drive it.
 | 2 | **Open the row it created** | `Node` populated, `Status` = `Inactive`, `Policy set name` matches the portal, `lastrebuild` and the three counts **empty** |
 | 3 | Run again on the same capacity | `AlreadyExists`, and **no second policy set** |
 | 4 | A capacity with **no** Node row | **`NoNode`**, and **nothing created in Fabric** — check the holder workspace to confirm |
+| 4b | A capacity whose Node row exists but has **`ubsppcoe_statecode` = 2** | **`NoNode`**, and **nothing created in Fabric**. Proves the `ne 2` clause is present — without it this returns `Registered`, and that is the failure the Step 4 box describes |
 | 5 | Blank the `Node` lookup on a row, then run `RebuildCapacityPolicyRules` against it | It fails closed. Confirms what test 2 is protecting against |
 | 6 | Two capacities with the same display name | The second returns **`Failed` with the `ItemDisplayNameAlreadyInUse` message**, not a bare flow fault. This is what 7a buys |
 | 7 | Call it from a throwaway parent with `Run a Child Flow` | The three outputs arrive and are readable. **Do this before building the real parent** |
