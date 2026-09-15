@@ -415,31 +415,9 @@ Inside it, in order:
 | 3 | `Set variable` | `outcome` = `Caught` |
 | 4 | `Set_message` — **Set variable** | `message` = the expression below |
 | 5 | `Condition_row_known` — **Condition** | `empty(variables('policyRowId'))` is equal to `false` |
-| 6 | └ **Yes** → `Update_policy_error` | Dataverse **Update a row** — see below |
-| 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging` — see below. **Not inside the Condition** |
+| 6 | └ **Yes** → `Update_policy_error` | Dataverse **Update a row** — 7c |
+| 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging` — 7d. **Not inside the Condition** |
 | 8 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
-
-### 7c. `Add_log_row` — the `Logging` insert
-
-**Decided 2026-09-15**, replacing this document's earlier note that the target table was unsettled. The answer is *both*: `ubsppcoe_lasterror` for the text, `Logging` for the fact and the pointer.
-
-| Column (UI display name) | Value |
-|---|---|
-| Log Category | `Error` — literal text |
-| Log Source Name | `workflow()?['tags']?['flowDisplayName']` |
-| Log Source URL | the run URL — [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a |
-
-> **⚠ The logical names of those three columns are not confirmed — Q48.** Only the UI display names are known, and the table belongs to the platform team. **Do not guess them from the display names**; get a populated row first. §5a explains why, and names the six filters that had to be rewritten the last time this project guessed a column name.
-
-> ### `Add_log_row` sits **outside** `Condition_row_known`, and that is the point of adding it
->
-> `Update_policy_error` can only run when a `Capacity Policies` row exists. Since the trigger conversion, the ordinary exit for an ungoverned capacity leaves `policyRowId` **empty** — so on that path the Condition is false and, before this change, the failure was recorded **nowhere**. That is the largest population of runs this flow has.
->
-> Keep the insert at the same level as the Condition and it runs on every caught path, governed or not.
->
-> **It must also come before the `Terminate`.** Terminate ends the run without evaluating anything after it ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4) — an `Add a new row` placed below it is dead code that the designer will not flag.
-
-> **Do not tick *has failed* on `Add_log_row`.** It is inside `Scope_catch`, not `Scope_try`, so the rule in Step 5 does not apply to it — but if the insert itself fails, the `Terminate` is skipped and the run goes **green** with the error recorded nowhere. Leave it on the default so a broken log write fails the run loudly. This is the one place where losing the log is better than losing the red run.
 
 ### The `message` expression
 
@@ -555,9 +533,25 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 |---|---|
 | Table name | `Capacity Policies` |
 | Row ID | `variables('policyRowId')` |
-| `ubsppcoe_lasterror` | the error text from `Compose_error` |
+| `ubsppcoe_lasterror` | `variables('message')` |
 
 **That column and no other.** Do not stamp `ubsppcoe_lastrebuild` — no rebuild happened, and a fresh timestamp beside a fresh error reads as "we rebuilt and it broke" rather than "we never got there".
+
+> ### `variables('message')`, **not** `outputs('Compose_error')`
+>
+> An earlier revision of this table said *"the error text from `Compose_error`"*, which is ambiguous enough to be built wrong, so it is now spelled out. `Compose_error` holds **`result('Scope_try')` — the raw array**, and putting that in the column is wrong three ways:
+>
+> **It carries every action's `inputs` and `outputs` verbatim.** That is workspace GUIDs, capacity IDs, Dataverse filter strings and whatever the child flow returned, written into a column an app renders to users. Never write raw `result()` to a column or a log.
+>
+> **It would be truncated.** The column is 2000 characters; a four-action scope's `result()` comfortably exceeds that. Dataverse truncates rather than failing, so the damage is silent and the end of the string — where a reader would look — is the part that disappears.
+>
+> **It is an array, not text.** Writing it requires a `string()` wrapper, and what lands is unindented JSON that nobody reads.
+>
+> `variables('message')` is the composed signpost this document spends Step 7b building: failed action name, error message, and the run ID. **The `Terminate` on row 8 already uses it**, so using it here keeps the column and the run history carrying the same string — which is the point made further down about not formatting the same information two ways.
+>
+> **`Compose_error` still earns its place.** It is not written anywhere; it exists so the raw array is visible in the run history for whoever opens the run the column points at. That is the right place for it — inside the run, not inside the table.
+
+**The column is cleared on the next successful rebuild, not appended to.** `RebuildCapacityPolicyRules` Step 10a blanks it on success ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2), so this write is a snapshot with no history. That is exactly why 7d exists.
 
 > ### Why the `empty(policyRowId)` guard exists
 >
@@ -565,15 +559,43 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 >
 > On that branch the `Compose` and the `Terminate` are the entire record. That is acceptable: a failure that early is a defect in this flow, not a fact about a capacity, and the run history is the right place for it.
 
-> ### Open — which table the error is written to
+> ### Settled 2026-09-15 — which table the error is written to
 >
-> **Deferred deliberately, 2026-09-12.** Build 7c against `Capacity Policies` in the meantime.
+> **Both, and neither is `ubsppcoe_Workspace`.** 7c writes the text to `ubsppcoe_lasterror` on `Capacity Policies`; 7d records the fact and a pointer in the platform team's `Logging` table.
 >
-> It is ours, it already carries `ubsppcoe_lasterror`, and the child flow writes the same column in the same convention ([RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 10a). Nothing needs agreeing with anyone, and **it is the reversible choice** — moving a write later is one action's configuration.
+> `Capacity Policies` was the interim choice because it is ours, it already carries the column, and the child flow writes it in the same convention ([RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 10a). It stays — the reason it was never sufficient is the `policyRowId` guard, which 7d now covers rather than replaces.
 >
-> **If the answer comes back as `ubsppcoe_Workspace`, that is not a flow change.** Q23 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7 is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them. It would mean their schema change, their sign-off, and reopening a decision this design rests on in several places. **Raise it rather than building it.**
+> **`ubsppcoe_Workspace` was ruled out on principle, not convenience.** Q23 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7 is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them.
 >
-> There is also a practical objection worth putting to whoever decides. The error being recorded is about a **capacity's rules**, not about a workspace — a single failed rebuild concerns every workspace on that capacity, so writing it to the one workspace row that happened to trigger the run files it in the wrong place and makes it look narrower than it is.
+> There was also a practical objection, and it still holds against any future proposal to move the write there: the error being recorded is about a **capacity's rules**, not about a workspace. A single failed rebuild concerns every workspace on that capacity, so filing it on the one workspace row that happened to trigger the run puts it in the wrong place and makes it look narrower than it is.
+
+### 7d. `Add_log_row` — the `Logging` insert
+
+**Added 2026-09-15.** One of four flows that write here ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a).
+
+| Field | Value |
+|---|---|
+| Table name | `Logging` |
+
+| Column (UI display name) | Value |
+|---|---|
+| Log Category | `Error` — literal text |
+| Log Source Name | `workflow()?['tags']?['flowDisplayName']` |
+| Log Source URL | the run URL — §5a |
+
+> **⚠ The logical names of those three columns are not confirmed — Q48.** Only the UI display names are known, and the table belongs to the platform team. **Do not guess them from the display names**; get a populated row first. §5a explains why, and names the six filters that had to be rewritten the last time this project guessed a column name.
+
+> **`Logging` has no message column, so this row cannot carry the error text.** It records that the flow failed and where to look; 7c carries what went wrong. Neither is sufficient alone, which is why both are built.
+
+> ### `Add_log_row` sits **outside** `Condition_row_known`, and that is the point of adding it
+>
+> 7c can only run when a `Capacity Policies` row exists. Since the trigger conversion, the ordinary exit for an ungoverned capacity leaves `policyRowId` **empty** — so on that path the Condition is false and, before this change, the failure was recorded **nowhere**. That is the largest population of runs this flow has.
+>
+> Keep the insert at the same level as the Condition and it runs on every caught path, governed or not. It also covers the case named in the 7c guard box: a `Get_policy_row` that returned `400`, where the flow never learned where to write.
+>
+> **It must also come before the `Terminate`.** Terminate ends the run without evaluating anything after it ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4) — an `Add a new row` placed below it is dead code that the designer will not flag.
+
+> **Do not tick *has failed* on `Add_log_row`.** It is inside `Scope_catch`, not `Scope_try`, so Step 5's rule does not apply to it — but if the insert itself fails and that failure is tolerated, the `Terminate` is skipped and the run goes **green** with the error recorded nowhere. Leave it on the default so a broken log write fails the run loudly. **Losing the log is better than losing the red run.**
 
 ---
 
@@ -611,10 +633,13 @@ Nothing in this flow can confirm the workspace against `GET /v1/workspaces/{id}`
 | 10 | Inspect any run's action list | **No write action against `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
 | 11 | Bulk-enable 20 workspaces across 3 capacities | 20 runs, serialised by Degree of Parallelism 1. **Time it** — this is the storm question at small scale |
 | 12 | Set `ubsppcoe_oapenabled` to **No** | Trigger does **not** fire. The rules still contain the workspace until the nightly run — the gap `RemoveWorkspaceFromPolicy` has to close |
-| 13 | **Turn the child flow off**, then enable a workspace | Case A. `Scope_catch` fires, `ubsppcoe_lasterror` written by **this** flow, run ends **Failed** |
-| 14 | Put a bad `ubsppcoe_policysetid` on a `Capacity Policies` row, then enable a workspace on it | Case B. `Scope_catch` **skipped**, `ubsppcoe_lasterror` written by the **child**, run ends green with `outcome` = `Failed` |
+| 13 | **Turn the child flow off**, then enable a workspace | Case A. `Scope_catch` fires, `ubsppcoe_lasterror` written by **this** flow, **one row in `Logging`**, run ends **Failed** |
+| 14 | Put a bad `ubsppcoe_policysetid` on a `Capacity Policies` row, then enable a workspace on it | Case B. `Scope_catch` **skipped**, `ubsppcoe_lasterror` written by the **child**, **no `Logging` row**, run ends green with `outcome` = `Failed` |
 | 15 | Point `Get_policy_row` at a non-existent column | `Scope_catch` fires, takes the `empty(policyRowId)` branch, and **does not itself fail** |
-| 16 | Happy path | `Scope_catch` skipped, `Compose_result` still runs, `ubsppcoe_lasterror` left blank as the child set it |
+| 15b | Same as 15, then check `Logging` | **A row is written anyway.** `ubsppcoe_lasterror` is not, because there is no row to write it to. This is the case 7d exists for — if `Logging` is empty here, `Add_log_row` is inside the Condition |
+| 15c | Open the `Logging` row from 13 and follow **Log Source URL** | It opens that run's history. A URL that 404s makes the row worthless — see §5a |
+| 15d | Read `ubsppcoe_lasterror` from test 13 | A single readable line ending in the run ID. **If it is JSON, 7c was built against `Compose_error`** — rebuild it with `variables('message')` and check nothing was truncated |
+| 16 | Happy path | `Scope_catch` skipped, `Compose_result` still runs, `ubsppcoe_lasterror` left blank as the child set it, **no `Logging` row** |
 | 17 | Try to save with an `Initialize variable` inside `Scope_try` | Validation error on save. Confirms the restriction rather than discovering it later |
 
 Tests 2, 3 and 5 are the ones to write first. They verify the trigger's filters, which are the only part of this flow that is genuinely new — and a filter that is too loose does not fail, it just quietly rebuilds the estate all day.
@@ -622,6 +647,8 @@ Tests 2, 3 and 5 are the ones to write first. They verify the trigger's filters,
 **Tests 13 and 14 are the pair that proves the try/catch is wired correctly**, and they must be run together. Either one alone looks like a pass: 13 passing shows the Catch works, 14 passing shows the normal path works, and only the two side by side show that the *right* failure reaches the Catch and the other one deliberately does not.
 
 Test 15 is the one people skip. A Catch that fails is worse than no Catch — the run history then blames the error handler instead of the error.
+
+**Test 15b is the one that proves 7d was worth building.** It is the only test where `ubsppcoe_lasterror` is legitimately not written, so it is the only test that can distinguish an `Add_log_row` at the right level from one dragged inside `Condition_row_known` — a mistake with no visible effect on the canvas and no effect at all on tests 13 or 16.
 
 Test 12 is the standing reminder that this conversion is half finished.
 

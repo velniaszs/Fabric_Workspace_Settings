@@ -531,7 +531,7 @@ Build **last**, once the flow works. Identical in shape to [AddWorkspaceToPolicy
 | 3 | `Set variable` | `outcome` = `Caught` |
 | 4 | `Set_message` — **Set variable** | `message` = the expression below |
 | 5 | `Condition_row_known` — **Condition** | `empty(variables('policyRowId'))` is equal to `false` |
-| 6 | └ **Yes** → `Update_policy_error` | `Capacity Policies`, row `variables('policyRowId')`, `ubsppcoe_lasterror` only |
+| 6 | └ **Yes** → `Update_policy_error` | `Capacity Policies`, Row ID `variables('policyRowId')`, `ubsppcoe_lasterror` = **`variables('message')`** — that column and no other |
 | 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging`, **outside the Condition** — `Log Category` = `Error`, `Log Source Name` = `workflow()?['tags']?['flowDisplayName']`, `Log Source URL` = the run URL |
 | 8 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
 
@@ -540,6 +540,8 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 ```
 
 Copy that from the code block, not from a table cell — the `|` would have to be escaped, and a `\|` pasted into the designer fails at runtime rather than at save.
+
+> **`ubsppcoe_lasterror` takes `variables('message')`, never `outputs('Compose_error')`.** The raw `result('Scope_try')` array carries every action's `inputs` and `outputs` verbatim — here that includes the Fabric request bodies — and it overruns the column's 2000 characters. `Compose_error` is there to be read in the run history, not written to a column. See [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) 7c.
 
 > **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a for the full shape and the run-URL expression.
 
