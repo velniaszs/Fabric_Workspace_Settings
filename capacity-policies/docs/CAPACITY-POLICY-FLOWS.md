@@ -571,14 +571,19 @@ Environment variables travel with a solution export; their **values** may not. S
 | Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on every Fabric call. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven |
 | Q45 | What identity does that connection use? | **Unresolved, and it blocks granting Fabric roles** — see §5. A service-principal connection keeps the current model; a delegated user connection moves every role onto that account and makes the tenant SPN setting irrelevant. **If it must be a user, use a service account, not a named person** — the nightly rebuild across 200–300 capacities is otherwise one leaver away from stopping |
 
-### Still open
+### Decision taken 2026-09-15
 
-Ordered by what they block. **No column name blocks the build any more** — Q19 closed on 2026-09-07. Q45 now does.
+| # | Question | Answer |
+|---|---|---|
+| Q46 | What are the real logical names of the soft-delete columns, and are they Boolean or Choice? | **Both tables use a column called `ubsppcoe_statecode`, and both are Choices, not Booleans.** On `ubsppcoe_Workspace`, `1` = Active and `2` = Deleted. On `ubsppcoe_Node`, `2` = Deleted and the other **ten of eleven options are live states**. So the two tables need *different* tests — `eq 1` for workspaces, `ne 2` for nodes — and the placeholder `ubsppcoe_isdeleted ne true` was wrong in name *and* in operator. All six filters rewritten; [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 is authoritative. **`ubsppcoe_statecode` is a custom column and has nothing to do with Dataverse's system `statecode`** |
+
+### Still open
+Ordered by what they block. **No column name blocks the build any more** — Q19 closed on 2026-09-07, Q46 on 2026-09-15. Q45 is the only remaining build blocker.
 
 | # | Question | Blocks |
 |---|---|---|
-| **Q46** | **What are the real logical names of the soft-delete columns on `ubsppcoe_Workspace` and `ubsppcoe_Node`?** Both tables soft-delete rather than hard-delete (confirmed 2026-09-12), which changes the design in six places — [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 lists them. `ubsppcoe_isdeleted` is a **placeholder** written into every affected document. Also confirm whether each is a Boolean or a Choice, and what a live row holds | **Flow build** |
-| **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist | Pre-launch |
+| **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist. **Now covers `ubsppcoe_statecode` too** — a new option added to the Node table's eleven changes which capacities get governed, silently | Pre-launch |
+| **Q47** | **What do the other ten `ubsppcoe_statecode` options on `ubsppcoe_Node` actually mean?** Only `2` = Deleted is confirmed. Every filter treats the remaining ten as live. If any of them means archived, pending or rejected, `ne 2` is too generous and [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) will govern capacities it should leave alone | Pre-launch |
 | **Q45** | Which identity does the connector connection authenticate as, and who owns it? Every Fabric role in §5 attaches to that identity, so nothing can be granted until it is decided | **Flow build** |
 | **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`? **Narrowed 2026-09-10:** this applies to the **script** migration path only. Under a flow-driven migration no CSV is read, `ubsppcoe_Workspace` is the source of truth from the first publish, and the question does not arise. Seeding `PolicyException` still does, on both paths | Cutover |
 | **Q16** | Nothing triggers a rebuild when the owning system changes `ubsppcoe_oapenabled` or moves a `Node` — **or when somebody edits `PolicyException`, which is our own table**. Nightly convergence is currently the only backstop. Acceptable, or does this need a Dataverse modified-row trigger? | Post-launch |

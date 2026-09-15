@@ -78,9 +78,11 @@ In the built flow, **delete the Power Apps (V2) trigger and add** **Microsoft Da
 | Table name | `Workspaces` (`ubsppcoe_Workspace`) |
 | Scope | **Organization** |
 | Select columns | `ubsppcoe_oapenabled,ubsppcoe_nodeid` |
-| Filter rows | `ubsppcoe_oapenabled eq true and _ubsppcoe_nodeid_value ne null and ubsppcoe_isdeleted ne true` |
+| Filter rows | `ubsppcoe_oapenabled eq true and _ubsppcoe_nodeid_value ne null and ubsppcoe_statecode eq 1` |
 
-> **`ubsppcoe_isdeleted` is a PLACEHOLDER name — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 (Q46)**, which lists all six places it appears. The real name has not been supplied.
+> **`ubsppcoe_statecode` is a Choice, and on `ubsppcoe_Workspace` `1` = Active, `2` = Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). It is a **custom column**, not Dataverse's system `statecode`. The integer is **unquoted**, and `eq true` / `ne true` do not work against it — an earlier revision of this document used a placeholder Boolean and was wrong on both counts.
+>
+> **`eq 1`, not `ne 2`, and here that is the safer direction.** This filter decides what gets *added* to a deny-all exemption, so it should fail closed: if the platform team ever adds a third option, an `eq 1` test excludes it until somebody looks, whereas `ne 2` would whitelist it silently. The Node table takes the opposite form for the opposite reason — see the tables document.
 >
 > It is in `Filter rows` but deliberately **not** in `Select columns`. A workspace being soft-deleted should not fire *this* flow — that is [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)'s event. Keeping it out of `Select columns` means a delete does not even wake this flow up; keeping it in `Filter rows` means that if some *other* watched column changes on an already-deleted row, nothing happens.
 

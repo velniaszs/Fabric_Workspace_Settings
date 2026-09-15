@@ -64,9 +64,13 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 | Table name | `Nodes` (`ubsppcoe_Node`) |
 | Scope | **Organization** |
 | Select columns | `ubsppcoe_nodeuniqueid` |
-| Filter rows | `ubsppcoe_nodeuniqueid ne null and ubsppcoe_isdeleted ne true` |
+| Filter rows | `ubsppcoe_nodeuniqueid ne null and ubsppcoe_statecode ne 2` |
 
-> **`ubsppcoe_isdeleted` is a PLACEHOLDER name — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 (Q46).** The platform team's tables soft-delete rather than hard-delete, so a decommissioned capacity keeps its Node row and its capacity GUID. Without this clause, any later edit to a decommissioned Node row would initialise and **activate** a policy set on a capacity somebody has retired.
+> **`ubsppcoe_statecode` is a Choice with 11 options, and only `2` means Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). It is a custom column, **not** Dataverse's system `statecode`, and the integer is unquoted. An earlier revision used a placeholder Boolean, `ubsppcoe_isdeleted ne true`, which names the wrong column *and* is an invalid comparison against an option set.
+>
+> **`ne 2`, not `eq 1`, and the Node table is the opposite of the Workspace table here.** A capacity moves through ten live states; testing `eq 1` would refuse to initialise a policy set for nine of them, leaving most of the estate ungoverned and giving no error to explain why. `ubsppcoe_Workspace` has only `1` and `2`, so the whitelist filters there use `eq 1` — do not copy one form into the other.
+>
+> The platform team's tables soft-delete rather than hard-delete, so a decommissioned capacity keeps its Node row and its capacity GUID. Without this clause, any later edit to a decommissioned Node row would initialise and **activate** a policy set on a capacity somebody has retired.
 
 The three values the flow needs all come off the trigger body:
 

@@ -84,18 +84,29 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 | `ubsppcoe_Workspace` | **Fabric workspace GUID** | `ubsppcoe_workspaceid` | Text | **Confirmed 2026-09-07.** This is the Fabric id, not the row key |
 | `ubsppcoe_Workspace` | `Node` lookup | `ubsppcoe_nodeid` — read as `_ubsppcoe_nodeid_value` | Lookup → `ubsppcoe_Node` | **Corrected 2026-09-09.** Its *value* is the **Node row GUID**, not the capacity id |
 | `ubsppcoe_Workspace` | The whitelist flag | `ubsppcoe_oapenabled` | Boolean | **Confirmed 2026-09-07** |
-| `ubsppcoe_Workspace` | **Soft-delete flag** | `ubsppcoe_isdeleted` | Boolean | ⚠ **PLACEHOLDER NAME — 2026-09-12. Not confirmed.** |
-| `ubsppcoe_Node` | **Soft-delete flag** | `ubsppcoe_isdeleted` | Boolean | ⚠ **PLACEHOLDER NAME — 2026-09-12. Not confirmed.** |
+| `ubsppcoe_Workspace` | **Soft-delete state** | `ubsppcoe_statecode` | **Choice** | **Confirmed 2026-09-15.** `1` = Active, `2` = Deleted |
+| `ubsppcoe_Node` | **Soft-delete state** | `ubsppcoe_statecode` | **Choice** | **Confirmed 2026-09-15.** `2` = Deleted; **11 options in total**, every other value is live |
 
-> ## ⚠ The two soft-delete columns are placeholders — 2026-09-12
+> ## ⚠ `ubsppcoe_statecode` is a custom Choice column, not the system `statecode` — 2026-09-15
 >
-> **Neither logical name is real.** `ubsppcoe_isdeleted` is a stand-in written into the flow documents so the logic could be specified; the platform team owns the actual names and they have not been supplied yet. The two tables may not even use the same name as each other.
+> **Both tables carry a column literally named `ubsppcoe_statecode`.** It sits alongside Dataverse's own `statecode`/`statuscode` pair and has nothing to do with it. Filtering or writing the system column instead is the mistake this note exists to prevent: the system pair governs Dataverse's own active/inactive behaviour and would hide rows from `List rows` altogether.
 >
-> **Nothing that depends on them can be built until the real names are in.** A wrong column name gives a clean `400`, which is survivable — but an expression that resolves to blank returns **every row**, and in this design that whitelists every workspace in the tenant on one capacity (§1, the standing warning).
+> **It is a Choice, so every filter is `eq <int>` / `ne <int>`.** The `eq true` / `ne true` idiom used for `ubsppcoe_oapenabled` does not apply and will not resolve. The integers are **unquoted**.
 >
-> ### Everywhere the name has to be substituted
+> ### The two tables do not use the same test, and that asymmetry is real
 >
-> Change all six together, in one pass, and re-run the tests named in each document:
+> | Table | Live rows | Deleted rows | Use |
+> |---|---|---|---|
+> | `ubsppcoe_Workspace` | `1` | `2` | **`ubsppcoe_statecode eq 1`** for live, `ne 1` for its complement |
+> | `ubsppcoe_Node` | any value except `2` | `2` | **`ubsppcoe_statecode ne 2`** for live, `eq 2` for deleted |
+>
+> **Do not standardise these into one form.** `ubsppcoe_Node` has **11 options** covering a capacity's lifecycle, so `eq 1` on a Node would exclude nine live states and silently refuse to govern most of the estate. `ubsppcoe_Workspace` is the two-value case, so `eq 1` is correct there and fails *closed* — an unexpected new option is excluded from the whitelist rather than added to it.
+>
+> **Confirm the Node option set before the first rebuild.** Only `2` is pinned down. If any of the other ten turns out to mean something that should *not* be governed — archived, pending, rejected — then `ne 2` is too generous and the list needs narrowing. `ne 2` is the right default only because an over-inclusive Node filter merely governs a capacity nobody asked about, whereas an under-inclusive one leaves capacities unprotected.
+>
+> ### Everywhere the filter appears
+>
+> Six places, all updated 2026-09-15. Re-run the tests named in each document:
 >
 > | # | File | Where | What it does |
 > |---|---|---|---|
@@ -106,11 +117,11 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 > | 5 | [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Step 1, trigger `Filter rows` | Stops a decommissioned capacity being initialised |
 > | 6 | [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | Step 1, trigger `Filter rows` | The whole trigger for that flow |
 >
-> ### Two things to confirm at the same time, not afterwards
+> ### What the earlier draft got wrong, and why it matters
 >
-> **Is it a Boolean or a Choice?** Every filter written so far assumes Boolean and uses `ne true` / `eq true`. A Choice column needs `eq <optionsetvalue>` and the `ne true` idiom stops working entirely.
+> Until 2026-09-15 all six filters used a placeholder Boolean, `ubsppcoe_isdeleted ne true`. **That form is not merely misnamed — it does not work against a Choice column**, so none of it would have survived first contact. Anything copied out of an older revision of these documents has to be rewritten, not renamed.
 >
-> **Is it nullable, and what does a live row hold?** All six filters use **`ne true`** rather than `eq false`, on the assumption that a row nobody has deleted holds null rather than `false` — the same three-valued reasoning as `ubsppcoe_oapenabled` (§1). If the column is in fact non-nullable and defaults to `false`, `ne true` still works; if it is nullable, `eq false` would silently drop every live row. **`ne true` is the safe form either way — do not "tidy" it to `eq false` once the real name is known.**
+> The `ne true` / `eq false` reasoning that still applies to `ubsppcoe_oapenabled` (§1) has **no bearing here**. That argument is about a nullable Boolean's third state; an option set has no such state.
 
 > ### Both tables separate their Fabric GUID from their row key
 >

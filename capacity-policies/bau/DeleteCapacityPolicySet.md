@@ -47,9 +47,11 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 >
 > But when Fabric says the capacity is gone, **there is nothing to reverse to.** The set could only ever be reactivated against a capacity GUID that no longer exists and will not be reissued. Keeping it is not caution; it is clutter with a story attached.
 
-> ### The `IsDeleted` column name is a PLACEHOLDER
+> ### The delete state is `ubsppcoe_statecode`, and on `ubsppcoe_Node` only `2` means deleted
 >
-> `ubsppcoe_isdeleted` throughout this document is a stand-in. The real logical name has not been supplied — **[CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 is the authoritative list** of all six places it appears, and Q46 tracks it as blocking the build.
+> **Confirmed 2026-09-15.** It is a **Choice** with **11 options**, and it is a custom column — not Dataverse's system `statecode`. Filters use unquoted integers; `eq true` does not resolve against it. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1.
+>
+> **This flow is the one place that tests `eq 2` rather than `ne 2`**, because it is the only flow in the design that wants the deleted rows. Ten of the eleven options are live states of a capacity's lifecycle and none of them should fire this flow.
 
 > ### The row is readable, and that changes the design
 >
@@ -78,14 +80,14 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 | Change type | **Modified** |
 | Table name | `Nodes` (`ubsppcoe_Node`) |
 | Scope | **Organization** |
-| Select columns | `ubsppcoe_isdeleted` |
-| Filter rows | `ubsppcoe_isdeleted eq true` |
+| Select columns | `ubsppcoe_statecode` |
+| Filter rows | `ubsppcoe_statecode eq 2` |
 
-**`eq true` here, not `ne true`.** This is the one filter in the design that wants the deleted rows rather than the live ones, so the three-valued reasoning inverts: `eq true` matches only rows explicitly flagged, which is exactly right. A null or `false` flag is a live capacity and must not fire this flow.
+**`eq 2` here, not `ne 2`.** This is the one filter in the design that wants the deleted rows rather than the live ones, so the test inverts. `ubsppcoe_Node` has **11 options** and only `2` is Deleted — so `ne 2` here would fire this flow on every ordinary lifecycle change and start deleting policy sets for capacities that are merely being reprovisioned. **Getting this one backwards destroys policy sets on live capacities**, which is why it is stated twice.
 
 **`Modified`, not `Deleted`.** A soft delete is a column change. Ticking `Deleted` as well would add a trigger for hard deletes, which this flow cannot service — the row would be unreadable and the capacity underivable. **Leave `Deleted` off**, and accept that a genuine hard delete is invisible here; [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) is what would eventually notice the orphan.
 
-**`Select columns` must contain the flag**, or the flow never fires — the deletion *is* the change being watched for.
+**`Select columns` must contain `ubsppcoe_statecode`**, or the flow never fires — the deletion *is* the change being watched for.
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**.
 
