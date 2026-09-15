@@ -11,8 +11,8 @@ Creates the policy set for a newly inventoried capacity, registers it in Dataver
 > | # | Edit | Where |
 > |---|---|---|
 > | 1 | Delete the Power Apps (V2) trigger, add the Dataverse one | Step 1 |
-> | 2 | `triggerBody()['text']` → `triggerOutputs()?['body/ubsppcoe_nodeuniqueid']` | Steps 3, 4, 8a, 8c |
-> | 3 | `triggerBody()['text_1']` → the Fabric display name from Step 4 | Steps 5, 8a |
+> | 2 | `triggerBody()['text']` → `triggerOutputs()?['body/ubsppcoe_nodeuniqueid']` | Steps 3, 4, **6**, 8a, 8c |
+> | 3 | `triggerBody()['text_1']` → `first(body('Filter_capacity'))?['displayName']` | Steps 5, **6**, 8a |
 > | 4 | **Delete Step 4b entirely** — the trigger *is* the Node row | Step 4b |
 > | 5 | Replace `Respond` with a `Compose` | Step 9 |
 > | 6 | Wrap Steps 3–8 in `Scope_try`; add `Scope_catch` | Step 10 |
@@ -273,8 +273,10 @@ Three **Compose** actions. Capacity display names are far more permissive than F
 ### 5a. `Compose_name_raw`
 
 ```
-@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), triggerBody()['text_1'])}
+@{concat(parameters('PolicyNamePrefix (ubsppcoe_PolicyNamePrefix)'), first(body('Filter_capacity'))?['displayName'])}
 ```
+
+**Two different things in one expression.** `parameters(...)` is the environment variable holding the prefix; the display name is Fabric's, read from Step 4's `Filter_capacity`. Neither is a trigger input — `triggerBody()['text_1']` belonged to the Power Apps (V2) trigger this flow no longer has.
 
 ### 5b. `Compose_name_clean`
 
@@ -313,11 +315,11 @@ Body:
 ```json
 {
   "displayName": "@{outputs('Compose_name_final')}",
-  "description": "@{concat('Item creation policy for capacity ', triggerBody()['text_1'])}",
+  "description": "@{concat('Item creation policy for capacity ', first(body('Filter_capacity'))?['displayName'])}",
   "creationPayload": {
     "scope": {
       "type": "Capacity",
-      "id": "@{triggerBody()['text']}"
+      "id": "@{triggerOutputs()?['body/ubsppcoe_nodeuniqueid']}"
     }
   }
 }
@@ -395,7 +397,7 @@ Then the columns:
 
 > **The Node bind now comes straight from the trigger.** `triggerOutputs()?['body/ubsppcoe_nodeid']` is the row key of the row that fired the flow — no query, and nothing that can return empty. Step 4b used to fetch it; see that section for why it is gone and why re-querying "to be safe" would be worse.
 
-> **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Step 4b exists solely to make this line safe to write.
+> **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Bind it to `triggerOutputs()?['body/ubsppcoe_nodeid']` — the Node row key, straight off the trigger.
 >
 > **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's **primary key**. That key is `ubsppcoe_nodeid` — display name *Node*, the only unique-identifier column on the table. Step 4b exists to fetch it. If the connector rejects the path, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
 >
@@ -411,9 +413,7 @@ Then the columns:
 
 With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows for a policy row that was created seconds ago, this writes **rule 1 alone** — the intended default, and it exercises the zero-workspace path on day one rather than months later.
 
-> **A capacity with no `ubsppcoe_Node` row never reaches this step** — Step 4b stops it and returns `Failed` before anything is created in Fabric. What can still happen here is a Node row that exists but has **no OAP-enabled workspaces yet**, which is the normal state for a freshly provisioned capacity and produces rule 1 alone.
->
-> If provisioning routinely creates the capacity before its inventory record, expect `Failed` from Step 4b on first run, and decide whether the provisioning app should order the two the other way round.
+> **A capacity with no `ubsppcoe_Node` row cannot reach this step** — the trigger *is* a Node row, so one always exists. What can still happen here is a Node row with **no OAP-enabled workspaces yet**, which is the normal state for a freshly provisioned capacity and produces rule 1 alone.
 
 ### 8c. `Activate` — **Invoke an HTTP request**
 
