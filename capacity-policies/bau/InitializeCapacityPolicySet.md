@@ -532,13 +532,22 @@ Build **last**, once the flow works. Identical in shape to [AddWorkspaceToPolicy
 | 4 | `Set_message` — **Set variable** | `message` = the expression below |
 | 5 | `Condition_row_known` — **Condition** | `empty(variables('policyRowId'))` is equal to `false` |
 | 6 | └ **Yes** → `Update_policy_error` | `Capacity Policies`, row `variables('policyRowId')`, `ubsppcoe_lasterror` only |
-| 7 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
+| 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging`, **outside the Condition** — `Log Category` = `Error`, `Log Source Name` = `workflow()?['tags']?['flowDisplayName']`, `Log Source URL` = the run URL |
+| 8 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
 
 ```
 concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scope_try'), ': ', coalesce(first(body('Filter_failed'))?['error']?['message'], 'scope was skipped or timed out'), ' | run ', workflow()?['run']?['name'])
 ```
 
 Copy that from the code block, not from a table cell — the `|` would have to be escaped, and a `\|` pasted into the designer fails at runtime rather than at save.
+
+> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a for the full shape and the run-URL expression.
+
+> ### The `Logging` insert matters more in this flow than in any of the four
+>
+> The box below explains that five of this flow's six failure points happen **before** `Add_policy_row`, so there is no row to write `ubsppcoe_lasterror` to. Until now those five produced no Dataverse record at all.
+>
+> **The worst of them is a policy set created in Fabric with no `Capacity Policies` row** — an orphan that nothing maps back to and that `SyncCapacityPolicySets` will later report as `Untracked` drift with no explanation of how it got there. The `Logging` row is what connects the two, so keep row 7 outside the Condition.
 
 > ### The `empty(policyRowId)` guard matters more here than anywhere else
 >

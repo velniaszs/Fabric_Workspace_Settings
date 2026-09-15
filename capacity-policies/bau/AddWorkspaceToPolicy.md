@@ -41,6 +41,8 @@ Confirms that a workspace really is whitelisted on a capacity, then rebuilds tha
 > **The body still does not change.** Dragging actions into a Scope edits none of them — variables are global, so every `variables('capacityId')` reference survives the move untouched.
 >
 > **One thing is not settled: which table the Catch writes to.** This document assumes `Capacity Policies`, which is ours. If the answer turns out to be `ubsppcoe_Workspace`, that is not a flow change — see Step 7.
+>
+> **Settled 2026-09-15, and the answer was neither.** The Catch writes `ubsppcoe_lasterror` on `Capacity Policies` **and** inserts a row into the existing `Logging` table. It never writes `ubsppcoe_Workspace` — that table is read-only for this project, without exception ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
 
 Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1–§2.
 
@@ -50,7 +52,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 
 - Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it.
 - Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. It makes **no Fabric calls of its own** — every Fabric interaction, and therefore the whole auth question, lives inside the child flow.
-- **Reads only, apart from one column.** `Scope_catch` writes `ubsppcoe_lasterror` on a `Capacity Policies` row, and only when something has failed. Nothing else in the flow writes anything — see Step 7.
+- **Reads only, apart from one column.** `Scope_catch` writes `ubsppcoe_lasterror` on a `Capacity Policies` row and inserts a row into `Logging`, and only when something has failed. Nothing else in the flow writes anything — see Step 7.
 
 > ## This flow does not add anything
 >
@@ -414,7 +416,30 @@ Inside it, in order:
 | 4 | `Set_message` — **Set variable** | `message` = the expression below |
 | 5 | `Condition_row_known` — **Condition** | `empty(variables('policyRowId'))` is equal to `false` |
 | 6 | └ **Yes** → `Update_policy_error` | Dataverse **Update a row** — see below |
-| 7 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
+| 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging` — see below. **Not inside the Condition** |
+| 8 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
+
+### 7c. `Add_log_row` — the `Logging` insert
+
+**Decided 2026-09-15**, replacing this document's earlier note that the target table was unsettled. The answer is *both*: `ubsppcoe_lasterror` for the text, `Logging` for the fact and the pointer.
+
+| Column (UI display name) | Value |
+|---|---|
+| Log Category | `Error` — literal text |
+| Log Source Name | `workflow()?['tags']?['flowDisplayName']` |
+| Log Source URL | the run URL — [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a |
+
+> **⚠ The logical names of those three columns are not confirmed — Q48.** Only the UI display names are known, and the table belongs to the platform team. **Do not guess them from the display names**; get a populated row first. §5a explains why, and names the six filters that had to be rewritten the last time this project guessed a column name.
+
+> ### `Add_log_row` sits **outside** `Condition_row_known`, and that is the point of adding it
+>
+> `Update_policy_error` can only run when a `Capacity Policies` row exists. Since the trigger conversion, the ordinary exit for an ungoverned capacity leaves `policyRowId` **empty** — so on that path the Condition is false and, before this change, the failure was recorded **nowhere**. That is the largest population of runs this flow has.
+>
+> Keep the insert at the same level as the Condition and it runs on every caught path, governed or not.
+>
+> **It must also come before the `Terminate`.** Terminate ends the run without evaluating anything after it ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4) — an `Add a new row` placed below it is dead code that the designer will not flag.
+
+> **Do not tick *has failed* on `Add_log_row`.** It is inside `Scope_catch`, not `Scope_try`, so the rule in Step 5 does not apply to it — but if the insert itself fails, the `Terminate` is skipped and the run goes **green** with the error recorded nowhere. Leave it on the default so a broken log write fails the run loudly. This is the one place where losing the log is better than losing the red run.
 
 ### The `message` expression
 

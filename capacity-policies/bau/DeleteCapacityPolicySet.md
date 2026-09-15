@@ -300,7 +300,25 @@ concat('Node soft-deleted ', utcNow(), ' but the capacity is still present in Fa
 
 Same shape as [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7. `Scope_try` wraps Steps 2 and 3; `Scope_catch` runs after it on **has failed**, **is skipped**, **has timed out**; the Catch ends in `Terminate` status **Failed**.
 
-**The Catch cannot write `ubsppcoe_lasterror` here in the usual way.** The row it would write to is the one Step 2 may have failed to find. Guard on a `policyRowId` variable exactly as the other flows do, set it after Step 2, and accept that a failure inside Step 2 records only to the run history.
+**The Catch cannot write `ubsppcoe_lasterror` here in the usual way.** The row it would write to is the one Step 2 may have failed to find. Guard on a `policyRowId` variable exactly as the other flows do, and set it after Step 2.
+
+**So add `Add_log_row` as well — Dataverse *Add a new row* into `Logging`, outside that guard and before the `Terminate`.** Decided 2026-09-15; this is one of the four flows that logs there ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a).
+
+| Column (UI display name) | Value |
+|---|---|
+| Log Category | `Error` — literal text |
+| Log Source Name | `workflow()?['tags']?['flowDisplayName']` |
+| Log Source URL | the run URL — §5a |
+
+> **⚠ The logical names of those three columns are not confirmed — Q48.** Only the UI display names are known, and the table belongs to the platform team. Do not guess them.
+
+> ### This flow needed it most of the four
+>
+> The sentence above used to end *"and accept that a failure inside Step 2 records only to the run history."* That acceptance is what the `Logging` row removes.
+>
+> **This is the only flow that deletes a policy set**, and the failure it cannot currently record is a `List rows` that did not resolve the policy row — meaning the flow does not know whether it was supposed to delete anything. A capacity is being decommissioned, something went wrong before the flow could identify the target, and there was no Dataverse trace of it whatsoever. Whether the policy set was left behind or the row was simply absent are very different situations, and the run history was the only place to tell them apart.
+>
+> **Keep the insert outside `Condition_row_known` and above the `Terminate`.** Inside the guard it is skipped on exactly the path that motivated it; below the Terminate it never runs at all ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4).
 
 Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can itself fail, or `result('Scope_try')` reports the container rather than the action ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E1, E10).
 

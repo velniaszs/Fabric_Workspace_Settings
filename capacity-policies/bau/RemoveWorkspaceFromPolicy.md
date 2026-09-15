@@ -415,13 +415,20 @@ Build **last**. Identical in shape to [AddWorkspaceToPolicy.md](docs/flows/capac
 | 4 | `Set_message` — **Set variable** | `message` = the expression below |
 | 5 | `Condition_row_known` — **Condition** | `empty(variables('policyRowId'))` is equal to `false` |
 | 6 | └ **Yes** → `Update_policy_error` | `Capacity Policies`, row `variables('policyRowId')`, `ubsppcoe_lasterror` only |
-| 7 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
+| 7 | `Add_log_row` — Dataverse **Add a new row** | Table `Logging`, **outside the Condition** — `Log Category` = `Error`, `Log Source Name` = `workflow()?['tags']?['flowDisplayName']`, `Log Source URL` = the run URL |
+| 8 | `Terminate` | Status **Failed**, message `concat(variables('outcome'), ' — ', variables('message'))` |
 
 ```
 concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scope_try'), ': ', coalesce(first(body('Filter_failed'))?['error']?['message'], 'scope was skipped or timed out'), ' | run ', workflow()?['run']?['name'])
 ```
 
 Copy from the code block, not from a table cell — the `|` would need escaping, and a `\|` pasted into the designer fails at runtime rather than at save.
+
+> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a for the full shape, the run-URL expression, and why guessing the names is the mistake this project already made once.
+
+> **Row 7 is at the same level as row 5, not inside it**, and it must come before the `Terminate`. Outside the Condition it runs on every caught path including the one where no `Capacity Policies` row exists; below the Terminate it would never run at all ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4).
+>
+> **Leave `Add_log_row` on default run-after.** If the insert fails and it is configured to tolerate that, the `Terminate` is skipped and this flow reports **green** for a failed removal — the exact outcome the Terminate exists to prevent, reintroduced through the logging.
 
 > **A caught failure here is more serious than in `AddWorkspaceToPolicy`.** That flow fails to *grant* access, which is an inconvenience. This one fails to *remove* it — so a caught error means somebody asked for access to be taken away and it is still live, until the nightly run. The `Terminate` is what makes that visible; without it the run reports success ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7).
 
