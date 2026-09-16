@@ -132,7 +132,35 @@ The child flow already stamps `last_rebuild` and `last_error` on each row, so pe
 
 After the loop, a **Condition** on `@greater(length(variables('failures')), 0)`.
 
-**Yes** → send a mail or post to Teams — whatever your operational routing is. Include the count and the lines.
+**Yes** → `Send_failure_report` — Office 365 Outlook **Send an email (V2)**. **To** is your operational mailbox, not a named person.
+
+> **This adds an Office 365 Outlook connection to the flow**, which is otherwise Dataverse-only.
+
+**Subject:**
+
+```
+@{concat('Capacity policy rebuild — ', string(length(variables('failures'))), ' of ', string(length(body('List_policy_rows')?['value'])), ' capacities failed')}
+```
+
+**Body** — switch the box to **</>** (code view) and paste:
+
+```html
+<p><b>MIG_RebuildAllCapacityPolicies</b> finished @{utcNow()}.</p>
+<p>
+Capacities processed: <b>@{length(body('List_policy_rows')?['value'])}</b><br>
+Rebuilt: <b>@{sub(length(body('List_policy_rows')?['value']), length(variables('failures')))}</b><br>
+Failed: <b>@{length(variables('failures'))}</b>
+</p>
+<p>The capacities below <b>still hold the rules they had before this run</b>. Nothing was left half-published &mdash; each rebuild either replaced a capacity's whole rule set or changed nothing.</p>
+<h3>Failed</h3>
+<p>@{join(variables('failures'), '<br>')}</p>
+<p>Each line is <code>capacity name (id): message</code>. The same text is on that capacity's <code>Capacity Policies</code> row in <code>ubsppcoe_lasterror</code>, and <code>ubsppcoe_lastrebuild</code> shows when it was last attempted.</p>
+<p>Re-running this flow is safe. Rebuilds are idempotent, and the capacities above sort to the front of the next run because their <code>ubsppcoe_lastrebuild</code> is the oldest.</p>
+```
+
+**The counts go in the subject** so the result is readable without opening the mail, and so two runs do not produce identical subject lines.
+
+**The body leads with what is still true**, not with the list. The reader's first question on seeing a rebuild failure is whether a capacity has been left unenforced; `replaceByPolicy` means it has not, and saying so before the list stops that question being asked.
 
 > **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, for three reasons.
 >
