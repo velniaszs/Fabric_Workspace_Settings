@@ -1,6 +1,6 @@
-# Flow — `RebuildAllCapacityPolicies`
+# Flow — `MIG_RebuildAllCapacityPolicies`
 
-Scheduled. Rebuilds every capacity's rules from Dataverse, on a nightly or weekly cycle. The backstop that makes Dataverse genuinely the source of truth rather than merely the intended one.
+Manual. Rebuilds every capacity's rules from Dataverse in one pass, when somebody runs it. The backstop that makes Dataverse genuinely the source of truth rather than merely the intended one.
 
 > **Not built yet.** Specification, not a description of something that exists.
 
@@ -43,15 +43,13 @@ The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-
 
 ## Step 1 — Create the flow
 
-**Solutions** → **New** → **Automation** → **Cloud flow** → **Scheduled**. Name it `RebuildAllCapacityPolicies`.
+**Solutions** → **New** → **Automation** → **Cloud flow** → **Instant** → trigger **Manually trigger a flow**. Name it `MIG_RebuildAllCapacityPolicies`. No trigger inputs.
 
-Recurrence: nightly, outside business hours. Each run processes the **whole estate** — see §5 before considering otherwise.
-
-Nightly rather than weekly, because the interval is the **worst-case delay on a failed removal reaching Fabric** ([RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) §6).
+Each run processes the **whole estate** — see §5 before considering otherwise.
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. A run that overlaps its predecessor would have two loops rebuilding the same capacities.
 
-**This flow can set it and the child flow cannot** — a Recurrence trigger has no `Respond` action, so the platform allows trigger concurrency here. [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) is request-response and is rejected if you try. That makes this setting the only thing preventing concurrent rebuilds at scale.
+**This flow can set it and the child flow cannot** — a manual trigger has no `Respond` action, so the platform allows trigger concurrency here. [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) is request-response and is rejected if you try. That makes this setting the only thing preventing concurrent rebuilds at scale.
 
 ---
 

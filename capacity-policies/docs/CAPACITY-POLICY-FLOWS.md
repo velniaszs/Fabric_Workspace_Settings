@@ -274,7 +274,6 @@ Build instructions are one file per flow in [flows/capacity-policies/](docs/flow
 | [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled eq true`** | Publish a workspace becoming whitelisted |
 | [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled ne true` or soft-deleted** | Publish a workspace losing its whitelist |
 | [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) | **Dataverse — `Policy Exceptions` added/modified** | Publish an exception being granted or revoked. **New — closes Q16 and Q33** |
-| [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | Recurrence | Nightly convergence of every capacity to the tables |
 | [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) | Recurrence | Detects drift the rebuild cannot fix |
 
 > ### Retriggered 2026-09-11 and 2026-09-12 — four flows moved off Power Apps
@@ -287,21 +286,28 @@ Build instructions are one file per flow in [flows/capacity-policies/](docs/flow
 >
 > **Q16 is closed for `ubsppcoe_Workspace` and `ubsppcoe_Node`, and closed for `Policy Exceptions` since 2026-09-16** — [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) gives that table the trigger it lacked. What remains uncovered is a **hard delete** of an exception row, and a `Node` **move**.
 >
-> **Q17 is closed by soft delete, partially.** A deleted workspace is now a `Modified` event that `RemoveWorkspaceFromPolicy` can act on. A workspace **moving** capacity still is not: the flag does not change, so neither flow fires, and the old capacity keeps it until the nightly run.
+> **Q17 is closed by soft delete, partially — and reopened by the 2026-09-16 retrigger.** A deleted workspace is now a `Modified` event that `RemoveWorkspaceFromPolicy` can act on. A workspace **moving** capacity still is not: the flag does not change, so neither flow fires, and the old capacity keeps it. That used to be corrected by the nightly rebuild **within a day**; with no schedule it is corrected only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md). See Q49.
 >
 > **Two decisions are outstanding and both are in the flow documents rather than here.** `InitializeCapacityPolicySet` now activates a deny-all with nobody deciding, and nothing retries a capacity it skipped. `DeleteCapacityPolicySet` removes enforcement on another team's signal, and nothing restores it when they reverse that signal.
 
-### Plus three migration flows, which are not part of BAU
+### Plus four `MIG_` flows, which are not part of BAU
 
-Built for cutover, run by hand, then **deleted**. The `MIG_` prefix marks them as disposable — see §8.
+Built for cutover and run by hand. Three are **deleted** afterwards; the fourth is kept — see §8.
 
 | Flow | Trigger | Purpose |
 |---|---|---|
 | [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) | Manual (child) | Creates and registers one capacity's policy set. **No rules, no activation** |
 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) | Manual | Loops `GET /v1/capacities` and calls the above |
+| [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) | Manual | Rebuilds every capacity's rules in one pass. **Retriggered 2026-09-16 from a nightly Recurrence — and kept after cutover, not deleted** |
 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) | Manual | Activates the estate. `Report` mode is the dry run |
 
-Migration's **rebuild** phase needs no flow of its own — `RebuildAllCapacityPolicies` already does it.
+> ## ⚠ Nothing converges the estate automatically any more — 2026-09-16
+>
+> `RebuildAllCapacityPolicies` ran nightly and was the backstop behind every other flow. It is now [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md), manual, and runs only when somebody starts it.
+>
+> **Four things that used to self-heal within a day now do not**: a `Failed` outcome from any of the three event flows, a workspace **moving** capacity (**Q17**), a hard-deleted `Policy Exceptions` row, and any rule edited or deleted by hand in the portal — including **rule 1**, whose absence leaves a capacity unenforced.
+>
+> The event flows still publish their own change immediately, so the ordinary path is unaffected. It is the **failure** path that no longer recovers on its own. See that flow's §0a, and **Q49**.
 
 **No flow writes a whitelist, because there is no whitelist to write.** Membership is derived from `OapEnabled` and `Node` (§3), so flows 3 and 4 are **read-only against Dataverse**: they check that the state the caller assumes is actually true, then republish the rules. **No flow writes `PolicyException` either** — that table is ours, but rows are created by hand or by the app, and every flow here only reads it.
 
@@ -336,9 +342,9 @@ Remove **proceeds anyway**, because republishing current truth can only narrow o
 >
 > It only arises while the workspace is **still on this capacity**. The usual reasons for calling remove — a capacity move or a deleted workspace — take the `Node` with them, and the rebuild then drops the workspace from rule 2 and rule 3 alike. `StillExcepted` is the narrower case of somebody clearing `OapEnabled` and expecting that to be the end of it.
 
-### Why both scheduled flows exist
+### Why both flows exist
 
-The nightly rebuild makes Dataverse the source of truth in practice, not just in intent: hand-edited rules, a deleted rule, even a removed rule 1 are all overwritten within a day.
+A full rebuild makes Dataverse the source of truth in practice, not just in intent: hand-edited rules, a deleted rule, even a removed rule 1 are all overwritten. **Since 2026-09-16 that happens only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md)** — [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) is the only one of the two still on a schedule, which makes its report the thing that tells you a rebuild is due.
 
 It also converges every `OapEnabled` or `Node` change that reached Dataverse without anyone calling the refresh — which, since the flag is owned elsewhere and editable by bulk import, is not an edge case. **It is the only backstop for a whole class of change this project cannot see happen.**
 
@@ -591,7 +597,8 @@ Ordered by what they block. **No column name blocks the build any more** — Q19
 | **Q16** | ~~Nothing triggers a rebuild when somebody edits `PolicyException`.~~ **Answered 2026-09-16 by [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md)** — yes, it needed a modified-row trigger. Narrowed to: a `Node` **move** still fires nothing, which is Q17 | Post-launch |
 | **Q33** | ~~Does taking an exception away need a flow of its own?~~ **Answered 2026-09-16 — yes.** [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) fires on both directions of `ubsppcoe_active`. Residual: a **hard delete** of the row still fires nothing, so *deactivate, do not delete* is now procedure rather than preference | Post-launch |
 | **Q35** | An exception follows its workspace to a new capacity with nobody on that capacity approving it (§3). Acceptable, or does `PolicyException` need a `capacity` lookup and a re-approval step on move? | Post-launch |
-| **Q17** | A `Node` move needs remove-then-add from the app. If it makes only the add call, the workspace stays whitelisted on the old capacity until the nightly run, and nothing reports it. Is that acceptable, or does the move need to be detected rather than declared? | Post-launch |
+| **Q49** | **Nothing converges the estate automatically since the 2026-09-16 retrigger.** A `Failed` outcome from any event flow, a `Node` move, a hard-deleted exception row and any hand-edited rule now persist until somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md). Is an operator-initiated rebuild acceptable, or does a Recurrence copy need to come back? **If it does, it is this flow on a schedule — no per-event flow can cover those four cases, because none of them fires an event** | **Pre-launch** |
+| **Q17** | A `Node` move needs remove-then-add from the app. If it makes only the add call, the workspace stays whitelisted on the old capacity, and nothing reports it. Is that acceptable, or does the move need to be detected rather than declared? **Sharper since Q49** — there is no longer a scheduled run behind it | Post-launch |
 | **Q10** | Should the app confirm against Fabric that a workspace exists and is on the capacity? The `Node` lookup answers it from the CMDB's point of view, but the CMDB can lag the real assignment, and a stale GUID is published verbatim and matches nothing — see §5 | Flow 3 |
 | **Q11** | What reconciles drift if someone edits rules in the portal? A scheduled compare-and-report, or compare-and-correct? | Post-launch |
 | **Q29** | `capacity_id` on `CapacityPolicy` and the `node` lookup now hold the **same GUID** (Q41), so they can only disagree if one was written wrong. Should the nightly scan assert they match, or is that too cheap a check to bother stating? | Post-launch |
@@ -610,7 +617,7 @@ One document per flow in [flows/capacity-policies/](docs/flows/capacity-policies
 6. **[AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)**, then **[RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)** — build add first and copy it. Verify the validation outcomes before the happy path: `NotEnabled` on add and `StillEnabled` on remove are the two that a bare rebuild wrapper could not report, and they are the reason both flows exist.
 7. **[RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md)** — copy `RemoveWorkspaceFromPolicy` and cut it down. Verify `NoWorkspace` before the happy path: a mistyped GUID on an exception row is the only failure in this design that nothing else detects, and it is what makes the flow worth more than same-day publishing.
 8. **[ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md)** — late because it reads the counts flow 0 stamps, so it is only meaningful once rebuilds have run. Nothing depends on it, but it is what the app actually renders.
-9. **[RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md)** — last, and only once a single-capacity rebuild is trusted. Time a full run at production scale before relying on the schedule.
+9. **[MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md)** — last, and only once a single-capacity rebuild is trusted. Time a full run at production scale so whoever presses the button knows how long to wait.
 
 Read-only first, one capacity before many — the order `Migration-Steps.md` already prescribes for the scripts, and it applies unchanged here.
 
@@ -623,11 +630,11 @@ Read-only first, one capacity before many — the order `Migration-Steps.md` alr
 > | 7 | [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) | Child, manual trigger. Creates and registers **one** capacity's policy set. No rules, no activation |
 > | 8 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) | The loop. Walks `GET /v1/capacities` and calls the child. Run by hand, in tranches |
 > | 9 | *Seed `Policy Exceptions`* | Human. Must precede any rebuild |
-> | 10 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | **Already built.** Doubles as migration's rebuild phase — no changes needed |
+> | 10 | [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) | Migration's rebuild phase. **Keep this one after cutover** — it is the only estate-wide repair tool |
 > | 11 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) | Puts deny-all into force. Has a `Report` dry-run mode |
 > | 12 | [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) | Verification surface, once there is something to verify |
 >
-> **Why copies rather than a `mode` input on the BAU flows.** A Power Apps (V2) trigger cannot be called by `Run a Child Flow`, so *something* with a manual trigger has to exist. Given that, a separate copy beats branching a tested flow: nothing built and verified for BAU has to be re-tested, and the `MIG_` prefix marks the whole set as disposable. **All three are turned off and deleted after cutover**, leaving no residue.
+> **Why copies rather than a `mode` input on the BAU flows.** A Power Apps (V2) trigger cannot be called by `Run a Child Flow`, so *something* with a manual trigger has to exist. Given that, a separate copy beats branching a tested flow: nothing built and verified for BAU has to be re-tested. **Three of the four are turned off and deleted after cutover**; `MIG_RebuildAllCapacityPolicies` is kept, because nothing else rebuilds more than one capacity at a time.
 >
 > **Register, rebuild and activate are three separate runs, deliberately.** Everything up to activation is inert — policy sets with no rules, deactivated, change nobody's access — so a half-finished or wholly wrong migration is undone by deleting rows and items. That separation is what replaces the `-WhatIf` the PowerShell path had, and it gives the exceptions seeding a window to happen in.
 >
@@ -653,10 +660,10 @@ Migration and BAU must not overlap on the same capacity.
 > |---|---|---|
 > | 1 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) — in tranches, checking the first five | Yes — delete the items and rows |
 > | 2 | Seed `Policy Exceptions` from `fabric_workspaces_exceptions.csv`, `workspace_id` column only | Yes |
-> | 3 | [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) | Yes — nothing is enforced yet |
+> | 3 | [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) | Yes — nothing is enforced yet |
 > | 4 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) in `Report` mode, and read the list | — |
 > | 5 | The same in `Activate` mode, stopping after five to verify | **No.** Deny-all is now in force |
-> | 6 | Delete the three `MIG_` flows | — |
+> | 6 | Delete `MIG_InitializeCapacityPolicySet`, `MIG_RegisterAllCapacityPolicySets` and `MIG_ActivateAllCapacityPolicySets`. **Keep `MIG_RebuildAllCapacityPolicies`**, switched off | — |
 >
 > Steps 1 to 3 change nobody's access. Step 5 changes everyone's.
 
