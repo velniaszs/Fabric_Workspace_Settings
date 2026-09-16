@@ -196,8 +196,8 @@ The GUID is **unquoted**, as always for a lookup filter.
 | Field | Value |
 |---|---|
 | Table name | `Workspaces` (`ubsppcoe_Workspace`) |
-| Filter rows | `ubsppcoe_workspaceid eq '@{variables('workspaceId')}'` |
-| Select columns | `ubsppcoe_workspaceid,ubsppcoe_oapenabled,_ubsppcoe_nodeid_value` |
+| Filter rows | `ubsppcoe_workspaceid eq '@{variables('workspaceId')}' and ubsppcoe_statecode eq 1` |
+| Select columns | `ubsppcoe_workspaceid,ubsppcoe_oapenabled,_ubsppcoe_nodeid_value,ubsppcoe_statecode` |
 | Row count | `50` |
 
 **Rows, plural, deliberately — and the trigger does not make this redundant.** The trigger body is *one* row. This table is not ours and has no uniqueness key we control, so if the same workspace GUID appears on two rows and either of them is still enabled, the workspace stays in the rules. **Query for all of them rather than trusting the row that fired**, or `StillEnabled` becomes unreachable in exactly the case it was written for.
