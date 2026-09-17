@@ -46,14 +46,20 @@ Three text inputs, all `x-ms-content-hint: TEXT`, all with the designer default 
 | # | Input title | Schema key | Type | Required | Raw reference |
 |---|---|---|---|---|---|
 | 1 | `workspaceId` | `text` | string | Yes | `@triggerBody()['text']` |
-| 2 | `requiredAction` | `text_1` | string | Yes | `@triggerBody()?['text_1']` |
+| 2 | `requiredAction` | `text_4` | string | Yes | `@triggerBody()?['text_4']` |
 | 3 | `initializationStrategy` | `text_2` | string | Yes | `@triggerBody()?['text_2']` |
 
-`text_1` carries the `requiredAction` that `ConnectWorkspaceToGit` (or `GetGitOperationStatus`) reported. `text_2` carries the owner's choice — `PreferRemote` or `PreferWorkspace` — and is blank when Fabric already named a direction.
+`text_4` carries the `requiredAction` that `ConnectWorkspaceToGit` (or `GetGitOperationStatus`) reported. `text_2` carries the owner's choice — `PreferRemote` or `PreferWorkspace` — and is blank when Fabric already named a direction.
+
+> **`requiredAction` is `text_4`, not `text_1` — changed 2026-09-17.** The input was deleted and re-added after logging inputs were introduced, and **Power Automate does not renumber schema keys**: a deleted key is not reused in place, and a re-added input takes the next free number. So position in the designer does not predict the key. **Read the key from ⋯ → Peek code on the trigger before wiring anything to it.**
+>
+> While `requiredAction` was missing altogether, `coalesce(triggerBody()?['text_1'],'None')` in §9 resolved to `None` on every run with a blank strategy — the Switch matched no case, and the flow reported success having done nothing. **Silent, and invisible in run history.** Third bug of that shape on this trigger.
+>
+> **Arguments are positional from the canvas app**, so inserting inputs ahead of `requiredAction` shifts everything after them. Update the call site in the same change.
 
 `initializationStrategy` was made **required on 2026-08-12** and must stay required. As an optional input the calling app dropped it from the payload entirely: the key was absent from the trigger outputs, `Condition_needs_strategy` evaluated false, initialization never ran, and the owner's `PreferRemote` choice had no effect. A missing optional input is indistinguishable in run history from one that was never wired. Required means a blank now arrives as `text_2: ""` and is visible.
 
-Every reference to `text_1` and `text_2` uses the safe `?[...]` form wrapped in `coalesce(…, '')`, which is what lets the flow treat a blank strategy as "no strategy" rather than throwing.
+Every reference to `text_4` and `text_2` uses the safe `?[...]` form wrapped in `coalesce(…, '')`, which is what lets the flow treat a blank strategy as "no strategy" rather than throwing.
 
 > The flow takes `workspaceId` at face value. There is no ownership check, so it will sync any workspace the broker administers for any caller who can run it. Deferred by decision — OPEN-ISSUES §10.3.
 
@@ -159,14 +165,16 @@ Runs after `Get_git_status` on **Succeeded or Failed**.
 | Name | `action` |
 
 ```
-@{if(empty(coalesce(triggerBody()?['text_2'],'')),coalesce(triggerBody()?['text_1'],'None'),if(equals(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),409),if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit')),if(less(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),300),coalesce(body('Initialize_with_strategy')?['requiredAction'],if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit'))),'InitFailed')))}
+@{if(empty(coalesce(triggerBody()?['text_2'],'')),coalesce(triggerBody()?['text_4'],'None'),if(equals(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),409),if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit')),if(less(coalesce(outputs('Initialize_with_strategy')?['statusCode'],0),300),coalesce(body('Initialize_with_strategy')?['requiredAction'],if(empty(coalesce(body('Get_git_status')?['changes'],json('[]'))),'None',if(equals(triggerBody()?['text_2'],'PreferRemote'),'UpdateFromGit','CommitToGit'))),'InitFailed')))}
 ```
+
+**This is the only place in the flow that reads `requiredAction`.** It was `text_1` until 2026-09-17 — see §1.
 
 Decoded:
 
 | Situation | Result |
 |---|---|
-| No strategy passed (`text_2` blank) | the caller's `text_1`, defaulting to `None` |
+| No strategy passed (`text_2` blank) | the caller's `text_4`, defaulting to `None` |
 | Initialize returned `409`, `changes` empty | `None` |
 | Initialize returned `409`, changes pending | `UpdateFromGit` if strategy is `PreferRemote`, else `CommitToGit` |
 | Initialize returned < 300 and its body carries `requiredAction` | that value |
