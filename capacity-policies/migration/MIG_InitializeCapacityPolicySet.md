@@ -23,7 +23,7 @@ Three reasons, and the first is the one that forces the issue.
 > | Dropped | Why |
 > |---|---|
 > | Step 4 — the `GET /v1/capacities` eligibility check | The parent already filtered to Active F-SKU capacities, and it holds the list. Repeating it here is one full capacity-list `GET` per capacity — 200 pointless calls |
-> | Step 8b — `Run_rebuild` | Rules are built later, estate-wide, by `RebuildAllCapacityPolicies`, after exceptions are seeded |
+> | Step 8b — `Run_rebuild` | Rules are built later, estate-wide, by `MIG_RebuildAllCapacityPolicies`, after exceptions are seeded |
 > | Step 8c — `Activate` | Separate, deliberate step. See §0 above |
 > | Step 8d/8e — the status flip | Nothing to flip. Rows are written `Inactive` and stay that way until activation |
 >
@@ -155,7 +155,7 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 >
 > **Without it this flow registers capacities the inventory has decommissioned.** The parent filters on what Fabric reports, and Fabric knows nothing about a soft-deleted Node row — so a capacity that is still Active and F-SKU in Fabric, but marked Deleted in `ubsppcoe_Node`, sails through the parent and lands here. The lookup would find the row, Step 8 would bind to it, and the capacity would enter the migration backlog as a normal registration.
 >
-> **It does not stop there, which is why this is worth a box.** That row is written `Inactive`, so `RebuildAllCapacityPolicies` builds rules for it and [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) then activates it — putting deny-all on a capacity the platform team has retired, with nothing anywhere reporting it. It also contradicts [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md), whose entire trigger is `ubsppcoe_statecode eq 2`: BAU deletes those policy sets, migration was creating them.
+> **It does not stop there, which is why this is worth a box.** That row is written `Inactive`, so `MIG_RebuildAllCapacityPolicies` builds rules for it and [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) then activates it — putting deny-all on a capacity the platform team has retired, with nothing anywhere reporting it. It also contradicts [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md), whose entire trigger is `ubsppcoe_statecode eq 2`: BAU deletes those policy sets, migration was creating them.
 >
 > **`ne 2`, not `eq 1`** — the same asymmetry as the BAU [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 1. `eq 1` would exclude nine live states and quietly skip most of the estate.
 
@@ -276,7 +276,7 @@ Status code is on `outputs(...)`, never on `body(...)`.
 4. `Get_operation_result` — **Invoke an HTTP request**, `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}/result`.
 5. `Set_policySetId_async` — Set variable → `policySetId` = `body('Get_operation_result')?['id']`.
 
-> **`PT90S`, not the BAU flow's `PT10M`.** This flow is called by `Run a Child Flow`, which must get its `Respond` back within roughly **120 seconds** ([RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §5). A ten-minute poll would hang the parent and take the whole migration run down with it.
+> **`PT90S`, not the BAU flow's `PT10M`.** This flow is called by `Run a Child Flow`, which must get its `Respond` back within roughly **120 seconds** ([MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5). A ten-minute poll would hang the parent and take the whole migration run down with it.
 >
 > Ninety seconds fails *inside* the parent's budget, so a slow create costs one capacity in the failure list instead of the run. Creation almost always answers `201`, so this branch should be rare — but "rare" across 200 capacities is not "never".
 
@@ -311,7 +311,7 @@ Status code is on `outputs(...)`, never on `body(...)`.
 >
 > `Inactive` is not a placeholder here. It is the value [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) selects on, so it is the migration backlog.
 
-Leave `ubsppcoe_lastrebuild`, `ubsppcoe_lasterror` and the three counts **empty**. `RebuildAllCapacityPolicies` fills them later, and an empty `lastrebuild` is what proves a capacity has not yet been through the rebuild phase.
+Leave `ubsppcoe_lastrebuild`, `ubsppcoe_lasterror` and the three counts **empty**. `MIG_RebuildAllCapacityPolicies` fills them later, and an empty `lastrebuild` is what proves a capacity has not yet been through the rebuild phase.
 
 ### 8b. `Set_outcome_registered` — **Set variable**
 

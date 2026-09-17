@@ -2,7 +2,7 @@
 
 Operational guide for bringing an existing Fabric estate under capacity item-creation policy. Follow it in order. Each phase names what to check before moving on, and what "stop" looks like.
 
-Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) (schema and seeding), the three `MIG_` flow documents in [flows/capacity-policies/](docs/flows/capacity-policies/).
+Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) (schema and seeding), the four `MIG_` flow documents in [flows/capacity-policies/](docs/flows/capacity-policies/).
 
 **Once cutover is done, day-to-day operations are in [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md)** — which flow to run when a capacity or workspace is created, deleted or moved.
 
@@ -14,7 +14,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8 (design a
 PHASE 0   Pre-flight                    nothing changes
 PHASE 1   Register        MIG_RegisterAllCapacityPolicySets     inert
 PHASE 2   Seed exceptions                                       inert
-PHASE 3   Rebuild rules   RebuildAllCapacityPolicies            inert
+PHASE 3   Rebuild rules   MIG_RebuildAllCapacityPolicies        inert
 PHASE 4   Review gate                   nothing changes         ← decision point
 PHASE 5   Activate        MIG_ActivateAllCapacityPolicySets     ENFORCEMENT BEGINS
 PHASE 6   Verify
@@ -35,14 +35,15 @@ PHASE 7   Clean up
 
 Nothing here changes anything. All of it is cheaper to do now than to discover in Phase 5.
 
-### 0.1 Turn off the two scheduled flows
+### 0.1 Turn off `SyncCapacityPolicySets`
 
 Power Automate → **Solutions** → your solution → select the row → **Turn off**.
 
 | Flow | Why |
 |---|---|
-| `RebuildAllCapacityPolicies` | It would publish rules at a moment you did not choose, before exceptions are seeded |
-| `SyncCapacityPolicySets` | Every policy set is deactivated *by design* through this migration, and `Inactive` is a drift kind. A nightly scan would report the whole estate as drift and train whoever reads it to ignore the report |
+| `SyncCapacityPolicySets` | Every policy set is deactivated *by design* through this migration, and `Inactive` is a drift kind. A scheduled scan would report the whole estate as drift and train whoever reads it to ignore the report |
+
+`MIG_RebuildAllCapacityPolicies` is **manual**, so there is no schedule to stop — but leave the flow turned **off** until Phase 3, which turns it on, runs it, and turns it off again. An enabled manual flow is one stray button press from publishing rules at a moment you did not choose, before exceptions are seeded.
 
 **Do not turn off `RebuildCapacityPolicyRules`.** It is a child flow, and a flow that is off cannot be called as one.
 
@@ -94,7 +95,7 @@ Any policy set in the holder workspace created while building the flows, and any
 
 **Checklist before Phase 1**
 
-- [ ] Both scheduled flows off
+- [ ] `SyncCapacityPolicySets` off, `MIG_RebuildAllCapacityPolicies` off
 - [ ] `Policy Item Types` seeded and active
 - [ ] All five environment variables set
 - [ ] Contributor on the holder workspace confirmed
@@ -182,7 +183,7 @@ Re-run until `Failed` is empty. `No Node row` may stay non-empty — those capac
 
 ## Phase 3 — Rebuild rules
 
-**Run:** `RebuildAllCapacityPolicies`, manually — turn it **on**, use **Run**, then turn it **off** again.
+**Run:** `MIG_RebuildAllCapacityPolicies`, manually — turn it **on**, use **Run**, then turn it **off** again.
 
 Iterates every `Capacity Policies` row with a policy set and publishes rule 1, the whitelist chunks and the exception rule for each. Stamps `lastrebuild`, `lasterror`, `rulecount`, `workspacecount` and `exceptioncount`.
 
@@ -307,16 +308,19 @@ Per capacity, using the scripts in `C:\GIT\ubs-policies`:
 
 ## Phase 7 — Clean up
 
-### 7.1 Turn the scheduled flows back on
+### 7.1 Turn `SyncCapacityPolicySets` back on
 
 | Flow | |
 |---|---|
-| `RebuildAllCapacityPolicies` | Nightly convergence. Without it, table edits never reach Fabric |
 | `SyncCapacityPolicySets` | Drift detection. It is the only thing that notices a policy set being deactivated, replaced or deleted |
 
-Let one nightly cycle run and read both reports before considering migration closed. The first `SyncCapacityPolicySets` run after cutover is the one that will tell you whether anything was left half-done.
+Leave `MIG_RebuildAllCapacityPolicies` **off**. It is manual, so there is no schedule to restore — but keep it in the solution; §7.2 does not delete it.
 
-### 7.2 Delete the three `MIG_` flows
+> **Nothing converges the estate on its own after cutover.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies`. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+
+Let one `SyncCapacityPolicySets` cycle run and read its report before considering migration closed. The first run after cutover is the one that will tell you whether anything was left half-done.
+
+### 7.2 Delete the three disposable `MIG_` flows
 
 Turn off and delete:
 
@@ -324,7 +328,9 @@ Turn off and delete:
 - `MIG_InitializeCapacityPolicySet`
 - `MIG_ActivateAllCapacityPolicySets`
 
-They have no BAU role. `MIG_InitializeCapacityPolicySet` in particular is **unsafe standalone** — it has no capacity eligibility check, because the loop did that — so leaving it in the solution invites someone to run it against a live capacity a year from now.
+**Keep `MIG_RebuildAllCapacityPolicies`**, turned off. It carries the prefix but is not disposable — nothing else rebuilds more than one capacity at a time, and the operations runbook sends people to it.
+
+The other three have no BAU role. `MIG_InitializeCapacityPolicySet` in particular is **unsafe standalone** — it has no capacity eligibility check, because the loop did that — so leaving it in the solution invites someone to run it against a live capacity a year from now.
 
 New capacities are handled by the provisioning app calling `InitializeCapacityPolicySet`, which creates, registers, rebuilds and activates one capacity at a time, where the blast radius is a capacity nobody is using yet.
 
@@ -350,4 +356,4 @@ Stopping before Phase 5 is free — leave it, or delete the sets and rows.
 
 Stopping partway through Phase 5 is stable, not broken: activated capacities are governed, the rest are as they were. Re-run mode `Activate` to finish, or roll back the activated ones individually.
 
-**The one thing not to do is leave Phase 5 partly done with the scheduled flows still off.** Activated capacities then stop converging to the tables, so a workspace whitelisted in Dataverse never reaches Fabric and its owner cannot create anything. If Phase 5 is going to be paused for more than a day, turn `RebuildAllCapacityPolicies` back on first.
+**The one thing not to do is leave Phase 5 partly done and walk away.** Activated capacities are governed by whatever Phase 3 published. The per-event flows keep individual changes flowing, but **nothing re-converges the estate on its own**, so a gap left here stays until a person closes it. If Phase 5 is going to be paused for more than a day, run `MIG_RebuildAllCapacityPolicies` before you stop and again before you resume.

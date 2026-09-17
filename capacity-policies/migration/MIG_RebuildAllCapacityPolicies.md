@@ -28,9 +28,9 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 
 The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects. Run both: this one converges what it can, the scan reports what it cannot.
 
-> **This flow carries more weight than it did.** When the whitelist lived in a table only these flows wrote to, nightly convergence was a safety net. Now it is the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change. If a same-day guarantee is needed, that is a Dataverse-modified trigger on `ubsppcoe_Workspace`, not a shorter recurrence here — see Q16 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **This flow carries more weight than it did, and now nothing starts it.** When the whitelist lived in a table only these flows wrote to, scheduled convergence was a safety net. It is still the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change, a `Node` move, a hard-deleted exception row or a hand-edited rule — but since 2026-09-16 it does so only when somebody runs it. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 >
-> The same is true of `PolicyException`, and there it is sharper: **taking an exception away** is not live until this flow runs. A workspace whose exception row was deactivated at nine in the morning can still create anything until tonight. Anyone doing that in earnest should force a rebuild of that capacity rather than wait for the schedule.
+> [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) now publishes an exception being granted or revoked, so the ordinary path is covered. What is not is a row **deleted** rather than deactivated: that workspace keeps unrestricted creation on its capacity until this flow is run. **Deactivate, do not delete.**
 
 ---
 
@@ -80,7 +80,7 @@ One `Initialize variable`, **at the top level**, before Step 2.
 
 Pagination **On**, threshold `5000`. **Process the whole estate every run** — 250 capacities is not a large loop, and the retry policy absorbs throttling by waiting rather than failing.
 
-A row without a `policy_set_id` was never initialised. Skipping it here keeps the run log clean — those belong to `InitializeCapacityPolicySet`, and a nightly job reporting the same 3 known-uninitialised capacities as failures every night is how people learn to ignore the report.
+A row without a `policy_set_id` was never initialised. Skipping it here keeps the run log clean — those belong to `InitializeCapacityPolicySet`, and a report listing the same 3 known-uninitialised capacities as failures on every run is how people learn to ignore the report.
 
 ### Why sort by `ubsppcoe_lastrebuild` if there is no cap?
 
@@ -172,7 +172,7 @@ Failed: <b>@{length(variables('failures'))}</b>
 >
 > Per-capacity detail is already recorded where it belongs: `last_error` and `last_rebuild` on the capacity's own `Capacity Policies` row, stamped by the child flow on every attempt. That is queryable, survives the scan, and is what [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) surfaces. This step only needs to raise a human's attention to the summary.
 
-**Do not send anything on a clean run.** A nightly "all fine" mail is unread within a fortnight, and its absence then means nothing. Report exceptions; use `last_rebuild` on the table to prove the run happened.
+**Nothing is sent on a clean run.** That was decided when the flow was scheduled, on the grounds that a recurring "all fine" mail goes unread within a fortnight. **Worth revisiting now it is manual** — an operator who presses Run and gets silence has no confirmation it finished, and there is no longer a steady drumbeat of `lastrebuild` timestamps to infer health from. Until it is revisited, use `last_rebuild` on the table to prove the run happened.
 
 > A capacity whose policy set was **deleted** in the portal appears here every night, because the rebuild will keep 404ing. That is correct — it is a real problem needing a human to re-run `InitializeCapacityPolicySet` — but it will also be the noisiest failure. Fix those promptly rather than letting them train people to ignore the report.
 
@@ -194,7 +194,7 @@ Three separate limits, and only one of them is a real risk.
 
 The Policy Rules operations do not document a per-minute limit the way the Admin operations do (10/minute), but that is absence of documentation, not absence of a limit. The stronger evidence is in the PowerShell: `migrate_policy_sets.ps1` carries an `Invoke-WithRetry` wrapper that retries **only** on `429`, honours `Retry-After`, and counts throttle events across a run. Nobody writes that speculatively.
 
-A nightly job doing 250 `replaceByPolicy` calls back to back is exactly the shape that triggers it.
+A job doing 250 `replaceByPolicy` calls back to back is exactly the shape that triggers it.
 
 Three defences, in order of how much they buy:
 
@@ -217,7 +217,9 @@ None of this is worth building before test 7 below shows it is needed.
 
 The retry policy protects the HTTP call **inside** the child. It does nothing for this loop: if a capacity's rebuild exhausts its retries, `Run_rebuild` returns a failure and Step 3b records it.
 
-That is the intended behaviour, not an omission. The capacity keeps its old `ubsppcoe_lastrebuild`, so the oldest-first sort puts it near the front of tomorrow's run, and the failure appears in tonight's report. Wrapping the loop body in a Do-until retry would re-enter a rebuild the service has already throttled — pushing on a door it just held shut, and turning a visible failure into a longer, quieter one.
+That is the intended behaviour, not an omission. The capacity keeps its old `ubsppcoe_lastrebuild`, so the oldest-first sort puts it near the front of the **next** run, and the failure appears in this run's report. Wrapping the loop body in a Do-until retry would re-enter a rebuild the service has already throttled — pushing on a door it just held shut, and turning a visible failure into a longer, quieter one.
+
+> **Without a schedule, "the next run" is a person.** A throttled capacity used to be retried automatically the following night. Now the report is the only thing that will cause it to be retried at all.
 
 ### Action quotas
 
@@ -238,7 +240,7 @@ The flow *could* call `activate` with `allowReplace=true` and take the capacity 
 | For | Against |
 |---|---|
 | The estate converges on the intended policy with no human involvement | It silently overrides a deliberate act by someone with legitimate rights on the capacity |
-| Drift cannot persist | A nightly fight between two automations, or between automation and an admin, that nobody observes because both sides "succeed" |
+| Drift cannot persist | A repeated fight between two automations, or between automation and an admin, that nobody observes because both sides "succeed" |
 
 If it is turned on, it must be **loud** — every takeover reported, with the ID of the policy set that was displaced. A silent takeover is indistinguishable from a healthy run, right up until someone asks why their policy set stopped working.
 

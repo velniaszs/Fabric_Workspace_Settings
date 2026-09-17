@@ -191,7 +191,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **This table's lookup is `ubsppcoe_node` / `_ubsppcoe_node_value`; the workspace table's is `ubsppcoe_nodeid` / `_ubsppcoe_nodeid_value`.** Different columns, different tables, four characters apart — see the near-miss box in §0. Both hold the same **Node row GUID**, which is what makes comparing them meaningful in [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 3b.
 
-**`_ubsppcoe_node_value` and `ubsppcoe_capacityid` hold *different* GUIDs.** The lookup holds the Node row key `ubsppcoe_nodeid`; `ubsppcoe_capacityid` holds the Fabric capacity id, which lives on the Node row as `ubsppcoe_nodeuniqueid` (§1). Both are needed and neither substitutes for the other: `ubsppcoe_capacityid` is what callers pass and what Fabric understands, and it survives the Node row being deleted; the lookup enforces that the Node exists and gives navigation from the platform team's side. **Corrected 2026-09-09** — they were previously documented as the same value, and Q29's nightly agreement check was defined on that basis; it must now compare `ubsppcoe_capacityid` against the linked Node's `ubsppcoe_nodeuniqueid`, not against the lookup. See Q29 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+**`_ubsppcoe_node_value` and `ubsppcoe_capacityid` hold *different* GUIDs.** The lookup holds the Node row key `ubsppcoe_nodeid`; `ubsppcoe_capacityid` holds the Fabric capacity id, which lives on the Node row as `ubsppcoe_nodeuniqueid` (§1). Both are needed and neither substitutes for the other: `ubsppcoe_capacityid` is what callers pass and what Fabric understands, and it survives the Node row being deleted; the lookup enforces that the Node exists and gives navigation from the platform team's side. **Corrected 2026-09-09** — they were previously documented as the same value, and Q29's agreement check was defined on that basis; it must now compare `ubsppcoe_capacityid` against the linked Node's `ubsppcoe_nodeuniqueid`, not against the lookup. See Q29 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 
 **A blank `ubsppcoe_node` makes the rebuild fail closed.** That is deliberate — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a. It means the column must be *allowed* to be blank at the schema level, because flow 1 writes it and a partially-created row has to be legible rather than rejected.
 
@@ -199,7 +199,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **Consider an alternate key on `ubsppcoe_capacityid`.** Flow 1 checks for an existing row and then writes one, with nothing between the two. Two concurrent calls for the same capacity produce two rows and one orphaned policy set in Fabric that nothing maps back to. A uniqueness constraint turns that into a clean failure.
 
-**Do not put these columns on `ubsppcoe_Node` instead.** Ownership, nightly write churn, lifecycle and deletion all decide against it — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q22.
+**Do not put these columns on `ubsppcoe_Node` instead.** Ownership, write churn, lifecycle and deletion all decide against it — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q22.
 
 ---
 
@@ -346,7 +346,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 | [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Capacity added |
 | [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | Capacity deleted |
 
-**The rebuild, sync and `MIG_` flows do not.** That is a deliberate scope limit, not an oversight. These four are the ones that change who can create what, one event at a time, in response to another team's edit — so a silent failure in one of them is a governance gap nobody would otherwise notice. The rebuild already stamps `ubsppcoe_lasterror` and runs again nightly; the `MIG_` flows are supervised by a person watching the run.
+**The rebuild, sync and `MIG_` flows do not.** That is a deliberate scope limit, not an oversight. These four are the ones that change who can create what, one event at a time, in response to another team's edit — so a silent failure in one of them is a governance gap nobody would otherwise notice. The rebuild already stamps `ubsppcoe_lasterror`; the `MIG_` flows are supervised by a person watching the run.
 
 ### Rules
 

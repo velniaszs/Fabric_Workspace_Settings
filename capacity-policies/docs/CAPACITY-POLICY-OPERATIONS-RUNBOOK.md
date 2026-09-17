@@ -21,13 +21,15 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) (design), [CA
 | **Governed item type added or retired** | Edit `Policy Item Types`, then rebuild — §7 | You |
 | **Emergency: unlock a capacity** | §8 | You |
 
-> ### Almost everything is self-healing within a day
+> ### Nothing is self-healing — changed 2026-09-16
 >
-> `RebuildAllCapacityPolicies` runs nightly and republishes every capacity's rules from the tables. So a forgotten call is a **delay**, not a permanent wrong state — the tables are the truth, and the nightly run converges Fabric to them.
+> `RebuildAllCapacityPolicies` used to run nightly and republish every capacity's rules from the tables, which made a forgotten call a **delay** rather than a permanent wrong state. **That schedule is gone.** It is now `MIG_RebuildAllCapacityPolicies`, manual, and runs only when somebody starts it.
 >
-> The flows below exist for two reasons the nightly run cannot cover: applying a change **now** rather than tonight, and **telling you whether the change actually did what you meant**. `NotEnabled` and `StillEnabled` are the whole value; a bare rebuild could not report either.
+> So the flows below are no longer a faster path to an outcome that would have happened anyway — **they are the only thing that publishes the change at all.** If one reports `Failed` and nobody acts, Fabric and Dataverse stay out of step indefinitely.
 >
-> **Two things are not self-healing** and need a human: a deleted capacity (§2), and anything requiring a `Policy Exceptions` edit (§6).
+> They still do the second job they always did: **telling you whether the change actually did what you meant.** `NotEnabled` and `StillEnabled` are the whole value; a bare rebuild could not report either.
+>
+> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a deleted capacity (§2), a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 
 ---
 
@@ -77,10 +79,10 @@ A `Failed` from activation still leaves the policy set **registered** — that i
 | Artefact | State | Consequence |
 |---|---|---|
 | Policy set in the holder workspace | Orphaned | Clutters the workspace; counts against nothing |
-| `Capacity Policies` row | Still there, `status = Active` | The nightly rebuild keeps attempting it |
+| `Capacity Policies` row | Still there, `status = Active` | Every estate-wide rebuild keeps attempting it |
 | `ubsppcoe_Node` row | **Soft-deleted** by the platform team — row and capacity GUID retained, a flag set | Our `node` lookup still resolves |
 
-That last one is the correction that matters: the platform team's tables **soft-delete rather than hard-delete**, so the lookup does *not* go null and `RebuildCapacityPolicyRules` does *not* fail closed at Step 5a. It reads the workspaces quite happily and republishes rules to a policy set whose capacity is gone — so the capacity reports `Failed` on the **Fabric call** in the nightly summary, **every night, forever**, with a `404` that looks like an outage. See [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §4.
+That last one is the correction that matters: the platform team's tables **soft-delete rather than hard-delete**, so the lookup does *not* go null and `RebuildCapacityPolicyRules` does *not* fail closed at Step 5a. It reads the workspaces quite happily and republishes rules to a policy set whose capacity is gone — so the capacity reports `Failed` on the **Fabric call**, with a `404` that looks like an outage, in the summary of **every** estate-wide rebuild until somebody cleans it up. See [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
 
 ### Cleanup, in this order
 
@@ -98,7 +100,7 @@ That last one is the correction that matters: the platform team's tables **soft-
 
 **Do not delete the row.** Update it. `SyncCapacityPolicySets` would report an untracked policy set if the row went before the item, and six months later the row is the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
 
-**Update the row after the Fabric call, not before.** A row saying `Deleted` with the item still present is an orphan that nothing will chase; a row still saying `Active` with the item gone is loud — the nightly rebuild `404`s and you come back and finish the job.
+**Update the row after the Fabric call, not before.** A row saying `Deleted` with the item still present is an orphan that nothing will chase; a row still saying `Active` with the item gone is loud — the next estate-wide rebuild `404`s and you come back and finish the job.
 
 ---
 
@@ -122,7 +124,7 @@ That third one is the platform team's flag, not ours. **No flow in this design c
 | `NotFound` | No workspace row, or more than one | **No** |
 | `WrongCapacity` | Its `Node` points elsewhere | **No** |
 | `NotEnabled` | `ubsppcoe_oapenabled` is `false` or null | **No** |
-| `Failed` | The rebuild failed. Nightly run will apply it | Yes, and it failed |
+| `Failed` | The rebuild failed. **Nothing will retry it** — re-run the flow, or `RebuildCapacityPolicyRules` for that capacity | Yes, and it failed |
 
 **`NotEnabled` is the common one**, and it is not an error — it happens whenever provisioning runs ahead of whatever sets the flag. The remedy is with the platform team, and the message says so.
 
@@ -143,7 +145,7 @@ Works whether or not the `ubsppcoe_Workspace` row still exists — a missing row
 | `Removed` | No longer qualifies, rules now say so |
 | `StillEnabled` | `ubsppcoe_oapenabled` is **still true**, so it remains whitelisted. Rules republished as they stand |
 | `StillExcepted` | An active `Policy Exceptions` row keeps it able to create **anything** on this capacity |
-| `Failed` | Rules not republished. Access may still be live until the nightly run |
+| `Failed` | Rules not republished. **Access may still be live, and nothing will retry** — re-run it |
 
 **`StillEnabled` and `StillExcepted` are successes carrying a warning.** The flow did everything it could; the workspace is still in the rules. If the app shows a green tick for either, someone will believe access was removed when it was not.
 
@@ -151,7 +153,7 @@ They need different remedies: `StillEnabled` points at the platform team's flag;
 
 ### If you skip the call
 
-A deleted workspace whose inventory row is also deleted disappears from the rules on the next nightly rebuild. If the row **survives** with `oapenabled = true`, its dead GUID stays in rule 2 indefinitely — harmless, because Fabric accepts a well-formed GUID that never matches, but it inflates `workspacecount` and consumes chunk slots.
+A deleted workspace whose inventory row is also deleted disappears from the rules at the next rebuild of that capacity. If the row **survives** with `oapenabled = true`, its dead GUID stays in rule 2 indefinitely — harmless, because Fabric accepts a well-formed GUID that never matches, but it inflates `workspacecount` and consumes chunk slots.
 
 That is accepted: `ubsppcoe_Workspace` is trusted as-is and no flow verifies a workspace still exists in Fabric. Pruning is the platform team's business.
 
@@ -180,31 +182,31 @@ An active `Policy Exceptions` row is scoped to a capacity only by the workspace'
 
 ### If you forget the old-capacity call
 
-The old capacity keeps granting until its next nightly rebuild, which will drop the workspace correctly. So this is self-healing within a day — but for a move made to *take access away*, a day is the exposure.
+The old capacity keeps granting until something rebuilds it, and **no flow fires on a move** — so nothing will, until you make the call above or someone runs `MIG_RebuildAllCapacityPolicies`. This used to self-heal overnight; since the rebuild lost its schedule it does not heal at all. For a move made to *take access away*, that is open-ended exposure rather than a day of it.
 
 ---
 
 ## 6. An exception is granted or revoked
 
-**No flow writes `Policy Exceptions`.** Rows are created by hand in the maker portal or by the app.
+**No flow writes `Policy Exceptions`.** Rows are created by hand in the maker portal or by the app. [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) **reads** the row and republishes that capacity.
 
 ### To grant
 
 1. Add a row: `ubsppcoe_workspaceid` = the Fabric workspace GUID, `ubsppcoe_active` = **Yes**, plus `ubsppcoe_reason` and `ubsppcoe_approvedby`
-2. Run `RebuildCapacityPolicyRules(capacityId)`, or wait for tonight
+2. Nothing else. `RebuildOnExceptionChange` fires on the row and rebuilds that capacity within a minute — check its run for `Rebuilt`
 
 `ubsppcoe_active` defaults to **No**. A row created with the toggle untouched is `null` and the rebuild's `eq true` filter excludes it — **a new exception that appears to do nothing is almost always an unset flag.**
 
-The workspace must also have a `ubsppcoe_Workspace` row under the target capacity's Node, or the join in the rebuild finds nothing and no rule 3 entry appears. No error is raised.
+The workspace must also have a `ubsppcoe_Workspace` row under the target capacity's Node, or the join in the rebuild finds nothing and no rule 3 entry appears. `RebuildOnExceptionChange` reports that as `NoWorkspace` — which is the check that catches a mistyped GUID.
 
 ### To revoke
 
-1. Set `ubsppcoe_active` to **No** — do not delete the row; the history is the point
-2. **Run `RebuildCapacityPolicyRules(capacityId)`**
+1. Set `ubsppcoe_active` to **No**
+2. Nothing else. The same flow fires and republishes
 
-> **A row edit does not publish itself, and this is the case where that matters.** Revoking an exception is usually done to take away access. Until a rebuild runs, the workspace can still create **anything** on that capacity. A workspace deactivated at nine in the morning is unrestricted until tonight.
+> **Do not delete the row — this is now operationally load-bearing, not just about history.** `RebuildOnExceptionChange` triggers on *added or modified*; a deleted row cannot be read, so the capacity it belonged to is not derivable and **no rebuild happens at all**. The workspace keeps unrestricted creation until somebody runs `MIG_RebuildAllCapacityPolicies` across the estate.
 >
-> **Force the rebuild.** Do not wait for the nightly run when revoking.
+> Deactivating publishes in a minute. Deleting publishes never.
 
 `ubsppcoe_oapenabled` is not consulted for rule 3 at all — an exception grants a workspace the platform team has not enabled. That is deliberate, and it is why this table is the only thing in the design that can widen access without them.
 
@@ -218,7 +220,7 @@ Edit `Policy Item Types`, then rebuild. This is estate-wide, not per capacity.
 
 **To retire:** set `ubsppcoe_active` to No. Note the flag is **per row** — if the same item type appears on several rows, clearing one removes nothing, because the others still contribute it.
 
-Then run `RebuildAllCapacityPolicies` to apply it everywhere, or let the nightly run do it.
+Then run `MIG_RebuildAllCapacityPolicies` to apply it everywhere. **There is no scheduled run to fall back on** — until you run it, the edit changes nothing in Fabric.
 
 > **Adding an item type restricts, it does not widen.** A newly governed type can only be created in whitelisted workspaces from the next rebuild onward. Expect refusals from teams that were creating it freely the day before, and announce it.
 
@@ -258,10 +260,10 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 
 | Signal | Where | Means |
 |---|---|---|
-| `RebuildAllCapacityPolicies` failure summary | Nightly mail | Capacities whose rules are stale |
-| `SyncCapacityPolicySets` drift report | Nightly mail | A policy set deactivated, replaced, deleted or untracked |
+| `MIG_RebuildAllCapacityPolicies` failure summary | Mail, after each manual run | Capacities whose rules are stale |
+| `SyncCapacityPolicySets` drift report | Scheduled mail | A policy set deactivated, replaced, deleted or untracked |
 | `lasterror` non-empty | `Capacity Policies` | That capacity's last rebuild failed |
-| `lastrebuild` growing stale | `Capacity Policies` | The nightly job is not reaching it |
+| `lastrebuild` growing stale | `Capacity Policies` | Nothing has rebuilt that capacity. **No longer self-correcting** — an estate-wide rebuild only happens when someone runs it |
 | `Inactive` + `Untracked` together | Drift report | **Someone created a replacement policy set and activated it.** The rebuild is now writing rules to a set that is not in force, and reporting success |
 
 That last pair is the one to act on immediately. It is the only state in which everything reports healthy while the capacity is governed by something nobody in this system controls.

@@ -4,7 +4,7 @@
 
 > **Not built yet.** Specification, not a description of something that exists.
 
-Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -13,7 +13,7 @@ Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_I
 ```
 1  MIG_RegisterAllCapacityPolicySets   ← this flow. Estate registered, all Inactive
 2  Seed Policy Exceptions              ← human. Must precede any rebuild
-3  RebuildAllCapacityPolicies          ← rules built, still nothing enforced
+3  MIG_RebuildAllCapacityPolicies      ← rules built, still nothing enforced
 4  MIG_ActivateAllCapacityPolicySets   ← deny-all goes live
 ```
 
@@ -34,9 +34,9 @@ Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_I
 - Build [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) first and run its test 7. This flow is a loop around it.
 - Needs the *HTTP with Microsoft Entra ID (preauthorized)* connector for one `GET`. **No Dataverse connection** — every table read and write happens inside the child.
 - **Check for duplicate capacity display names before the first run.** Two capacities with the same name produce one policy set name and the second create fails. See [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) Step 5.
-- Easiest build path: **copy `RebuildAllCapacityPolicies`** and make two substitutions.
+- Easiest build path: **copy `MIG_RebuildAllCapacityPolicies`** and make two substitutions.
 
-| | `RebuildAllCapacityPolicies` | This flow |
+| | `MIG_RebuildAllCapacityPolicies` | This flow |
 |---|---|---|
 | Trigger | Recurrence | **Manually trigger a flow** |
 | Source list | `List_policy_rows` — Dataverse | `Get_capacities` — `GET /v1/capacities` |
@@ -236,7 +236,7 @@ Failed: <b>@{length(variables('failures'))}</b>
 @{if(empty(variables('noNode')), '', concat('<h3>No live Node row &mdash; for the platform team</h3><p>These capacities are Active F-SKU in Fabric, but have no usable <code>ubsppcoe_Node</code> row &mdash; either none exists, or the row is marked Deleted (<code>ubsppcoe_statecode</code> = 2). Their workspaces cannot be determined, so nothing was created for them. Each one is either an inventory gap or a capacity that was decommissioned on paper and never in Fabric.</p><p>', join(variables('noNode'), '<br>'), '</p>'))}
 @{if(empty(variables('failures')), '', concat('<h3>Failed &mdash; fix and re-run</h3><p>', join(variables('failures'), '<br>'), '</p>'))}
 <p>Re-running this flow is safe. Capacities already registered return <code>AlreadyExists</code> and are skipped, so only the entries above are retried.</p>
-<p>Next: seed <code>Policy Exceptions</code>, then run <code>RebuildAllCapacityPolicies</code>. Do not activate anything until both are done.</p>
+<p>Next: seed <code>Policy Exceptions</code>, then run <code>MIG_RebuildAllCapacityPolicies</code>. Do not activate anything until both are done.</p>
 ```
 
 Four things that body is doing, none of them decoration:
@@ -251,7 +251,7 @@ Four things that body is doing, none of them decoration:
 
 **No** → empty. But **read the summary from the run history either way.** This is a supervised one-off, and "registered 187 of 200 with nothing to report" is a contradiction worth noticing.
 
-> **Do not write any of this to `Policy Drift`.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, so anything written here would vanish at an interval nobody is thinking about. The same reasoning as [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §4.
+> **Do not write any of this to `Policy Drift`.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, so anything written here would vanish at an interval nobody is thinking about. The same reasoning as [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
 
 ---
 

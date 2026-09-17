@@ -48,7 +48,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > A Dataverse row trigger fires **once per change**. If Step 4 answers `Skipped` — the commonest reason being that Fabric does not yet know about a capacity whose inventory row has already been created — **nothing runs this flow again**. The app used to be able to retry; there is no app.
 >
-> `Added or Modified` mitigates it only if something later edits the row. If the platform team writes the Node row once and never touches it, that capacity is never initialised, never governed, and **nothing reports it** — the nightly [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) only walks capacities that already have a `Capacity Policies` row, so it cannot notice one that was never registered.
+> `Added or Modified` mitigates it only if something later edits the row. If the platform team writes the Node row once and never touches it, that capacity is never initialised, never governed, and **nothing reports it** — [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) only walks capacities that already have a `Capacity Policies` row, so it cannot notice one that was never registered, and it only runs when somebody starts it.
 >
 > **That is a governance hole, not an inconvenience.** A capacity silently ungoverned looks identical to one that was never meant to be governed. The fix is a scheduled sweep — list `ubsppcoe_Node`, left-join `Capacity Policies`, report the gaps — which does not exist and is not specified here. **Raise it with [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md), which is the flow that ought to own it.**
 
@@ -441,7 +441,7 @@ Body:
 
 ⋯ → **Configure run after** `Run_rebuild` on **is successful** only. Activating rules that failed to build would put an unknown rule set into force.
 
-**Do not pass `allowReplace`.** `PolicySetActivationConflict` means another policy set already governs this capacity — on a freshly provisioned one that should be impossible, so it signals something worth a human looking at. Taking the capacity over silently is the wrong default here; the nightly job in [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) is where that decision belongs.
+**Do not pass `allowReplace`.** `PolicySetActivationConflict` means another policy set already governs this capacity — on a freshly provisioned one that should be impossible, so it signals something worth a human looking at. Taking the capacity over silently is the wrong default here; [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §6 is where that decision belongs.
 
 ### 8d. `Update_status` — Dataverse **Update a row**
 

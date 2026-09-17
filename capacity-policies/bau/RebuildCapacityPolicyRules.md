@@ -105,9 +105,9 @@ Add one input: **+ Add an input** → **Text**, titled `capacityId`. Referenced 
 >
 > A request-response flow — a **Manually trigger a flow** trigger plus a `Respond to a Power App or flow` action — cannot have trigger concurrency at all. Making the Response asynchronous would satisfy the platform and defeat the point, since every caller needs the answer.
 >
-> **The consequence: two rebuilds of the same capacity can overlap, and the later write wins.** That is tolerable, because both runs read the same Dataverse state and `replaceByPolicy` publishes the whole rule set from it — so the two agree unless the data changed in the seconds between their reads. If it did, the loser's view is at most seconds stale and the next rebuild, or the nightly run, converges it.
+> **The consequence: two rebuilds of the same capacity can overlap, and the later write wins.** That is tolerable, because both runs read the same Dataverse state and `replaceByPolicy` publishes the whole rule set from it — so the two agree unless the data changed in the seconds between their reads. If it did, the loser's view is at most seconds stale and the next rebuild of that capacity converges it.
 >
-> **Serialisation happens where the volume is**, not here: [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) is Recurrence-triggered with no `Respond`, so it *can* set Degree of Parallelism 1 — both on its trigger and on its loop. The nightly batch therefore never overlaps itself, which is the only case that would have produced concurrent rebuilds at scale.
+> **Serialisation happens where the volume is**, not here: [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) has no `Respond`, so it *can* set Degree of Parallelism 1 — both on its trigger and on its loop. The estate-wide batch therefore never overlaps itself, which is the only case that would have produced concurrent rebuilds at scale.
 
 > ### The shape of this flow — three guards, and you do **not** nest them
 >
@@ -491,7 +491,7 @@ A bad filter now fails in well under half a minute instead of hanging.
 >
 > The symptom is nastier than a plain failure. `501` is a `5xx`, so the **default** retry policy treats it as transient and keeps retrying something that can never succeed — presenting as a `List rows` stuck at *0 seconds duration* with a climbing retry count for **thirty minutes**, rather than as an error.
 >
-> **That is not survivable for a child flow.** `Run a Child Flow` gives this flow roughly 120 seconds to answer ([RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §5). An action that can burn thirty minutes takes the caller down with it, and in the nightly batch it would stall the whole queue behind one bad capacity.
+> **That is not survivable for a child flow.** `Run a Child Flow` gives this flow roughly 120 seconds to answer ([MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5). An action that can burn thirty minutes takes the caller down with it, and in the estate-wide batch it would stall the whole queue behind one bad capacity.
 >
 > Two retries still cover a genuine Dataverse `429`, which is the only transient failure worth waiting for here.
 >
@@ -750,7 +750,7 @@ The body is the bare `@outputs(...)` form. Wrapping it in `@{ }` would send the 
 
 If throttling ever turns out to be routine rather than rare, tune it then. `migrate_policy_sets.ps1` settled on 5 retries with a 30-second floor, which is the obvious next step — but there is no reason to pay for it up front.
 
-> A `429` that survives the retries fails this flow, which stamps `last_error` and reports `Failed`. The nightly job picks the capacity up next run, and its stale `last_rebuild` puts it near the front of the queue. **`Run a Child Flow` is not retried by callers**, which is deliberate — see [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) §5.
+> A `429` that survives the retries fails this flow, which stamps `last_error` and reports `Failed`. **Nothing retries it on its own** — the capacity keeps its stale `last_rebuild`, which puts it near the front of the next estate-wide run, but that run only happens when somebody starts it. **`Run a Child Flow` is not retried by callers**, which is deliberate — see [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5.
 
 Retries do not show as failures. To see whether they are happening, open a run, select `Replace_rules`, and check the attempt count.
 
@@ -799,7 +799,7 @@ Status code lives on `outputs('Replace_rules')`, the payload on `body('Replace_r
 
 ### `PolicySetId` costs nothing and answers the support question
 
-It is already in a variable, so returning it is free. What it buys is a run history where **the policy set that was written is on the record next to the outcome**, rather than something you re-derive from `Capacity Policies` as it stands today — which is the wrong day to be reading it, because by then it may have been repointed. The nightly batch in [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) is where this pays: 250 child-flow runs in one parent, and the id is what ties a failure to a capacity without a second query.
+It is already in a variable, so returning it is free. What it buys is a run history where **the policy set that was written is on the record next to the outcome**, rather than something you re-derive from `Capacity Policies` as it stands today — which is the wrong day to be reading it, because by then it may have been repointed. The estate-wide batch in [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) is where this pays: 250 child-flow runs in one parent, and the id is what ties a failure to a capacity without a second query.
 
 > **Do not return the rule IDs.** `replaceByPolicy` responds with the rules it created, and it is tempting to keep them. They are regenerated with new IDs on every rebuild, so anything that stored them would be stale within a day, and nothing in this design addresses a rule by ID — that is the entire point of rebuilding wholesale.
 

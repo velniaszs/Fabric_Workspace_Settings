@@ -22,7 +22,7 @@ Confirms that a workspace really is whitelisted on a capacity, then rebuilds tha
 >
 > Three new actions, three expression edits, one action swapped. **No branch moves, and the nesting is untouched.**
 >
-> **`RemoveWorkspaceFromPolicy` is not converted yet** and still expects a caller, so `ubsppcoe_oapenabled` going `true` → `false` still reaches Fabric only at the nightly run.
+> **`RemoveWorkspaceFromPolicy` is not converted yet** and still expects a caller, so `ubsppcoe_oapenabled` going `true` → `false` still reaches Fabric only when an estate-wide rebuild is run.
 
 > ## Adding try/catch scopes — 2026-09-12
 >
@@ -276,7 +276,7 @@ Resolves the derived capacity id to the Node row's **primary key**, `ubsppcoe_no
 
 > **Refusing here rather than rebuilding was a judgement call made for a caller, and under a trigger it inverts.** There is no longer a user to mislead, and the trigger's `Filter rows` has already asserted the flag — so this guard only fires when the flag was cleared **between the trigger and the run**. That is the disable case, and a rebuild is exactly what it needs.
 >
-> **Keep the guard as built, for now.** Refusing means a rapid enable-then-disable is not published here and waits for the nightly run. That is the same latency `RemoveWorkspaceFromPolicy` already has, so the conversion does not make anything worse — and once that flow is converted it will own the disable direction outright. **Revisit this box then**, rather than leaving a flow that quietly declines to publish a revocation.
+> **Keep the guard as built, for now.** Refusing means a rapid enable-then-disable is not published here and waits for an estate-wide rebuild. That is the same latency `RemoveWorkspaceFromPolicy` already has, so the conversion does not make anything worse — and once that flow is converted it will own the disable direction outright. **Revisit this box then**, rather than leaving a flow that quietly declines to publish a revocation.
 
 > **`NotEnabled` does not mean the workspace can create nothing.** An active `PolicyException` row puts it in rule 3, which never consults `ubsppcoe_oapenabled` ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3) — so a workspace can be refused here and still be able to create anything on that capacity.
 >
@@ -316,7 +316,7 @@ Configure this Condition to run after `Run_rebuild` on **is successful** only. *
 
 ### No
 
-`outcome` = `Failed`, `message` = `concat('The workspace is whitelisted in Dataverse but the rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' The nightly rebuild will apply it.')`
+`outcome` = `Failed`, `message` = `concat('The workspace is whitelisted in Dataverse but the rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' Nothing will retry this automatically.')`
 
 > ### "The rebuild failed" is two different events, and only one of them can reach a Catch
 >
@@ -337,7 +337,7 @@ Configure this Condition to run after `Run_rebuild` on **is successful** only. *
 >
 > **Case A is exactly what the Catch is for**, and it is the case that leaves no trace anywhere else. Unticking **has failed** is what lets it propagate out of the Try instead of being absorbed here — verified, not assumed; see the box above.
 
-> **Rollback is still nothing, and a failed rebuild still leaves the world as it found it.** Dataverse already said the workspace was whitelisted before the run, and the previously published rules are untouched. The Catch's write to `ubsppcoe_lasterror` is a diagnostic, not state — nothing reads it back as truth, and the nightly rebuild overwrites it either way.
+> **Rollback is still nothing, and a failed rebuild still leaves the world as it found it.** Dataverse already said the workspace was whitelisted before the run, and the previously published rules are untouched. The Catch's write to `ubsppcoe_lasterror` is a diagnostic, not state — nothing reads it back as truth, and the next successful rebuild overwrites it either way.
 >
 > The only casualty is timing. The workspace is whitelisted according to Dataverse and not yet according to Fabric, and it stays that way until the next successful rebuild. Say so in the message rather than reporting a bare failure.
 
@@ -369,12 +369,12 @@ Replace it with `Compose_result` — **Compose**, run after **both** `Scope_try`
 | `NotFound` | `ubsppcoe_workspaceid` is blank on the row, or duplicated. **An inventory defect** | No | Succeeded |
 | `WrongCapacity` | The capacity is not governed, or our `ubsppcoe_capacityid` disagrees with the Node | No | Succeeded |
 | `NotEnabled` | The flag was cleared between the trigger firing and the run starting. **Now rare** | No | Succeeded |
-| `Failed` | Case B — the child reported a Fabric error. The nightly run will converge it | Yes, and it failed | Succeeded |
+| `Failed` | Case B — the child reported a Fabric error. **Nothing will retry it** | Yes, and it failed | Succeeded |
 | `Caught` | Case A — an action failed outright. Set by `Scope_catch` | Maybe | **Failed** |
 
 > **Only `Caught` ends the run red**, and that is the point of the last column. The four middle outcomes are ordinary states of a system where another team owns the input data — marking them failed would bury the real failures in a run history that is mostly red, and this flow now runs unattended at whatever rate that team edits their table.
 >
-> `Failed` staying green is the debatable one. It is green because the error is already recorded on the `Capacity Policies` row by the child flow, and because the nightly rebuild is expected to fix it — not because nothing went wrong. If operations would rather be paged for it, the change is a `Terminate` on the **No** branch of `Condition_rebuild_ok`, not a change to the scopes.
+> `Failed` staying green is the debatable one, and it got weaker when the estate-wide rebuild lost its schedule. It is green because the error is already recorded on the `Capacity Policies` row by the child flow — but nothing will now pick that capacity up on its own. If operations would rather be paged for it, the change is a `Terminate` on the **No** branch of `Condition_rebuild_ok`, not a change to the scopes.
 
 > **Nothing reads this.** It exists so that "why did this run do nothing" is answerable from the run history without re-deriving it from four action outputs — which matters far more now that runs happen unattended and in bulk than it did when a user was waiting for the answer.
 >
@@ -607,7 +607,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 
 ### A `Node` move still only rebuilds the new capacity
 
-The trigger fires with the row's **new** Node and nothing carries the old one, so the workspace stays in the old capacity's rules until the nightly run. This is **Q17**, and the trigger does not close it — it removes the risk of the app forgetting the remove call and replaces it with a structural inability to make it. Worth stating plainly, because "it is automatic now" reads as though the gap went away.
+The trigger fires with the row's **new** Node and nothing carries the old one, so the workspace stays in the old capacity's rules until an estate-wide rebuild is run by hand. This is **Q17**, and the trigger does not close it — it removes the risk of the app forgetting the remove call and replaces it with a structural inability to make it. Worth stating plainly, because "it is automatic now" reads as though the gap went away.
 
 ### The inventory is not Fabric
 
@@ -628,11 +628,11 @@ Nothing in this flow can confirm the workspace against `GET /v1/workspaces/{id}`
 | 5 | Enable a workspace whose `Node` is blank | Trigger does **not** fire — the `ne null` half of `Filter rows` |
 | 6 | Enable a workspace on a capacity with **no `Capacity Policies` row** | `WrongCapacity`, **no rebuild**, run succeeds. Not a failed run |
 | 7 | Corrupt one `ubsppcoe_capacityid` to another capacity's GUID, then enable a workspace on it | `WrongCapacity` — the Q29 round-trip check in 4b |
-| 8 | Break the child flow deliberately | `Failed`, with the "nightly rebuild will apply it" message |
+| 8 | Break the child flow deliberately | `Failed`, with the "nothing will retry this automatically" message |
 | 9 | Blank `ubsppcoe_workspaceid` on an enabled, assigned row | `NotFound` |
 | 10 | Inspect any run's action list | **No write action against `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
 | 11 | Bulk-enable 20 workspaces across 3 capacities | 20 runs, serialised by Degree of Parallelism 1. **Time it** — this is the storm question at small scale |
-| 12 | Set `ubsppcoe_oapenabled` to **No** | Trigger does **not** fire. The rules still contain the workspace until the nightly run — the gap `RemoveWorkspaceFromPolicy` has to close |
+| 12 | Set `ubsppcoe_oapenabled` to **No** | Trigger does **not** fire. The rules still contain the workspace until an estate-wide rebuild — the gap `RemoveWorkspaceFromPolicy` has to close |
 | 13 | **Turn the child flow off**, then enable a workspace | Case A. `Scope_catch` fires, `ubsppcoe_lasterror` written by **this** flow, **one row in `Logging`**, run ends **Failed** |
 | 14 | Put a bad `ubsppcoe_policysetid` on a `Capacity Policies` row, then enable a workspace on it | Case B. `Scope_catch` **skipped**, `ubsppcoe_lasterror` written by the **child**, **no `Logging` row**, run ends green with `outcome` = `Failed` |
 | 15 | Point `Get_policy_row` at a non-existent column | `Scope_catch` fires, takes the `empty(policyRowId)` branch, and **does not itself fail** |

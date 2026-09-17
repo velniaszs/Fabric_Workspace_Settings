@@ -14,9 +14,9 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 
 This flow answers a different question: *does Fabric still match what we think it holds?* It exists because the tables are only the source of truth for **rules**. The policy sets themselves can be created, activated, replaced or deleted by anyone with rights on the holder workspace, and nothing stops them.
 
-> **The nightly rebuild does not make this redundant.** [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) overwrites every rule from the tables each night, so rule-level drift is self-healing and not worth worrying about.
+> **An estate-wide rebuild does not make this redundant.** [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) overwrites every rule from the tables — but it is **manual**, so rule-level drift persists until somebody runs it. **This scan is what tells you a run is due.**
 >
-> What it cannot fix is a policy set that has been **deactivated, replaced or deleted**. In those cases the nightly rebuild writes rules to a set that is not in force, and **reports success**. The capacity is governed by something else entirely and every signal says healthy. That gap is the whole reason this scan exists.
+> What it cannot fix is a policy set that has been **deactivated, replaced or deleted**. In those cases a rebuild writes rules to a set that is not in force, and **reports success**. The capacity is governed by something else entirely and every signal says healthy. That gap is the whole reason this scan exists.
 
 ### The cheap-scan trick
 
@@ -60,7 +60,7 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 Findings are rewritten each run, so this table is a **current state**, not a log. If an audit trail is wanted, add a second table and append instead — but do not make one table try to be both.
 
-> **This flow is the only writer, and that follows from the wipe.** Step 2b deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
+> **This flow is the only writer, and that follows from the wipe.** Step 2b deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
 
 ---
 
@@ -417,7 +417,7 @@ There are two honest ways to resolve that. **Pick one.**
 
 ### Option A — do not build it, and alert on failure instead *(recommended to start)*
 
-Add nothing here. Instead, on the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) already uses for its failures.
+Add nothing here. Instead, on the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) already uses for its failures.
 
 Then a failed scan is known by mail rather than by absence, and the drift screen can be labelled *"findings from the last successful scan"* without claiming to be current.
 

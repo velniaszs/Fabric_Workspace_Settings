@@ -6,7 +6,7 @@ Fires when a `Policy Exceptions` row is created or edited, derives which capacit
 
 > ## Why it exists
 >
-> `Policy Exceptions` is the only table in this design that **nothing triggers on**. Rule 3 is rebuilt from it nightly and at no other time, so approving an exception — or revoking one — is not live in Fabric until [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) runs. This flow closes that gap.
+> `Policy Exceptions` is the only table in this design that **nothing triggers on**. Rule 3 is rebuilt from it only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md), so approving an exception — or revoking one — is not live in Fabric until then. This flow closes that gap.
 >
 > It answers **Q16** and **Q33** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7, both of which ask whether the table needs a modified-row trigger of its own. Update them when this is built.
 
@@ -34,7 +34,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 >
 > The table has **no soft-delete column** — `ubsppcoe_active` is the revoke mechanism, and [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §4 is explicit that it exists to revoke *without deleting history*. So a normal removal is `true` → `false`: a **Modified** event on a row that is still fully readable, with `ubsppcoe_workspaceid` intact and the capacity still derivable.
 >
-> **A hard delete is the one case this flow cannot handle.** The row is gone, the workspace GUID with it, and there is no way to work out which capacity to rebuild — the same reasoning as [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)'s *Why `Deleted` is not in the trigger*. Leave `Deleted` off the Change type and let the nightly run catch it. It is not the documented procedure, so it should be rare; **deactivate, do not delete** is worth stating wherever the exception process is written down.
+> **A hard delete is the one case this flow cannot handle.** The row is gone, the workspace GUID with it, and there is no way to work out which capacity to rebuild — the same reasoning as [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)'s *Why `Deleted` is not in the trigger*. Leave `Deleted` off the Change type; the workspace then keeps unrestricted creation until somebody runs an estate-wide rebuild. It is not the documented procedure, so it should be rare — but **deactivate, do not delete** is now operational procedure rather than a preference, and belongs wherever the exception process is written down.
 
 > ### The blast radius is wider than one workspace
 >
@@ -54,7 +54,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 | Select columns | `ubsppcoe_active` |
 | Filter rows | *(leave empty)* |
 
-**`Added` is required, and this is the opposite of [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)'s reasoning — deliberately.** That flow is `Added or Modified` because a workspace row is *never* created already enabled; a separate process sets `ubsppcoe_oapenabled` later, so the enable is always a Modified event. **Exception rows have no such second process.** The person creating the row is the person approving it, and filling in the form — workspace, reason, approved by, Active to Yes — and pressing Save is a **single create**. That produces one `Added` event and no `Modified` event ever follows, so a `Modified`-only trigger would sit silent and the exception would wait for the nightly run.
+**`Added` is required, and this is the opposite of [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)'s reasoning — deliberately.** That flow is `Added or Modified` because a workspace row is *never* created already enabled; a separate process sets `ubsppcoe_oapenabled` later, so the enable is always a Modified event. **Exception rows have no such second process.** The person creating the row is the person approving it, and filling in the form — workspace, reason, approved by, Active to Yes — and pressing Save is a **single create**. That produces one `Added` event and no `Modified` event ever follows, so a `Modified`-only trigger would sit silent and the exception would not publish until somebody ran an estate-wide rebuild.
 
 `ubsppcoe_active` defaults to **No**, so a row created and *then* activated fires twice and rebuilds twice. That is a wasted rebuild, not a wrong one, and it is the correct price for not missing the single-save case.
 
@@ -64,7 +64,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**.
 
-> **Bulk edits queue rather than collide.** Deactivating twenty rows in one sitting fires this flow twenty times, and Degree of Parallelism 1 serialises them into twenty rebuilds of the same capacity. Every one is idempotent — `replaceByPolicy` — and every one publishes the complete, correct rule 3, so the end state is right; the intermediate ones are transient partial states nobody sees. At exception volumes that is fine. **If bulk edits ever become routine, leave them to the nightly run instead** rather than trying to debounce this, which the platform has no mechanism for.
+> **Bulk edits queue rather than collide.** Deactivating twenty rows in one sitting fires this flow twenty times, and Degree of Parallelism 1 serialises them into twenty rebuilds of the same capacity. Every one is idempotent — `replaceByPolicy` — and every one publishes the complete, correct rule 3, so the end state is right; the intermediate ones are transient partial states nobody sees. At exception volumes that is fine. **If bulk edits ever become routine, do them with the flow turned off and run [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) afterwards** rather than trying to debounce this, which the platform has no mechanism for.
 
 ---
 
@@ -120,7 +120,7 @@ All six at the **top level and outside `Scope_try`**. `Initialize variable` cann
 
 > ### `first()`, and the case where that is not enough
 >
-> If the same workspace GUID appears on **two live rows pointing at different Nodes**, the exception applies to both capacities — 5l would pick it up on each — and this flow rebuilds only the first. The second waits for the nightly run.
+> If the same workspace GUID appears on **two live rows pointing at different Nodes**, the exception applies to both capacities — 5l would pick it up on each — and this flow rebuilds only the first. The second is not published until somebody runs an estate-wide rebuild.
 >
 > Fixing it properly means an `Apply to each` around `Run_rebuild`, which nests the child call and forfeits the real error message Step 6 depends on ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E1, E10). **Not worth it for a state that should not exist.** The right fix is upstream: an alternate key on `ubsppcoe_workspaceid`, as already recommended in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2 for the other tables. Recorded so it is not rediscovered as a defect.
 
@@ -193,7 +193,7 @@ concat('Policy rules republished. ', body('Run_rebuild')?['ExceptionCount'], ' e
 **No** → `outcome` = `Failed`, and `message` =
 
 ```
-concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Message'], 'the rebuild flow failed.'), ' The exception change will take effect at the nightly rebuild.')
+concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Message'], 'the rebuild flow failed.'), ' Nothing will retry this — rebuild this capacity by hand.')
 ```
 
 **Tick *is successful* only.** An action inside a Try scope that runs after *has failed* makes `Scope_try` report Succeeded and skips the Catch entirely ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3).
@@ -232,7 +232,7 @@ concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Me
 |---|---|---|
 | `Rebuilt` | The capacity's rules now reflect the exception table | Succeeded |
 | `NoWorkspace` | The exception row's workspace GUID matches no live workspace. **It grants nothing** | Succeeded |
-| `Failed` | The child reported an error. The change lands at the nightly rebuild | Succeeded |
+| `Failed` | The child reported an error. **Nothing will retry it** | Succeeded |
 | `Caught` | An action failed outright. Set by `Scope_catch` | **Failed** |
 
 There is no `NotEnabled` and no `WrongCapacity`. An exception grants regardless of `ubsppcoe_oapenabled` ([RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) 5l), and there is no caller-supplied capacity to be wrong about.
@@ -301,7 +301,7 @@ Copy from the code block, not from a table cell — the `|` would need escaping,
 | 13 | Break `Get_policy_row` with a bad column name | `Caught`, run ends **Failed**, and `ubsppcoe_lasterror` names `Get_policy_row` and its real error — not a container |
 | 14 | Inspect any run's action list | **No write action against `Policy Exceptions`, `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
 
-**Test 6 is the one to build the flow around.** Same-day publishing was the motivation, but a mistyped GUID is the failure that currently has no detection at all — the nightly run does nothing about it and never will.
+**Test 6 is the one to build the flow around.** Same-day publishing was the motivation, but a mistyped GUID is the failure that has no detection at all — an estate-wide rebuild does nothing about it and never will.
 
 **Test 11 is the cheap mistake.** Adding more columns to `Select columns` makes every edit to a reason or an approver rebuild a capacity.
 

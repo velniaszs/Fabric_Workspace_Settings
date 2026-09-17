@@ -173,9 +173,9 @@ Four consequences follow, and all four are worth stating before anyone builds it
 
 **Decision: rows are created by hand in the maker portal, or by the app through the Dataverse connector.** No `AddPolicyException` / `RemovePolicyException` flow is being built. The rebuild reads the table; that is the whole of this project's involvement.
 
-> **The consequence is a delay, and it is asymmetric.** Writing a row does not publish it — nothing triggers a rebuild. A new exception takes effect at the **nightly** run in §4, unless whoever wrote the row also calls a flow that rebuilds that capacity.
+> **The consequence is a delay, and it is asymmetric.** Writing a row does not publish it by itself — [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) is what turns the edit into rules, and it fires on *added or modified* only.
 >
-> Granting late is an inconvenience. **Revoking late is not.** Clearing `active`, or deleting the row, leaves the workspace able to create anything until the nightly rebuild runs. Anyone taking an exception away because of an incident has to force a rebuild rather than assume the row edit did it, and the screen that edits these rows should say so.
+> Granting late is an inconvenience. **Revoking late is not.** Clearing `active` publishes within a minute; **deleting the row publishes nothing at all**, because a deleted row cannot be read and the capacity cannot be derived — the workspace stays able to create anything until somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md). The screen that edits these rows should deactivate, never delete.
 >
 > This makes **Q16** — nothing triggers a rebuild on a data change — materially more pointed than it was when every input was owned elsewhere. It is now our own table that goes stale.
 
@@ -205,7 +205,7 @@ Four consequences follow, and all four are worth stating before anyone builds it
 >
 > **Ownership.** `ubsppcoe_Node` belongs to the platform team. Adding our columns to it makes these flows *writers* to their table, which is the boundary set out at the top of this section. And not a one-off schema favour — `last_rebuild` and `last_error` are written on **every** rebuild.
 >
-> **Churn.** The nightly run would stamp 200–300 of their rows every night. That is audit history they did not ask for, and if anything of theirs triggers on a modified Node row, we would fire it nightly for every capacity in the estate.
+> **Churn.** An estate-wide rebuild would stamp 200–300 of their rows every run. That is audit history they did not ask for, and if anything of theirs triggers on a modified Node row, we would fire it for every capacity in the estate.
 >
 > **Lifecycle.** A Node row exists for every capacity, including non-F SKUs and capacities we do not govern. A policy row exists only where a policy set does. Merged, every column is nullable and blank becomes ambiguous: not governed, governed but never rebuilt, or cleared by hand. Separate, the **presence of the row** is the answer.
 >
@@ -229,7 +229,7 @@ Four consequences follow, and all four are worth stating before anyone builds it
 >
 > The `node` lookup already gives Node → policy navigation for free: related records work from the Node side without a single column being added to it.
 >
-> **`capacity_id` is a deliberate exception**, and worth being honest about. It duplicates the capacity GUID that also sits on the Node row. It stays because it is the key every flow is invoked with, and resolving a capacity id through a lookup on every call would cost more than it saves. If the Node's capacity GUID is ever corrected, our copy goes stale — a cheap check for the nightly scan to make.
+> **`capacity_id` is a deliberate exception**, and worth being honest about. It duplicates the capacity GUID that also sits on the Node row. It stays because it is the key every flow is invoked with, and resolving a capacity id through a lookup on every call would cost more than it saves. If the Node's capacity GUID is ever corrected, our copy goes stale — a cheap check for the drift scan to make.
 
 ### `PolicyItemType` — the governed item types (new)
 | Column | Purpose |
@@ -453,7 +453,7 @@ There is no `NotFound`: a workspace with no row is not whitelisted, which is exa
 
 The cases that made this awkward incrementally are gone. There is no last-workspace-in-a-rule problem, because rules are not edited — they are regenerated, and a chunk that would be empty simply is not emitted. The `PropertyMinCount` error that `remove_workspace_from_rule.ps1` has to refuse cannot arise.
 
-> **Neither flow rolls anything back, because neither writes anything.** A failed rebuild leaves Dataverse and the previously published rules exactly as they were. What changes is the reporting: after a failed remove, **access that should be gone is still live** until the nightly run, and the message has to say so. An operator taking access away for a leaver needs to know whether it took effect now or tonight.
+> **Neither flow rolls anything back, because neither writes anything.** A failed rebuild leaves Dataverse and the previously published rules exactly as they were. What changes is the reporting: after a failed remove, **access that should be gone is still live**, with nothing scheduled to correct it, and the message has to say so. An operator taking access away for a leaver needs to know whether it took effect or not.
 
 ---
 
@@ -495,7 +495,7 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 >
 > Nothing in these flows can fix that, because the GUIDs come from `ubsppcoe_Workspace` and we do not write it. A stale or mistyped workspace GUID on an enabled row goes into the rules verbatim and matches nothing. **The validation has to happen where the row is created** — confirm the workspace exists and is actually assigned to that capacity. The API will not do it, and neither will we.
 
-> **A user connection makes the whole subsystem depend on one person's account.** The nightly rebuild is the sharp end: it runs unattended against 200–300 capacities, and it stops the day that account is disabled, loses Capacity Admin, or is prompted to re-consent. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
+> **A user connection makes the whole subsystem depend on one person's account.** The estate-wide rebuild is the sharp end: it runs against 200–300 capacities, and it stops the day that account is disabled, loses Capacity Admin, or is prompted to re-consent. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
 >
 > If a service-principal connection is available for this connector, prefer it. If not, the connection should be owned by a **service account**, never a named individual, and its expiry should be monitored. That is Q45.
 
@@ -555,7 +555,7 @@ Environment variables travel with a solution export; their **values** may not. S
 | Q27 | Do we manage the workspaces-per-capacity limit? | **No**, but we do **chunk**. Rules are split at 49 workspaces on every rebuild, exactly as `migrate_policy_sets.ps1` does — that is normal operation. What we do not do is warn, forecast or pre-check as a capacity grows; the 50-rule service limit is guarded once inside the rebuild so it fails readably |
 | Q30 | What does rule 3 grant? | **Unrestricted item creation.** `workspace.id AnyOf [≤49]` with **no `item.type` condition** — confirmed against `migrate_policy_sets.ps1` lines 559–580. It supersedes rule 2 rather than supplementing it, and `PolicyItemType` does not apply to it |
 | Q31 | Where do exceptions live, and does an exception need `OapEnabled`? | **`PolicyException`, a new table of ours, keyed on the workspace GUID alone. No** — an exception ignores `ubsppcoe_oapenabled`. It does **not** ignore the `Node` lookup: the capacity an exception applies to is derived from it, exactly as the whitelist is |
-| Q32 | Who writes `PolicyException`? | **By hand in the maker portal, or the app through the Dataverse connector. No flow.** The rebuild only reads it, and [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) publishes the edit — neither writes a row. **Revoke by setting `ubsppcoe_active` to No; do not delete the row**, or the change waits for the nightly run |
+| Q32 | Who writes `PolicyException`? | **By hand in the maker portal, or the app through the Dataverse connector. No flow.** The rebuild only reads it, and [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) publishes the edit — neither writes a row. **Revoke by setting `ubsppcoe_active` to No; do not delete the row**, or nothing publishes the change at all |
 | Q34 | What happens to an exception when the workspace moves capacity or is deleted? | **It leaves the old capacity's rule 3 on the next rebuild, because rule 3 is keyed on the `Node` lookup — and the row stays.** So the workspace is unrestricted on whichever capacity it lands on, with no re-approval. Accepted deliberately; the alternative silently revokes exceptions on every move. See the two boxes in §3 |
 
 ### Decisions taken 2026-09-07
@@ -576,7 +576,7 @@ Environment variables travel with a solution export; their **values** may not. S
 | # | Question | Answer |
 |---|---|---|
 | Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on every Fabric call. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven |
-| Q45 | What identity does that connection use? | **Unresolved, and it blocks granting Fabric roles** — see §5. A service-principal connection keeps the current model; a delegated user connection moves every role onto that account and makes the tenant SPN setting irrelevant. **If it must be a user, use a service account, not a named person** — the nightly rebuild across 200–300 capacities is otherwise one leaver away from stopping |
+| Q45 | What identity does that connection use? | **Unresolved, and it blocks granting Fabric roles** — see §5. A service-principal connection keeps the current model; a delegated user connection moves every role onto that account and makes the tenant SPN setting irrelevant. **If it must be a user, use a service account, not a named person** — an estate-wide rebuild across 200–300 capacities is otherwise one leaver away from stopping |
 
 ### Decision taken 2026-09-15
 
@@ -601,7 +601,7 @@ Ordered by what they block. **No column name blocks the build any more** — Q19
 | **Q17** | A `Node` move needs remove-then-add from the app. If it makes only the add call, the workspace stays whitelisted on the old capacity, and nothing reports it. Is that acceptable, or does the move need to be detected rather than declared? **Sharper since Q49** — there is no longer a scheduled run behind it | Post-launch |
 | **Q10** | Should the app confirm against Fabric that a workspace exists and is on the capacity? The `Node` lookup answers it from the CMDB's point of view, but the CMDB can lag the real assignment, and a stale GUID is published verbatim and matches nothing — see §5 | Flow 3 |
 | **Q11** | What reconciles drift if someone edits rules in the portal? A scheduled compare-and-report, or compare-and-correct? | Post-launch |
-| **Q29** | `capacity_id` on `CapacityPolicy` and the `node` lookup now hold the **same GUID** (Q41), so they can only disagree if one was written wrong. Should the nightly scan assert they match, or is that too cheap a check to bother stating? | Post-launch |
+| **Q29** | `capacity_id` on `CapacityPolicy` and the `node` lookup now hold the **same GUID** (Q41), so they can only disagree if one was written wrong. Should the drift scan assert they match, or is that too cheap a check to bother stating? | Post-launch |
 
 ---
 

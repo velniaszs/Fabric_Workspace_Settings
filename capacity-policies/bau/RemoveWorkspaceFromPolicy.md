@@ -35,7 +35,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > It does not clear `ubsppcoe_oapenabled` and it does not delete a row. Both belong to the platform team ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3). Nor does it touch `PolicyException`, which is ours — no flow writes that table either. What it does is **check that the workspace really has stopped qualifying, and republish the rules so Fabric agrees**.
 >
-> Access goes away when the owning system clears `ubsppcoe_oapenabled`, repoints the `Node`, or deletes the row. This flow is how that becomes visible in the policy without waiting for the nightly run.
+> Access goes away when the owning system clears `ubsppcoe_oapenabled`, repoints the `Node`, or deletes the row. This flow is how that becomes visible in the policy without waiting for somebody to run an estate-wide rebuild.
 
 > ### What it is normally called for — and what it no longer covers
 >
@@ -49,11 +49,11 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > **So this flow now handles exactly one case: the flag being cleared while the workspace stays where it is.** That is a real case and worth handling promptly — it is how a leaver or an incident response takes access away. But it is not the case the flow was originally written for, and the two it has lost are the common ones.
 >
-> **Moves and deletions fall to the nightly [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md)**, exactly as they did before anyone called this flow reliably. This is **Q17**, unchanged and now structural rather than procedural: previously the app could forget to make the old-capacity call, and now there is no way to make it at all.
+> **Moves and deletions fall to [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md)**, exactly as they did before anyone called this flow reliably. This is **Q17**, unchanged and now structural rather than procedural: previously the app could forget to make the old-capacity call, and now there is no way to make it at all. **Since that flow lost its nightly schedule (Q49) they fall to a person deciding to run it**, which is weaker again.
 
 > ### Why `Deleted` is not in the trigger
 >
-> A deleted row cannot be read. The Dataverse trigger fires, but `_ubsppcoe_nodeid_value` is not reliably available, so there is **no way to work out which capacity to rebuild** — and rebuilding the wrong one, or every one, are both worse than waiting for the nightly run.
+> A deleted row cannot be read. The Dataverse trigger fires, but `_ubsppcoe_nodeid_value` is not reliably available, so there is **no way to work out which capacity to rebuild** — and rebuilding the wrong one, or every one, are both worse than leaving it to an estate-wide run.
 >
 > Adding `Deleted` would produce a flow that fires, fails to derive a capacity, and exits — noise in the run history with no action taken. **Leave it off.** If same-day removal on deletion is ever a requirement, it needs a different mechanism: the workspace's last-known Node recorded somewhere we control, which nothing currently does.
 
@@ -101,7 +101,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > The platform team's tables **soft-delete rather than hard-delete**. A deleted workspace is a `Modified` event on a row that is still fully readable — so `_ubsppcoe_nodeid_value` is still there, the capacity is still derivable, and **this flow can handle deletions after all.**
 >
-> That reverses what this document said an hour earlier. Deletion is no longer a gap left to the nightly run; it is the same event as any other removal.
+> That reverses what this document said an hour earlier. Deletion is no longer a gap left to an estate-wide rebuild; it is the same event as any other removal.
 >
 > **The `or` needs its parentheses.** OData groups `A or B and C` as `A or (B and C)`, so without them a soft-deleted workspace with a blank Node would fire the flow and then fail to derive a capacity.
 >
@@ -335,7 +335,7 @@ Leave `outcome` as Step 4 set it — `Removed`, `StillEnabled` or `StillExcepted
 
 Two **Set variable** actions — `outcome` = `Failed`, and `message` set outright rather than appended, because the Step 4 text no longer applies:
 
-`concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' If the workspace has already been moved or disabled in Dataverse, the nightly rebuild will apply it.')`
+`concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['message'], 'the rebuild flow failed.'), ' Nothing will retry this automatically — re-run the flow or rebuild this capacity by hand.')`
 
 ---
 
@@ -351,9 +351,9 @@ There is nothing to roll back — this flow writes nothing. But the *reporting* 
 | Fabric still says | not whitelisted | **whitelisted** |
 | Consequence | The app promises access that does not exist | **Access that should be gone is still live** |
 
-The second is the one with a security dimension. The change is recorded in Dataverse and the nightly rebuild in [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) will converge Fabric to it — but not until tonight.
+The second is the one with a security dimension. The change is recorded in Dataverse, but **nothing converges Fabric to it on its own** — [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) will, and only when somebody runs it.
 
-**Say so in the message.** An operator taking access away for a leaver needs to know whether it took effect now or tonight; that is the difference between finishing the task and escalating it. A bare "failed" tells them neither.
+**Say so in the message.** An operator taking access away for a leaver needs to know whether it took effect or not; that is the difference between finishing the task and escalating it. A bare "failed" tells them neither.
 
 ---
 
@@ -372,7 +372,7 @@ Replace it with `Compose_result` — **Compose**, run after **both** `Scope_try`
 | `Removed` | The workspace no longer qualifies, and the rules now say so | Yes | Succeeded |
 | `StillEnabled` | `ubsppcoe_oapenabled` is still `true` on another row, so it **remains whitelisted** | Yes | Succeeded |
 | `StillExcepted` | Still on this capacity with an active `PolicyException` row, so it can create **any** item type | Yes | Succeeded |
-| `Failed` | The child reported a Fabric error. Access may still be live until the nightly run | Yes, and it failed | Succeeded |
+| `Failed` | The child reported a Fabric error. Access may still be live, and nothing will retry it | Yes, and it failed | Succeeded |
 | `Caught` | An action failed outright. Set by `Scope_catch` | Maybe | **Failed** |
 
 There is no `NotFound` — a workspace with no row is not whitelisted, which is `Removed`.
@@ -432,7 +432,7 @@ Copy from the code block, not from a table cell — the `|` would need escaping,
 >
 > **Leave `Add_log_row` on default run-after.** If the insert fails and it is configured to tolerate that, the `Terminate` is skipped and this flow reports **green** for a failed removal — the exact outcome the Terminate exists to prevent, reintroduced through the logging.
 
-> **A caught failure here is more serious than in `AddWorkspaceToPolicy`.** That flow fails to *grant* access, which is an inconvenience. This one fails to *remove* it — so a caught error means somebody asked for access to be taken away and it is still live, until the nightly run. The `Terminate` is what makes that visible; without it the run reports success ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7).
+> **A caught failure here is more serious than in `AddWorkspaceToPolicy`.** That flow fails to *grant* access, which is an inconvenience. This one fails to *remove* it — so a caught error means somebody asked for access to be taken away and it is still live, with nothing scheduled to correct it. The `Terminate` is what makes that visible; without it the run reports success ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7).
 
 ---
 
@@ -446,12 +446,12 @@ Copy from the code block, not from a table cell — the `|` would need escaping,
 | 4 | **Create** a new workspace row with the flag unset | This flow does **not** fire — the trigger is `Modified` only. If it fires, you have `Added` ticked and every new workspace in the tenant will rebuild a capacity |
 | 5 | Clear the flag on a workspace with a **blank** Node | Does not fire — the `ne null` half of `Filter rows` |
 | 6 | Crossing back under the chunk boundary, from 50 to 49 | Rules go from 3 to 2; the `(1/2)`/`(2/2)` naming is regenerated, not left stale |
-| 7 | Break the child flow | `Failed`, with the message saying access may still be live until the nightly run |
+| 7 | Break the child flow | `Failed`, with the message saying access may still be live and nothing will retry |
 | 8 | Duplicate rows for one workspace GUID, one enabled and one not | `StillEnabled`, not `Removed`. **This is why Step 3 queries instead of trusting the trigger body** |
 | 9 | Inspect any run's action list | **No write action against `ubsppcoe_Workspace` or `ubsppcoe_Node`** |
 | 10 | Clear the flag on a workspace that has an active exception row, still on this capacity | `StillExcepted`, and the workspace is still in rule 3. **The one that would otherwise report a removal that did not happen** |
 | 11 | The same, with the exception row's `active` set to No | `Removed`, and no rule 3 for it |
-| 12 | **Move a workspace to another capacity** | This flow does **not** fire at all. The old capacity keeps it until the nightly run — confirm that, rather than assuming it is handled |
+| 12 | **Move a workspace to another capacity** | This flow does **not** fire at all. The old capacity keeps it until somebody runs an estate-wide rebuild — confirm that, rather than assuming it is handled |
 | 13 | **Delete a workspace row** | This flow does **not** fire. Same as test 12: verify the gap exists rather than discovering it later |
 | 14 | Break `Get_policy_row` with a bad column name | `Caught`, run ends **Failed**, and `ubsppcoe_lasterror` names `Get_policy_row` and its real error — not a container |
 

@@ -37,7 +37,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 >
 > **It degrades the detector.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) reports policy sets it cannot map to a live capacity as `Untracked` — that is how a genuine orphan is found. Manufacturing them deliberately, one per retired capacity, buries the real ones in noise until nobody reads the report.
 >
-> **The holder workspace accumulates.** One workspace holds every policy set in the estate, 200–300 of them, and the nightly scan walks all of them inside a fixed budget. Every capacity ever retired would stay in that list permanently.
+> **The holder workspace accumulates.** One workspace holds every policy set in the estate, 200–300 of them, and the scheduled drift scan walks all of them inside a fixed budget. Every capacity ever retired would stay in that list permanently.
 >
 > **The audit value is not in the Fabric item.** Rules are regenerated wholesale on every rebuild, so the item carries no history. Everything worth keeping — policy set name and id, last rebuild, last error, the Node link — is on the `Capacity Policies` row, and **that row is what should be retained**, not the item.
 
@@ -339,7 +339,7 @@ Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can it
 | 4 | **Revoke Capacity Admin from the connection identity, then soft-delete a governed Node row** | `Suspended`, **never `Deleted`**. This is the sanity check in 3b — if it deletes, the guard is wrong and a permissions lapse becomes a destructive event |
 | 5 | Break `Delete_policy_set`, then run test 3 again | The row must **not** say `Deleted`. If it does, the ordering in 3c is wrong and the flow has manufactured an orphan |
 | 6 | After test 2, clear the soft-delete flag on that Node row | [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) fires and returns `AlreadyExists`. **The policy set stays deactivated and the capacity stays ungoverned** — the gap named in 3d. Confirm it, then decide who closes it |
-| 7 | After test 2, run the nightly rebuild | The capacity is rebuilt as normal — the Node link still resolves. Rules are republished into a **deactivated** set: harmless, but `lastrebuild` keeps moving on a retired capacity. Decide whether the nightly job should skip `Suspended` rows |
+| 7 | After test 2, run `MIG_RebuildAllCapacityPolicies` | The capacity is rebuilt as normal — the Node link still resolves. Rules are republished into a **deactivated** set: harmless, but `lastrebuild` keeps moving on a retired capacity. Decide whether the estate-wide rebuild should skip `Suspended` rows |
 | 8 | Soft-delete the same Node row twice | Fires again, deactivates an already-inactive set. Must be harmless |
 
 **Test 4 is the one to write first.** It is the only test where a bug destroys something. `GET /v1/capacities` is scoped to the connection's identity, so *absent from the list* and *we cannot see it* are the same response — and one of those must never reach the delete branch.

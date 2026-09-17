@@ -4,7 +4,7 @@
 
 > **Not built yet.** Specification, not a description of something that exists.
 
-Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), [RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) (must have run first), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) 8c (the same call, for one capacity), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) (must have run first), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) 8c (the same call, for one capacity), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -24,7 +24,7 @@ Three consequences, all of which shape the design below:
 
 > ### The precondition, stated plainly
 >
-> **Do not run this until [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) has completed successfully across the estate, and `Policy Exceptions` was seeded before it ran.**
+> **Do not run this until [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) has completed successfully across the estate, and `Policy Exceptions` was seeded before it ran.**
 >
 > The check is in Step 3's filter — `ubsppcoe_rulecount` must be greater than 1 — but a filter is not a substitute for knowing. A capacity that reached this flow with `rulecount` = 1 either has no whitelisted workspaces at all, which is legitimate for a genuinely new capacity, or its rebuild never ran, which is not.
 
@@ -32,7 +32,7 @@ Three consequences, all of which shape the design below:
 
 ## 1. Before you start
 
-- [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) and [RebuildAllCapacityPolicies](docs/flows/capacity-policies/RebuildAllCapacityPolicies.md) must both have run.
+- [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) and [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) must both have run.
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector.
 - The connection's identity needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
 - No child flow. The activate call is three lines; wrapping it would add a 120-second budget for nothing.
@@ -122,7 +122,7 @@ Each clause earns its place:
 | `ubsppcoe_policysetid ne null` | Rows registered by hand or half-written. Nothing to activate |
 | `ubsppcoe_rulecount gt 1` | **Capacities whose rebuild never ran.** Activating rule 1 alone is a deny-all with no whitelist |
 
-> **`rulecount gt 1` is the guard, and it is not paranoia.** `RebuildAllCapacityPolicies` stamps that column on every attempt, success or failure, so a capacity whose rebuild failed carries the count it *tried* to publish rather than a stale one. An unrebuilt capacity has the column **empty**, and `gt 1` excludes empty — so a capacity that never made it through the rebuild phase cannot be activated by accident.
+> **`rulecount gt 1` is the guard, and it is not paranoia.** `MIG_RebuildAllCapacityPolicies` stamps that column on every attempt, success or failure, so a capacity whose rebuild failed carries the count it *tried* to publish rather than a stale one. An unrebuilt capacity has the column **empty**, and `gt 1` excludes empty — so a capacity that never made it through the rebuild phase cannot be activated by accident.
 >
 > **It will also exclude a legitimately empty capacity** — one with no OAP-enabled workspaces and no exceptions, whose rebuild correctly published rule 1 alone. That is the right trade during migration: such a capacity is locked completely once activated, so it should be a deliberate decision rather than a row in a batch. Activate those individually afterwards, or leave them for the provisioning app.
 
@@ -269,7 +269,7 @@ Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate
 <p><b>Nothing was activated.</b> This was a dry run of <code>MIG_ActivateAllCapacityPolicySets</code>, @{utcNow()}.</p>
 <p><b>@{length(variables('wouldActivate'))}</b> policy set(s) would be activated by running it again with mode <code>Activate</code>.</p>
 <p>Each has a rule count greater than 1, meaning its rules have been rebuilt. Activating puts the deny-all baseline into force on that capacity.</p>
-@{if(empty(variables('wouldActivate')), '<p>Nothing is pending. Either the estate is already activated, or RebuildAllCapacityPolicies has not run.</p>', concat('<p>', join(variables('wouldActivate'), '<br>'), '</p>'))}
+@{if(empty(variables('wouldActivate')), '<p>Nothing is pending. Either the estate is already activated, or MIG_RebuildAllCapacityPolicies has not run.</p>', concat('<p>', join(variables('wouldActivate'), '<br>'), '</p>'))}
 ```
 
 ### No — the live run
@@ -290,7 +290,7 @@ Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate
 <p>To reverse one capacity: <code>deactivate_policy_set.ps1</code>, then set its <code>Status</code> back to <code>Inactive</code>.</p>
 ```
 
-**Send the live one on a clean run too.** Unlike the nightly job, this runs once and somebody needs the record of when the estate went under enforcement.
+**Send the live one on a clean run too.** This runs once and somebody needs the record of when the estate went under enforcement.
 
 > **Do not use `'\n'` for line breaks in these expressions.** This expression language does not interpret `\n` as a newline — it emits a literal backslash-n. In HTML use `<br>`, as above; in a plain-text Compose use `decodeUriComponent('%0A')`.
 
