@@ -26,7 +26,7 @@ Three consequences, all of which shape the design below:
 >
 > **Do not run this until [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) has completed successfully across the estate, and `Policy Exceptions` was seeded before it ran.**
 >
-> The check is in Step 3's filter — `ubsppcoe_rulecount` must be greater than 1 — but a filter is not a substitute for knowing. A capacity that reached this flow with `rulecount` = 1 either has no whitelisted workspaces at all, which is legitimate for a genuinely new capacity, or its rebuild never ran, which is not.
+> The check is in Step 3's filter — `ubsppcoe_rulecount` must be at least 1 — but a filter is not a substitute for knowing. It proves only that a rebuild *ran*; it cannot tell you the rebuild produced what you meant. A capacity arriving here with `rulecount` = 1 has the deny-all baseline and nothing else, which is correct for a capacity with no OAP-enabled workspaces and wrong for one where the flag was never rolled out. **Phase 4 is where that distinction gets made — this flow will activate both.**
 
 ---
 
@@ -107,7 +107,7 @@ Set the group's join to **Or** and add a second row:
 | Field | Value |
 |---|---|
 | Table name | `Capacity Policies` |
-| Filter rows | `ubsppcoe_status eq 'Inactive' and ubsppcoe_policysetid ne null and ubsppcoe_rulecount gt 1` |
+| Filter rows | `ubsppcoe_status eq 'Inactive' and ubsppcoe_policysetid ne null and ubsppcoe_rulecount ge 1` |
 | Select columns | `ubsppcoe_capacitypolicyid,ubsppcoe_capacityid,ubsppcoe_capacityname,ubsppcoe_policysetid,ubsppcoe_rulecount,ubsppcoe_workspacecount,ubsppcoe_exceptioncount` |
 | Sort by | `ubsppcoe_capacityname asc` |
 | Row count | `5000` |
@@ -120,11 +120,17 @@ Each clause earns its place:
 |---|---|
 | `ubsppcoe_status eq 'Inactive'` | Anything already activated. **This is what makes re-runs safe** |
 | `ubsppcoe_policysetid ne null` | Rows registered by hand or half-written. Nothing to activate |
-| `ubsppcoe_rulecount gt 1` | **Capacities whose rebuild never ran.** Activating rule 1 alone is a deny-all with no whitelist |
+| `ubsppcoe_rulecount ge 1` | **Capacities whose rebuild never ran** — that column is empty, and a null comparison is false, so they are excluded |
 
-> **`rulecount gt 1` is the guard, and it is not paranoia.** `MIG_RebuildAllCapacityPolicies` stamps that column on every attempt, success or failure, so a capacity whose rebuild failed carries the count it *tried* to publish rather than a stale one. An unrebuilt capacity has the column **empty**, and `gt 1` excludes empty — so a capacity that never made it through the rebuild phase cannot be activated by accident.
+> ### `ge 1`, not `gt 1` — changed 2026-09-17
 >
-> **It will also exclude a legitimately empty capacity** — one with no OAP-enabled workspaces and no exceptions, whose rebuild correctly published rule 1 alone. That is the right trade during migration: such a capacity is locked completely once activated, so it should be a deliberate decision rather than a row in a batch. Activate those individually afterwards, or leave them for the provisioning app.
+> **A capacity with no whitelisted workspaces is activated like any other.** `rulecount` = 1 means the rebuild ran and correctly published the deny-all baseline alone, which is a governed capacity with nothing yet allowed on it — the intended end state, not a gap. Holding those back left capacities ungoverned for no reason and created a manual follow-up list nobody owned.
+>
+> **The clause stays, because it is doing a second job.** An unrebuilt capacity has `rulecount` **empty**, and both `gt 1` and `ge 1` exclude empty. Dropping the clause entirely would let those through — and their policy sets have **no rules at all**, because Phase 1 creates them empty. Activating a zero-rule set enforces nothing while stamping the row `Active`, so Dataverse would claim the capacity is governed when Fabric is not enforcing anything. That is worse than either alternative, because every signal reads healthy.
+>
+> One character, and it is the difference between *nothing is allowed yet* and *nothing is enforced*.
+
+> **Know what you are activating.** `MIG_RebuildAllCapacityPolicies` stamps `rulecount` on every attempt, success or failure, so a capacity whose rebuild **failed** carries the count it *tried* to publish rather than a stale one — and will now pass this filter. Read `lasterror` in the Phase 4 review, not just the counts.
 
 > ### There is no `ubsppcoe_statecode` clause here, and that is a dependency rather than an oversight
 >
@@ -160,7 +166,7 @@ And nothing else. **No Fabric call, no Dataverse write.**
 
 > **The workspace and exception counts are in that line for the coverage read.** They cost nothing — the rebuild already stamped them and the query already selects them — and they turn the dry run into a first look at who is about to be denied.
 >
-> A capacity showing **many rules and few whitelisted workspaces** is the shape to look for. It passes the `rulecount gt 1` filter and will activate cleanly, and it may still deny item creation to most of the teams working on it, because `workspacecount` counts only workspaces with `ubsppcoe_oapenabled = true`.
+> A capacity showing **many rules and few whitelisted workspaces** is the shape to look for. It passes the `rulecount ge 1` filter and will activate cleanly, and it may still deny item creation to most of the teams working on it, because `workspacecount` counts only workspaces with `ubsppcoe_oapenabled = true`.
 >
 > What this still cannot tell you is the **total** number of workspaces under each capacity's Node, which is what turns these counts into a denial count. That needs a query against `ubsppcoe_Workspace` per capacity and is not built yet — so read this list as a smell test, not as sign-off.
 >
@@ -323,6 +329,7 @@ Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate
 | 3 | `Activate` on one throwaway capacity | Policy set active in the portal, row flips to `Active`, `lasterror` empty |
 | 4 | Run again immediately | **Zero candidates.** The `status eq 'Inactive'` filter is what makes this safe |
 | 5 | A row whose `ubsppcoe_rulecount` is empty | Absent from the candidate list. **The unrebuilt-capacity guard** |
+| 5b | A row whose `ubsppcoe_rulecount` is **1** | **Present** in the candidate list and activated. Deny-all in force, nothing whitelisted — the 2026-09-17 change |
 | 6 | Revoke Capacity Admin on one capacity, run `Activate` | That capacity in `failures` with a permission message, row still `Inactive` with `lasterror` set, **and the others still activated** |
 | 7 | Time a run of 20 | Roughly two minutes. Materially faster means the Delay is missing or outside the loop |
 | 8 | After activating one capacity, try creating a governed item in a **non-whitelisted** workspace on it | **Refused.** This is the only test that proves the whole chain works |

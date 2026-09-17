@@ -259,7 +259,9 @@ Makes no Fabric call and no Dataverse write. Check the run history action list t
 
 Read the list. Is the count what Phase 4 led you to expect?
 
-Capacities with `rulecount = 1` are **excluded by design** — activating one locks it completely, so it is a per-capacity decision, not a batch. Handle those individually afterwards, or leave them for the provisioning app.
+Capacities with `rulecount = 1` **are included** — changed 2026-09-17. They activate with the deny-all baseline and nothing whitelisted, which is a governed capacity with nothing yet allowed on it. Only rows with an **empty** `rulecount` are excluded, because those were never rebuilt.
+
+> **So Phase 4 is the only thing standing between a `rulecount = 1` capacity and a total lock.** The filter no longer catches it. If the run list contains a capacity where `ubsppcoe_oapenabled` was never rolled out, activating it stops item creation for every team on it — and nothing downstream will query that decision.
 
 ### 5.2 First tranche — five capacities
 
@@ -338,7 +340,7 @@ New capacities are handled by the provisioning app calling `InitializeCapacityPo
 
 - The `No Node row` list from Phase 1, to the platform team
 - The Phase 4 denial figures and who signed them off
-- Any capacity left at `rulecount = 1` and deliberately not activated
+- Any capacity activated at `rulecount = 1`, and whether that was because it is genuinely unused or because the flag is not rolled out yet
 
 ---
 
