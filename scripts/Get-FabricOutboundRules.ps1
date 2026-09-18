@@ -16,14 +16,15 @@
     The Fabric workspace GUID.
 
 .PARAMETER TenantId
-    Entra tenant ID. Supply with ClientId and ClientSecret to authenticate as a service
-    principal. Omit all three to use the current Az PowerShell sign-in.
+    Entra tenant ID. Falls back to $env:FABRIC_TENANT_ID.
+    Supply tenant, client and secret together to authenticate as a service principal.
+    Supply none of them to use the current Az PowerShell sign-in.
 
 .PARAMETER ClientId
-    Application (client) ID of the service principal.
+    Application (client) ID of the service principal. Falls back to $env:FABRIC_CLIENT_ID.
 
 .PARAMETER ClientSecret
-    Client secret, as a SecureString.
+    Client secret, as a SecureString. Falls back to $env:FABRIC_CLIENT_SECRET.
 
 .PARAMETER IncludeAll
     Return denied rules too, not just active ones.
@@ -36,22 +37,25 @@
     $secret = Read-Host 'Client secret' -AsSecureString
     .\Get-FabricOutboundRules.ps1 -WorkspaceId $ws -TenantId $tid -ClientId $cid -ClientSecret $secret
 
+.EXAMPLE
+    $env:FABRIC_TENANT_ID     = '<tenant>'
+    $env:FABRIC_CLIENT_ID     = '<client>'
+    $env:FABRIC_CLIENT_SECRET = '<secret>'
+    .\Get-FabricOutboundRules.ps1 -WorkspaceId $ws
+
 .NOTES
     Requires Contributor (or higher) on the workspace.
 #>
-[CmdletBinding(DefaultParameterSetName = 'Interactive')]
+[CmdletBinding()]
 param(
     [Parameter(Mandatory)]
     [ValidatePattern('^[0-9a-fA-F-]{36}$')]
     [string]$WorkspaceId,
 
-    [Parameter(Mandatory, ParameterSetName = 'ServicePrincipal')]
     [string]$TenantId,
 
-    [Parameter(Mandatory, ParameterSetName = 'ServicePrincipal')]
     [string]$ClientId,
 
-    [Parameter(Mandatory, ParameterSetName = 'ServicePrincipal')]
     [securestring]$ClientSecret,
 
     [switch]$IncludeAll
@@ -59,6 +63,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $resource = 'https://api.fabric.microsoft.com'
+
+if (-not $TenantId) { $TenantId = $env:FABRIC_TENANT_ID }
+if (-not $ClientId) { $ClientId = $env:FABRIC_CLIENT_ID }
+if (-not $ClientSecret -and -not [string]::IsNullOrWhiteSpace($env:FABRIC_CLIENT_SECRET)) {
+    $ClientSecret = ConvertTo-SecureString $env:FABRIC_CLIENT_SECRET -AsPlainText -Force
+}
+
+# Any one of the three means service-principal auth was intended; all three are then required.
+if ($TenantId -or $ClientId -or $ClientSecret) {
+    $missing = @()
+    if (-not $TenantId)     { $missing += 'TenantId (or $env:FABRIC_TENANT_ID)' }
+    if (-not $ClientId)     { $missing += 'ClientId (or $env:FABRIC_CLIENT_ID)' }
+    if (-not $ClientSecret) { $missing += 'ClientSecret (or $env:FABRIC_CLIENT_SECRET)' }
+    if ($missing) {
+        throw "Incomplete service principal credentials. Missing: $($missing -join ', ')."
+    }
+}
 
 function Get-FabricToken {
     param($TenantId, $ClientId, [securestring]$ClientSecret, $Resource)
