@@ -28,7 +28,7 @@ Confirms that a workspace really is whitelisted on a capacity, then rebuilds tha
 >
 > A customer standard: the body goes in a `Try` scope, and a `Catch` scope reads `result()` and writes the error to a Dataverse column.
 >
-> **This solution has no try/catch to copy.** There is not one `Scope` action in any of the seventeen exported flows — error handling here is "configure run after" throughout. So this is the first, and if it is to become a house standard it belongs in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §4 before it is built a second time.
+> **This solution has no try/catch to copy.** There is not one `Scope` action in any of the seventeen exported flows — error handling here is "configure run after" throughout. So this is the first, and if it is to become a house standard it belongs in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §4 before it is built a second time.
 >
 > | # | Edit | Where |
 > |---|---|---|
@@ -42,25 +42,25 @@ Confirms that a workspace really is whitelisted on a capacity, then rebuilds tha
 >
 > **One thing is not settled: which table the Catch writes to.** This document assumes `Capacity Policies`, which is ours. If the answer turns out to be `ubsppcoe_Workspace`, that is not a flow change — see Step 7.
 >
-> **Settled 2026-09-15, and the answer was neither.** The Catch writes `ubsppcoe_lasterror` on `Capacity Policies` **and** inserts a row into the existing `Logging` table. It never writes `ubsppcoe_Workspace` — that table is read-only for this project, without exception ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+> **Settled 2026-09-15, and the answer was neither.** The Catch writes `ubsppcoe_lasterror` on `Capacity Policies` **and** inserts a row into the existing `Logging` table. It never writes `ubsppcoe_Workspace` — that table is read-only for this project, without exception ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1).
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1–§2.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md), [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1–§2.
 
 ---
 
 ## 0. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it.
+- Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it.
 - Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. It makes **no Fabric calls of its own** — every Fabric interaction, and therefore the whole auth question, lives inside the child flow.
 - **Reads only, apart from one column.** `Scope_catch` writes `ubsppcoe_lasterror` on a `Capacity Policies` row and inserts a row into `Logging`, and only when something has failed. Nothing else in the flow writes anything — see Step 7.
 
 > ## This flow does not add anything
 >
-> The name is the app's vocabulary, not a description of a write. Whitelist membership is **derived** from two columns on `ubsppcoe_Workspace` — the `Node` lookup and `ubsppcoe_oapenabled` — and **this project never writes either** ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3). `ubsppcoe_oapenabled` in particular is an internal flag meaning *this workspace has OAP enabled and receives the rest of the Fabric treatment*; capacity policy is one late consumer of it.
+> The name is the app's vocabulary, not a description of a write. Whitelist membership is **derived** from two columns on `ubsppcoe_Workspace` — the `Node` lookup and `ubsppcoe_oapenabled` — and **this project never writes either** ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3). `ubsppcoe_oapenabled` in particular is an internal flag meaning *this workspace has OAP enabled and receives the rest of the Fabric treatment*; capacity policy is one late consumer of it.
 >
 > So what this flow actually does is **check that the conditions for whitelisting are already true, and publish the consequences**. If they are not true, it says so and refuses — which is the entire reason it still exists as a separate flow rather than a bare "rebuild this capacity" call.
 >
-> There is also no `PATCH` of a policy rule, no "find a rule with space", no 49-chunking. The rebuild recomputes the whole layout. If you find yourself reading policy rules in this flow, the design has been misunderstood — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2.
+> There is also no `PATCH` of a policy rule, no "find a rule with space", no 49-chunking. The rebuild recomputes the whole layout. If you find yourself reading policy rules in this flow, the design has been misunderstood — see [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §2.
 
 > ### The failure this flow exists to prevent
 >
@@ -82,11 +82,11 @@ In the built flow, **delete the Power Apps (V2) trigger and add** **Microsoft Da
 | Select columns | `ubsppcoe_oapenabled,ubsppcoe_nodeid` |
 | Filter rows | `ubsppcoe_oapenabled eq true and _ubsppcoe_nodeid_value ne null and ubsppcoe_statecode eq 1` |
 
-> **`ubsppcoe_statecode` is a Choice, and on `ubsppcoe_Workspace` `1` = Active, `2` = Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). It is a **custom column**, not Dataverse's system `statecode`. The integer is **unquoted**, and `eq true` / `ne true` do not work against it — an earlier revision of this document used a placeholder Boolean and was wrong on both counts.
+> **`ubsppcoe_statecode` is a Choice, and on `ubsppcoe_Workspace` `1` = Active, `2` = Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). It is a **custom column**, not Dataverse's system `statecode`. The integer is **unquoted**, and `eq true` / `ne true` do not work against it — an earlier revision of this document used a placeholder Boolean and was wrong on both counts.
 >
 > **`eq 1`, not `ne 2`, and here that is the safer direction.** This filter decides what gets *added* to a deny-all exemption, so it should fail closed: if the platform team ever adds a third option, an `eq 1` test excludes it until somebody looks, whereas `ne 2` would whitelist it silently. The Node table takes the opposite form for the opposite reason — see the tables document.
 >
-> It is in `Filter rows` but deliberately **not** in `Select columns`. A workspace being soft-deleted should not fire *this* flow — that is [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)'s event. Keeping it out of `Select columns` means a delete does not even wake this flow up; keeping it in `Filter rows` means that if some *other* watched column changes on an already-deleted row, nothing happens.
+> It is in `Filter rows` but deliberately **not** in `Select columns`. A workspace being soft-deleted should not fire *this* flow — that is [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md)'s event. Keeping it out of `Select columns` means a delete does not even wake this flow up; keeping it in `Filter rows` means that if some *other* watched column changes on an already-deleted row, nothing happens.
 
 **`Added or Modified`, not `Added`.** A workspace row is almost never created already enabled — `ubsppcoe_oapenabled` is set later by a different process, which is exactly why `NotEnabled` was the most common outcome of the app-called version. On `Added` alone this flow would fire at creation, find the flag null, and never see the enable.
 
@@ -100,7 +100,7 @@ In the built flow, **delete the Power Apps (V2) trigger and add** **Microsoft Da
 >
 > **Keep Step 4c anyway.** It is now redundant against the trigger and costs nothing, and it closes the gap between trigger time and run time — see Step 4c.
 >
-> It also defines the seam with [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) when that is converted: the same trigger with `ubsppcoe_oapenabled ne true`. **Not `eq false`** — `false` and null are different values and null is the common one, so `eq false` would silently drop every never-set row.
+> It also defines the seam with [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) when that is converted: the same trigger with `ubsppcoe_oapenabled ne true`. **Not `eq false`** — `false` and null are different values and null is the common one, so `eq false` would silently drop every never-set row.
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. Now permitted, because losing `Respond` stops this being a request-response flow. It serialises a bulk enable; it does not shrink one, and 500 enabled rows is still 500 runs against perhaps 20 capacities. Time that before trusting it in production.
 
@@ -120,7 +120,7 @@ All five at the **top level**, before any Condition **and outside `Scope_try`**.
 
 > **This is the one part of the try/catch change the designer will not warn you about.** It offers `Initialize variable` inside a Scope quite happily and then fails validation on save, with an error that names the action rather than the rule. Leave all five above `Scope_try` and the problem never arises.
 
-> **The two new variables exist to avoid editing the body.** They hold what `triggerBody()['text']` and `triggerBody()['text_1']` used to hold, so converting Steps 3, 4a and 5 is a find-and-replace rather than a rethink. `workspaceId` reads `ubsppcoe_workspaceid` — the **Fabric** workspace GUID, not the row key `ubsppcoe_workspaceuniqueid` ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+> **The two new variables exist to avoid editing the body.** They hold what `triggerBody()['text']` and `triggerBody()['text_1']` used to hold, so converting Steps 3, 4a and 5 is a find-and-replace rather than a rethink. `workspaceId` reads `ubsppcoe_workspaceid` — the **Fabric** workspace GUID, not the row key `ubsppcoe_workspaceuniqueid` ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1).
 
 ---
 
@@ -154,7 +154,7 @@ The step the conversion turns on. **The trigger gives you the Node row GUID; it 
 >
 > A capacity with no `Capacity Policies` row is not an error — it is one of the 200–300 capacities that exist in inventory and are not under policy management. Handling it properly would mean a Condition, and putting Steps 3 onward inside its Yes branch, which is the restructuring this conversion is trying to avoid.
 >
-> So instead an unresolved capacity becomes the **zero GUID**. Step 4a then finds no Node row, Step 4b's comparison fails, and the run ends at `WrongCapacity` with no rebuild — which is the correct behaviour reached through an existing guard rather than a new one. The zero GUID is already this solution's sentinel ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §8), so it is not a new convention either.
+> So instead an unresolved capacity becomes the **zero GUID**. Step 4a then finds no Node row, Step 4b's comparison fails, and the run ends at `WrongCapacity` with no rebuild — which is the correct behaviour reached through an existing guard rather than a new one. The zero GUID is already this solution's sentinel ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8), so it is not a new convention either.
 >
 > **The cost is an imprecise label.** "Not governed" is reported as `WrongCapacity`. Step 4b's message is widened to name both causes; if that turns out to be the common case in the run history, promote it to its own Condition and accept the nesting.
 
@@ -191,7 +191,7 @@ The step the conversion turns on. **The trigger gives you the Node row GUID; it 
 >
 > **So yes — 4c is inside 4b's Yes branch, and 4a/4b are inside Step 3's Yes branch**, and all of it is now inside `Scope_try`. Four levels by the time you reach Step 5. **The scopes add a level of indentation and move nothing else.**
 >
-> Terminate is now permissible — there is no caller left to strand — and Step 7's Catch uses one. It is still wrong *inside* `Scope_try`, and this is **verified rather than assumed** ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4): a Terminate there ends the run without evaluating anything downstream, the scope goes **Aborted** rather than Failed, and the Catch is never reached. Aborted is not one of the four `runAfter` statuses either, so nothing could catch it even in principle. **The only Terminate in this flow is the last action of the Catch.**
+> Terminate is now permissible — there is no caller left to strand — and Step 7's Catch uses one. It is still wrong *inside* `Scope_try`, and this is **verified rather than assumed** ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E4): a Terminate there ends the run without evaluating anything downstream, the scope goes **Aborted** rather than Failed, and the Catch is never reached. Aborted is not one of the four `runAfter` statuses either, so nothing could catch it even in principle. **The only Terminate in this flow is the last action of the Catch.**
 >
 > **Step 6 is the only action at the top level after the two scopes.** Everything else lives in one of them — and it runs on every path except the caught one, where the Catch's Terminate ends the run first.
 
@@ -278,9 +278,9 @@ Resolves the derived capacity id to the Node row's **primary key**, `ubsppcoe_no
 >
 > **Keep the guard as built, for now.** Refusing means a rapid enable-then-disable is not published here and waits for an estate-wide rebuild. That is the same latency `RemoveWorkspaceFromPolicy` already has, so the conversion does not make anything worse — and once that flow is converted it will own the disable direction outright. **Revisit this box then**, rather than leaving a flow that quietly declines to publish a revocation.
 
-> **`NotEnabled` does not mean the workspace can create nothing.** An active `PolicyException` row puts it in rule 3, which never consults `ubsppcoe_oapenabled` ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3) — so a workspace can be refused here and still be able to create anything on that capacity.
+> **`NotEnabled` does not mean the workspace can create nothing.** An active `PolicyException` row puts it in rule 3, which never consults `ubsppcoe_oapenabled` ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3) — so a workspace can be refused here and still be able to create anything on that capacity.
 >
-> This flow does not check for that, deliberately: it is about whitelisting, the answer is still "no, and here is why", and adding a query for a case that changes nothing about the outcome buys a second sentence and a second failure mode. The place that needs to know is [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md), where the same fact turns a removal into a false confirmation.
+> This flow does not check for that, deliberately: it is about whitelisting, the answer is still "no, and here is why", and adding a query for a case that changes nothing about the outcome buys a second sentence and a second failure mode. The place that needs to know is [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md), where the same fact turns a removal into a false confirmation.
 
 Everything below goes in the **Yes** branch — Step 5, but **not** Step 6, which stays at the top level so every branch reaches it.
 
@@ -300,7 +300,7 @@ Configure this Condition to run after `Run_rebuild` on **is successful** only. *
 
 > ### Verified 2026-09-12, and it is not a preference
 >
-> A failure handled *inside* a Scope is invisible to the Catch. Measured in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3: an action failed, a later action ran after **has failed** and succeeded, and `Scope_try` reported **Succeeded** with `Scope_catch` **skipped**.
+> A failure handled *inside* a Scope is invisible to the Catch. Measured in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E3: an action failed, a later action ran after **has failed** and succeeded, and `Scope_try` reported **Succeeded** with `Scope_catch` **skipped**.
 >
 > A scope's status reflects what was left *unhandled*, not what went wrong. So leaving **has failed** ticked here would absorb a hard failure of the child flow, report the scope clean, and leave the Catch as dead code for the one case it exists to serve — with a green run history and the error written to no table at all.
 >
@@ -331,7 +331,7 @@ Configure this Condition to run after `Run_rebuild` on **is successful** only. *
 > | `ubsppcoe_lasterror` written? | **No** | **Yes, by the child itself** |
 > | How often | Rare | **The common one** |
 >
-> **Case B already writes the error, and writes it better than a Catch could.** [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 10a stamps `ubsppcoe_lasterror` on the `Capacity Policies` row on **both** its paths, carrying Fabric's own message. `result()` would give you "the child flow returned a value" and nothing about why.
+> **Case B already writes the error, and writes it better than a Catch could.** [RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) Step 10a stamps `ubsppcoe_lasterror` on the `Capacity Policies` row on **both** its paths, carrying Fabric's own message. `result()` would give you "the child flow returned a value" and nothing about why.
 >
 > So do not try to force Case B into the Catch. It would need an action rigged to fail on purpose, and a `Terminate` cannot do it — Terminate inside `Scope_try` ends the run before the Catch runs.
 >
@@ -357,7 +357,7 @@ Replace it with `Compose_result` — **Compose**, run after **both** `Scope_try`
 
 > ### It is not reached on the caught path, and cannot be
 >
-> `Scope_catch` ends with a `Terminate`, and **Terminate ends the run without evaluating anything downstream** — verified in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4. So when the Catch fires, this action never runs.
+> `Scope_catch` ends with a `Terminate`, and **Terminate ends the run without evaluating anything downstream** — verified in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E4. So when the Catch fires, this action never runs.
 >
 > That is not data loss, because the Terminate carries the same string as its message (Step 7b) and it appears in the run history the same way. But it does mean **`Compose_result` records five of the six outcomes, not all six.** `Caught` is recorded by the Terminate.
 >
@@ -398,7 +398,7 @@ The five `Initialize variable` actions stay **above** the scope — see Step 2.
 
 > ### Then check every action inside for *has failed*
 >
-> There should be exactly none, once Step 5 is done. A single action configured to run after **has failed** makes `Scope_try` report **Succeeded** even though something inside it failed, and `Scope_catch` is then skipped — verified in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3.
+> There should be exactly none, once Step 5 is done. A single action configured to run after **has failed** makes `Scope_try` report **Succeeded** even though something inside it failed, and `Scope_catch` is then skipped — verified in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E3.
 >
 > This is the failure mode to watch for over the life of the flow, because it is invisible on the canvas and arrives by accident: somebody adds an action, ticks *has failed* out of ordinary caution, and disables the error handling for that branch without touching the Catch or leaving any trace that they did.
 
@@ -431,7 +431,7 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 >
 > `Scope_catch` fires on **Failed, Skipped and TimedOut**, but `Filter_failed` only matches `Failed`. On the other two paths it returns an empty array and every expression here runs against `first([])`.
 >
-> [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E11 ran exactly that: **`first([])` returns null and does not throw**, the Catch completed cleanly, and `result()` resolved normally even for a scope that never ran. **So no length check and no extra Condition is needed** — the two `coalesce` wrappers are sufficient on their own.
+> [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E11 ran exactly that: **`first([])` returns null and does not throw**, the Catch completed cleanly, and `result()` resolved normally even for a scope that never ran. **So no length check and no extra Condition is needed** — the two `coalesce` wrappers are sufficient on their own.
 >
 > The fallback *text* matters more than it looks. E11's first attempt produced `unknown: no message`, which is safe and tells the reader nothing. The wording above produces `no failed action in Scope_try: scope was skipped or timed out`, which distinguishes *the scope never ran* from *something inside it broke* — two situations with different causes that would otherwise need the run opened to tell apart.
 >
@@ -439,13 +439,13 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 >
 > On that path **the run ID is the only informative thing in the string**. That is the clearest argument for keeping it.
 
-Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E9, E10 and E11.
+Verified end to end in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E9, E10 and E11.
 
 **The Terminate's message repeats `Compose_result`'s expression deliberately.** Step 6 never runs on this path — the Terminate ends the run first — so this is where the `Caught` outcome gets recorded. Keep the two strings identical or the run history formats the same information two ways.
 
 > ### The Terminate is not optional — verified 2026-09-12
 >
-> Without it a caught error produces a **green run**. Measured in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7: `Scope_try` failed, `Scope_catch` ran and succeeded, and the portal reported *"Your flow ran successfully."*
+> Without it a caught error produces a **green run**. Measured in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E7: `Scope_try` failed, `Scope_catch` ran and succeeded, and the portal reported *"Your flow ran successfully."*
 >
 > This is the same rule as Step 5's, one level up. **A handled failure reports clean at every level** — handle it inside a Scope and the Scope goes green (E3); handle a Scope's failure with a Catch and the *run* goes green (E7).
 >
@@ -465,7 +465,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 
 > ### `result()` returns immediate children only — and that matters here
 >
-> Verified in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E1: a five-action scope returned **three** entries. **`result('Scope_try')` lists the scope's immediate children and does not recurse.** A nested container appears as one entry; what happened inside it does not appear at all.
+> Verified in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E1: a five-action scope returned **three** entries. **`result('Scope_try')` lists the scope's immediate children and does not recurse.** A nested container appears as one entry; what happened inside it does not appear at all.
 >
 > In this flow that is not an edge case. `Run_rebuild` — the action most likely to fail — sits **three Conditions deep**. When it hard-fails, `Filter_failed` will surface `Condition_workspace_found`, the outermost container, and **never the name `Run_rebuild`**.
 
@@ -477,7 +477,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 > "An action failed. No dependent actions succeeded."
 > ```
 >
-> No action name, no Fabric error, nothing that distinguishes a dead child flow from a malformed Dataverse filter. So `ubsppcoe_lasterror` will read — and this is a **real, measured** output, not an illustration ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E9):
+> No action name, no Fabric error, nothing that distinguishes a dead child flow from a malformed Dataverse filter. So `ubsppcoe_lasterror` will read — and this is a **real, measured** output, not an illustration ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E9):
 >
 > ```
 > Condition: An action failed. No dependent actions succeeded. | run 08584123630290374015221423576CU18
@@ -551,7 +551,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 >
 > **`Compose_error` still earns its place.** It is not written anywhere; it exists so the raw array is visible in the run history for whoever opens the run the column points at. That is the right place for it — inside the run, not inside the table.
 
-**The column is cleared on the next successful rebuild, not appended to.** `RebuildCapacityPolicyRules` Step 10a blanks it on success ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2), so this write is a snapshot with no history. That is exactly why 7d exists.
+**The column is cleared on the next successful rebuild, not appended to.** `RebuildCapacityPolicyRules` Step 10a blanks it on success ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2), so this write is a snapshot with no history. That is exactly why 7d exists.
 
 > ### Why the `empty(policyRowId)` guard exists
 >
@@ -563,15 +563,15 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 >
 > **Both, and neither is `ubsppcoe_Workspace`.** 7c writes the text to `ubsppcoe_lasterror` on `Capacity Policies`; 7d records the fact and a pointer in the platform team's `Logging` table.
 >
-> `Capacity Policies` was the interim choice because it is ours, it already carries the column, and the child flow writes it in the same convention ([RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 10a). It stays — the reason it was never sufficient is the `policyRowId` guard, which 7d now covers rather than replaces.
+> `Capacity Policies` was the interim choice because it is ours, it already carries the column, and the child flow writes it in the same convention ([RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) Step 10a). It stays — the reason it was never sufficient is the `policyRowId` guard, which 7d now covers rather than replaces.
 >
-> **`ubsppcoe_Workspace` was ruled out on principle, not convenience.** Q23 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7 is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them.
+> **`ubsppcoe_Workspace` was ruled out on principle, not convenience.** Q23 in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7 is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them.
 >
 > There was also a practical objection, and it still holds against any future proposal to move the write there: the error being recorded is about a **capacity's rules**, not about a workspace. A single failed rebuild concerns every workspace on that capacity, so filing it on the one workspace row that happened to trigger the run puts it in the wrong place and makes it look narrower than it is.
 
 ### 7d. `Add_log_row` — the `Logging` insert
 
-**Added 2026-09-15.** One of four flows that write here ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a).
+**Added 2026-09-15.** One of four flows that write here ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5a).
 
 | Field | Value |
 |---|---|
@@ -593,7 +593,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 >
 > Keep the insert at the same level as the Condition and it runs on every caught path, governed or not. It also covers the case named in the 7c guard box: a `Get_policy_row` that returned `400`, where the flow never learned where to write.
 >
-> **It must also come before the `Terminate`.** Terminate ends the run without evaluating anything after it ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4) — an `Add a new row` placed below it is dead code that the designer will not flag.
+> **It must also come before the `Terminate`.** Terminate ends the run without evaluating anything after it ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E4) — an `Add a new row` placed below it is dead code that the designer will not flag.
 
 > **Do not tick *has failed* on `Add_log_row`.** It is inside `Scope_catch`, not `Scope_try`, so Step 5's rule does not apply to it — but if the insert itself fails and that failure is tolerated, the `Terminate` is skipped and the run goes **green** with the error recorded nowhere. Leave it on the default so a broken log write fails the run loudly. **Losing the log is better than losing the red run.**
 
@@ -603,7 +603,7 @@ Verified end to end in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SAN
 
 **Nothing. Stop calling this flow.** Setting `ubsppcoe_oapenabled` is what publishes a whitelist change now, and whoever sets it — app, bulk import, or the platform team's provisioning — gets the rebuild for free. Remove the call rather than leaving it: a Power Apps call to a flow with a Dataverse trigger fails at the connector, not silently.
 
-**What the app loses is the answer.** There is no `Respond`, so nothing comes back and nothing can be shown to a user. An app that wants to confirm the outcome has to read `ubsppcoe_lastrebuild` and `ubsppcoe_lasterror` on the `Capacity Policies` row, which is what [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) already surfaces — and which lags the edit by however long the run takes.
+**What the app loses is the answer.** There is no `Respond`, so nothing comes back and nothing can be shown to a user. An app that wants to confirm the outcome has to read `ubsppcoe_lastrebuild` and `ubsppcoe_lasterror` on the `Capacity Policies` row, which is what [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md) already surfaces — and which lags the edit by however long the run takes.
 
 ### A `Node` move still only rebuilds the new capacity
 

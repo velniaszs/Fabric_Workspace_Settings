@@ -4,7 +4,7 @@
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) (must have run first), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) 8c (the same call, for one capacity), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+Related: [MIG_RegisterAllCapacityPolicySets.md](MIG_RegisterAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) (must have run first), [InitializeCapacityPolicySet.md](../bau/InitializeCapacityPolicySet.md) 8c (the same call, for one capacity), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -24,7 +24,7 @@ Three consequences, all of which shape the design below:
 
 > ### The precondition, stated plainly
 >
-> **Do not run this until [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) has completed successfully across the estate, and `Policy Exceptions` was seeded before it ran.**
+> **Do not run this until [MIG_RebuildAllCapacityPolicies](MIG_RebuildAllCapacityPolicies.md) has completed successfully across the estate, and `Policy Exceptions` was seeded before it ran.**
 >
 > The check is in Step 3's filter — `ubsppcoe_rulecount` must be at least 1 — but a filter is not a substitute for knowing. It proves only that a rebuild *ran*; it cannot tell you the rebuild produced what you meant. A capacity arriving here with `rulecount` = 1 has the deny-all baseline and nothing else, which is correct for a capacity with no OAP-enabled workspaces and wrong for one where the flag was never rolled out. **Phase 4 is where that distinction gets made — this flow will activate both.**
 
@@ -32,7 +32,7 @@ Three consequences, all of which shape the design below:
 
 ## 1. Before you start
 
-- [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) and [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) must both have run.
+- [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md) and [MIG_RebuildAllCapacityPolicies](MIG_RebuildAllCapacityPolicies.md) must both have run.
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector.
 - The connection's identity needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
 - No child flow. The activate call is three lines; wrapping it would add a 120-second budget for nothing.
@@ -72,7 +72,7 @@ Four `Initialize variable` actions, **at the top level**.
 | `Initialize_failures` | `failures` | **Array** | *(leave empty)* |
 | `Initialize_wouldActivate` | `wouldActivate` | **Array** | *(leave empty)* |
 
-> **`mode` is a String, not a Boolean, and that is deliberate.** The obvious version is a Boolean `isReport` holding `equals(toLower(triggerBody()['text']), 'report')`, then a Condition comparing it to `true`. **Do not do that.** Comparing a real boolean against a right-hand box containing the text `true` is the classic silent mismatch in this editor — the same trap documented at [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 4. Two strings compared as strings cannot misfire.
+> **`mode` is a String, not a Boolean, and that is deliberate.** The obvious version is a Boolean `isReport` holding `equals(toLower(triggerBody()['text']), 'report')`, then a Condition comparing it to `true`. **Do not do that.** Comparing a real boolean against a right-hand box containing the text `true` is the classic silent mismatch in this editor — the same trap documented at [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 4. Two strings compared as strings cannot misfire.
 >
 > `toLower` alone is enough: it makes `Activate`, `activate` and `ACTIVATE` all work, and 2b rejects anything else — including a stray space — by terminating. Wrapping it in `trim(coalesce(…, ''))` is defensible but buys nothing here, because the input is required and any surviving whitespace fails the guard rather than slipping through.
 
@@ -136,9 +136,9 @@ Each clause earns its place:
 >
 > Days pass between registration and activation. A Node row soft-deleted in that window — `ubsppcoe_statecode` set to `2` — describes a capacity that should not be activated, and **this query cannot see it**: it reads `Capacity Policies`, our own table, which carries no state from `ubsppcoe_Node`.
 >
-> **[DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) is what closes the gap**, by moving the row's `ubsppcoe_status` to `Deleted` or `Suspended`. Neither matches `eq 'Inactive'`, so the row drops out of this query without any clause here.
+> **[DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) is what closes the gap**, by moving the row's `ubsppcoe_status` to `Deleted` or `Suspended`. Neither matches `eq 'Inactive'`, so the row drops out of this query without any clause here.
 >
-> **That only holds if the flow is switched on before the registration run**, and it is still marked *new, not agreed* ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8). **If it is not live, do not rely on this query** — take the `noNode` list from the registration run as the exclusion list and check it by hand before activating, because activation is the step that actually denies people access.
+> **That only holds if the flow is switched on before the registration run**, and it is still marked *new, not agreed* ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8). **If it is not live, do not rely on this query** — take the `noNode` list from the registration run as the exclusion list and check it by hand before activating, because activation is the step that actually denies people access.
 
 `Compose_candidate_count` — **Compose**, `@{length(body('List_inactive_rows')?['value'])}`. So the run history answers "how many?" without expanding the array.
 
@@ -170,7 +170,7 @@ And nothing else. **No Fabric call, no Dataverse write.**
 >
 > What this still cannot tell you is the **total** number of workspaces under each capacity's Node, which is what turns these counts into a denial count. That needs a query against `ubsppcoe_Workspace` per capacity and is not built yet — so read this list as a smell test, not as sign-off.
 >
-> **When that query is built it must carry `ubsppcoe_statecode eq 1`** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Without it the denominator includes soft-deleted workspaces, so the coverage gap reads worse than it is — and the one number whose whole purpose is to stop an activation would be the number that cries wolf.
+> **When that query is built it must carry `ubsppcoe_statecode eq 1`** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). Without it the denominator includes soft-deleted workspaces, so the coverage gap reads worse than it is — and the one number whose whole purpose is to stop an activation would be the number that cries wolf.
 >
 > **`ubsppcoe_workspacecount` itself is already correct on this point.** `RebuildCapacityPolicyRules` Step 5b stamps it from the same filtered list it publishes into rule 2, so since 2026-09-15 it counts live, OAP-enabled workspaces only. Counts stamped by a rebuild run **before** that date include deleted workspaces and read high — if this dry run is being compared against an earlier one, re-run the rebuild first rather than reconciling the difference by hand.
 
@@ -241,7 +241,7 @@ Tolerate `PolicySetIsAlreadyActive` — the end state is what was wanted. If it 
 >
 > The Admin activation endpoints are documented at **10 requests per minute** — one every 6 seconds.
 >
-> It does not constrain [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), because each of its iterations is a long-running create plus two Dataverse round trips, roughly 10 seconds — already under the limit without trying.
+> It does not constrain [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md), because each of its iterations is a long-running create plus two Dataverse round trips, roughly 10 seconds — already under the limit without trying.
 >
 > **Here the work is a single fast POST.** Left alone, the loop would issue 200 activations in about four minutes, roughly 50 per minute, and spend the rest of the run in retry backoff. Retries do not show as failures, so it would present as a mysteriously slow flow rather than as throttling.
 >

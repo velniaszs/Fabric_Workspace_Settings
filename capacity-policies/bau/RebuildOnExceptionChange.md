@@ -6,25 +6,25 @@ Fires when a `Policy Exceptions` row is created or edited, derives which capacit
 
 > ## Why it exists
 >
-> `Policy Exceptions` is the only table in this design that **nothing triggers on**. Rule 3 is rebuilt from it only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md), so approving an exception — or revoking one — is not live in Fabric until then. This flow closes that gap.
+> `Policy Exceptions` is the only table in this design that **nothing triggers on**. Rule 3 is rebuilt from it only when somebody runs [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md), so approving an exception — or revoking one — is not live in Fabric until then. This flow closes that gap.
 >
-> It answers **Q16** and **Q33** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7, both of which ask whether the table needs a modified-row trigger of its own. Update them when this is built.
+> It answers **Q16** and **Q33** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7, both of which ask whether the table needs a modified-row trigger of its own. Update them when this is built.
 
-Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) — build that one first, then copy it.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3, [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md) — build that one first, then copy it.
 
 ---
 
 ## 0. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first, and confirm the placeholder column names in its §0.
+- Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first, and confirm the placeholder column names in its §0.
 - Needs a **Dataverse connection** for reads only, and **not** the Entra ID HTTP connector. No Fabric calls of its own.
-- Build [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) first and copy it. Steps 2c onward are nearly identical; Step 2b is the one genuinely new action in this flow.
+- Build [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md) first and copy it. Steps 2c onward are nearly identical; Step 2b is the one genuinely new action in this flow.
 
 > ## This is the smallest flow in the set, and it has no guards
 >
 > It does not decide whether an exception is valid, it does not check who approved it, and it never refuses. **Every path reaches the rebuild.** Both directions of the `ubsppcoe_active` flag need exactly the same action — activating puts the workspace into rule 3, deactivating takes it out, and `RebuildCapacityPolicyRules` regenerates the whole rule either way.
 >
-> That is why there is no complementary pair here. [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) and [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) are two flows because they report different things to different people. This one reports to nobody, so one flow covers both transitions.
+> That is why there is no complementary pair here. [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) and [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) are two flows because they report different things to different people. This one reports to nobody, so one flow covers both transitions.
 
 > ### It never writes the exception table
 >
@@ -32,9 +32,9 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 
 > ### Revocation is `ubsppcoe_active` = No, not a delete
 >
-> The table has **no soft-delete column** — `ubsppcoe_active` is the revoke mechanism, and [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §4 is explicit that it exists to revoke *without deleting history*. So a normal removal is `true` → `false`: a **Modified** event on a row that is still fully readable, with `ubsppcoe_workspaceid` intact and the capacity still derivable.
+> The table has **no soft-delete column** — `ubsppcoe_active` is the revoke mechanism, and [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §4 is explicit that it exists to revoke *without deleting history*. So a normal removal is `true` → `false`: a **Modified** event on a row that is still fully readable, with `ubsppcoe_workspaceid` intact and the capacity still derivable.
 >
-> **A hard delete is the one case this flow cannot handle.** The row is gone, the workspace GUID with it, and there is no way to work out which capacity to rebuild — the same reasoning as [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)'s *Why `Deleted` is not in the trigger*. Leave `Deleted` off the Change type; the workspace then keeps unrestricted creation until somebody runs an estate-wide rebuild. It is not the documented procedure, so it should be rare — but **deactivate, do not delete** is now operational procedure rather than a preference, and belongs wherever the exception process is written down.
+> **A hard delete is the one case this flow cannot handle.** The row is gone, the workspace GUID with it, and there is no way to work out which capacity to rebuild — the same reasoning as [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md)'s *Why `Deleted` is not in the trigger*. Leave `Deleted` off the Change type; the workspace then keeps unrestricted creation until somebody runs an estate-wide rebuild. It is not the documented procedure, so it should be rare — but **deactivate, do not delete** is now operational procedure rather than a preference, and belongs wherever the exception process is written down.
 
 > ### The blast radius is wider than one workspace
 >
@@ -54,7 +54,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 | Select columns | `ubsppcoe_active` |
 | Filter rows | *(leave empty)* |
 
-**`Added` is required, and this is the opposite of [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)'s reasoning — deliberately.** That flow is `Added or Modified` because a workspace row is *never* created already enabled; a separate process sets `ubsppcoe_oapenabled` later, so the enable is always a Modified event. **Exception rows have no such second process.** The person creating the row is the person approving it, and filling in the form — workspace, reason, approved by, Active to Yes — and pressing Save is a **single create**. That produces one `Added` event and no `Modified` event ever follows, so a `Modified`-only trigger would sit silent and the exception would not publish until somebody ran an estate-wide rebuild.
+**`Added` is required, and this is the opposite of [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md)'s reasoning — deliberately.** That flow is `Added or Modified` because a workspace row is *never* created already enabled; a separate process sets `ubsppcoe_oapenabled` later, so the enable is always a Modified event. **Exception rows have no such second process.** The person creating the row is the person approving it, and filling in the form — workspace, reason, approved by, Active to Yes — and pressing Save is a **single create**. That produces one `Added` event and no `Modified` event ever follows, so a `Modified`-only trigger would sit silent and the exception would not publish until somebody ran an estate-wide rebuild.
 
 `ubsppcoe_active` defaults to **No**, so a row created and *then* activated fires twice and rebuilds twice. That is a wasted rebuild, not a wrong one, and it is the correct price for not missing the single-save case.
 
@@ -64,7 +64,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**.
 
-> **Bulk edits queue rather than collide.** Deactivating twenty rows in one sitting fires this flow twenty times, and Degree of Parallelism 1 serialises them into twenty rebuilds of the same capacity. Every one is idempotent — `replaceByPolicy` — and every one publishes the complete, correct rule 3, so the end state is right; the intermediate ones are transient partial states nobody sees. At exception volumes that is fine. **If bulk edits ever become routine, do them with the flow turned off and run [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) afterwards** rather than trying to debounce this, which the platform has no mechanism for.
+> **Bulk edits queue rather than collide.** Deactivating twenty rows in one sitting fires this flow twenty times, and Degree of Parallelism 1 serialises them into twenty rebuilds of the same capacity. Every one is idempotent — `replaceByPolicy` — and every one publishes the complete, correct rule 3, so the end state is right; the intermediate ones are transient partial states nobody sees. At exception volumes that is fine. **If bulk edits ever become routine, do them with the flow turned off and run [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) afterwards** rather than trying to debounce this, which the platform has no mechanism for.
 
 ---
 
@@ -81,7 +81,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, [Rebuild
 
 All six at the **top level and outside `Scope_try`**. `Initialize variable` cannot go inside a Condition, a Scope or an Apply to each.
 
-`ubsppcoe_workspaceid` on `Policy Exceptions` is **Text (50)**, not a lookup — the Fabric workspace GUID as typed. It is the only business key the table has ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §4).
+`ubsppcoe_workspaceid` on `Policy Exceptions` is **Text (50)**, not a lookup — the Fabric workspace GUID as typed. It is the only business key the table has ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §4).
 
 ---
 
@@ -104,13 +104,13 @@ All six at the **top level and outside `Scope_try`**. `Initialize variable` cann
 |---|---|
 | `nodeRowId` | `coalesce(first(body('Get_workspace_row')?['value'])?['_ubsppcoe_nodeid_value'], '00000000-0000-0000-0000-000000000000')` |
 
-> **The zero GUID is load-bearing, not decoration.** Step 2c's filter interpolates this value directly, and an **empty** string produces `_ubsppcoe_node_value eq ` — malformed OData that fails the action and sends the run to the Catch. A zero GUID is well-formed, matches nothing, and lets the flow reach Step 5 and report properly. Same idiom as [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 2b, for the same reason: a Condition here would push everything after it into a branch and cost the flat diagnosis in Step 6.
+> **The zero GUID is load-bearing, not decoration.** Step 2c's filter interpolates this value directly, and an **empty** string produces `_ubsppcoe_node_value eq ` — malformed OData that fails the action and sends the run to the Catch. A zero GUID is well-formed, matches nothing, and lets the flow reach Step 5 and report properly. Same idiom as [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) Step 2b, for the same reason: a Condition here would push everything after it into a branch and cost the flat diagnosis in Step 6.
 
 > ### `ubsppcoe_statecode eq 1` — this must match the rebuild
 >
-> [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5l excludes soft-deleted workspaces from rule 3, so an exception naming a deleted workspace publishes nothing. Without the same clause here the flow would derive a Node from a deleted row and report a rebuild that included the workspace — a **correct rebuild described wrongly**, which is the failure mode this document set keeps returning to.
+> [RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) Step 5l excludes soft-deleted workspaces from rule 3, so an exception naming a deleted workspace publishes nothing. Without the same clause here the flow would derive a Node from a deleted row and report a rebuild that included the workspace — a **correct rebuild described wrongly**, which is the failure mode this document set keeps returning to.
 >
-> Choice column, `1` = Active, `2` = Deleted on `ubsppcoe_Workspace`, unquoted integer, and **not** Dataverse's system `statecode` ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1).
+> Choice column, `1` = Active, `2` = Deleted on `ubsppcoe_Workspace`, unquoted integer, and **not** Dataverse's system `statecode` ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1).
 
 > ### A typo in `ubsppcoe_workspaceid` lands here, and that is the flow's best day
 >
@@ -122,13 +122,13 @@ All six at the **top level and outside `Scope_try`**. `Initialize variable` cann
 >
 > If the same workspace GUID appears on **two live rows pointing at different Nodes**, the exception applies to both capacities — 5l would pick it up on each — and this flow rebuilds only the first. The second is not published until somebody runs an estate-wide rebuild.
 >
-> Fixing it properly means an `Apply to each` around `Run_rebuild`, which nests the child call and forfeits the real error message Step 6 depends on ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E1, E10). **Not worth it for a state that should not exist.** The right fix is upstream: an alternate key on `ubsppcoe_workspaceid`, as already recommended in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2 for the other tables. Recorded so it is not rediscovered as a defect.
+> Fixing it properly means an `Apply to each` around `Run_rebuild`, which nests the child call and forfeits the real error message Step 6 depends on ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E1, E10). **Not worth it for a state that should not exist.** The right fix is upstream: an alternate key on `ubsppcoe_workspaceid`, as already recommended in [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2 for the other tables. Recorded so it is not rediscovered as a defect.
 
 ---
 
 ## Step 2c — Derive the capacity
 
-A copy of [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 2b, reading `nodeRowId` instead of the trigger body.
+A copy of [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) Step 2b, reading `nodeRowId` instead of the trigger body.
 
 `Get_policy_row` — Dataverse **List rows**:
 
@@ -150,7 +150,7 @@ The GUID is **unquoted**, as always for a lookup filter.
 
 **`_ubsppcoe_node_value` is not selected here**, unlike in the sibling flow. Nothing in this flow compares Nodes — Step 2b already established which one, and there is no caller-supplied capacity to check it against.
 
-> **Two lookups on two different tables, both holding a Node row GUID.** `_ubsppcoe_nodeid_value` in Step 2b is the `Node` lookup on a `ubsppcoe_Workspace` row; `_ubsppcoe_node_value` here is our own lookup on `ubsppcoe_CapacityPolicy`. The names differ by three characters and that is not a typo — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0. Neither is a capacity id.
+> **Two lookups on two different tables, both holding a Node row GUID.** `_ubsppcoe_nodeid_value` in Step 2b is the `Node` lookup on a `ubsppcoe_Workspace` row; `_ubsppcoe_node_value` here is our own lookup on `ubsppcoe_CapacityPolicy`. The names differ by three characters and that is not a typo — see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0. Neither is a capacity id.
 
 ---
 
@@ -168,7 +168,7 @@ The GUID is **unquoted**, as always for a lookup filter.
 > Scope_catch   runAfter Scope_try = Failed, Skipped, TimedOut
 > ```
 >
-> **Every action inside `Scope_try` is an immediate child of it**, and the two Conditions contain nothing but `Set variable`. That is what makes `result('Scope_try')` name the action that actually failed instead of a container ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E10) — the same property [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) has and [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) does not.
+> **Every action inside `Scope_try` is an immediate child of it**, and the two Conditions contain nothing but `Set variable`. That is what makes `result('Scope_try')` name the action that actually failed instead of a container ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E10) — the same property [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) has and [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) does not.
 >
 > **Keep it flat.** A `List rows`, an `Apply to each` or a `Run a Child Flow` inside either Condition costs this flow its diagnosis, and there is nothing else here to diagnose with.
 
@@ -196,7 +196,7 @@ concat('Policy rules republished. ', body('Run_rebuild')?['ExceptionCount'], ' e
 concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Message'], 'the rebuild flow failed.'), ' Nothing will retry this — rebuild this capacity by hand.')
 ```
 
-**Tick *is successful* only.** An action inside a Try scope that runs after *has failed* makes `Scope_try` report Succeeded and skips the Catch entirely ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3).
+**Tick *is successful* only.** An action inside a Try scope that runs after *has failed* makes `Scope_try` report Succeeded and skips the Catch entirely ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E3).
 
 > **An ungoverned capacity arrives here as the zero GUID** and the child answers with its own *capacity is not registered* message, which this branch surfaces unchanged. Do not add a second check for it — one flow should own that message, and it is the child.
 
@@ -216,7 +216,7 @@ concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Me
 
 > **It runs *after* the rebuild and overwrites it, which looks backwards until you follow the values.** With no workspace row, `nodeRowId` is the zero GUID, so `capacityId` is too, so the child fails and Step 3 has already written `Failed` with the child's *capacity is not registered* text. That message is true and useless — the capacity is not the problem, the GUID on the exception row is.
 >
-> Overwriting last is what puts the more specific diagnosis on top. Same override pattern as [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 4b, and for the same reason: a sibling Condition can correct either branch, where a nested one corrects half.
+> Overwriting last is what puts the more specific diagnosis on top. Same override pattern as [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) Step 4b, and for the same reason: a sibling Condition can correct either branch, where a nested one corrects half.
 
 ---
 
@@ -235,15 +235,15 @@ concat('The rules could not be republished: ', coalesce(body('Run_rebuild')?['Me
 | `Failed` | The child reported an error. **Nothing will retry it** | Succeeded |
 | `Caught` | An action failed outright. Set by `Scope_catch` | **Failed** |
 
-There is no `NotEnabled` and no `WrongCapacity`. An exception grants regardless of `ubsppcoe_oapenabled` ([RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) 5l), and there is no caller-supplied capacity to be wrong about.
+There is no `NotEnabled` and no `WrongCapacity`. An exception grants regardless of `ubsppcoe_oapenabled` ([RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) 5l), and there is no caller-supplied capacity to be wrong about.
 
-> **`NoWorkspace` goes into a `Compose` that nobody opens**, which is the same complaint [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 7 makes about `StillExcepted`. Here it is more actionable and cheaper to route: the row was saved seconds ago by a person who is still at their desk. **Consider a `Terminate` with status Failed on that branch**, which puts a mistyped exception in the failure list instead of a green run. Left undecided on purpose — it is a judgement about who watches what — but decide it before launch rather than after the first exception that quietly did nothing.
+> **`NoWorkspace` goes into a `Compose` that nobody opens**, which is the same complaint [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) Step 7 makes about `StillExcepted`. Here it is more actionable and cheaper to route: the row was saved seconds ago by a person who is still at their desk. **Consider a `Terminate` with status Failed on that branch**, which puts a mistyped exception in the failure list instead of a green run. Left undecided on purpose — it is a judgement about who watches what — but decide it before launch rather than after the first exception that quietly did nothing.
 
 ---
 
 ## Step 6 — Try and Catch
 
-Build **last**, and copy it wholesale from [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 8. Only the action names in Step 6a differ.
+Build **last**, and copy it wholesale from [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md) Step 8. Only the action names in Step 6a differ.
 
 ### 6a. `Scope_try`
 
@@ -272,13 +272,13 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 
 Copy from the code block, not from a table cell — the `|` would need escaping, and a `\|` pasted into the designer fails at runtime rather than at save.
 
-> **The `Terminate` is not optional.** Without it a caught error produces a **green run** — measured in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7. A try/catch that only logs converts a visible failure into an invisible one.
+> **The `Terminate` is not optional.** Without it a caught error produces a **green run** — measured in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E7. A try/catch that only logs converts a visible failure into an invisible one.
 
 > **`ubsppcoe_lasterror` takes `variables('message')`, never `outputs('Compose_error')`.** The raw `result()` array carries every action's `inputs` and `outputs` verbatim — including the workspace GUIDs `Get_workspace_row` returned — exceeds the column's 2000 characters, and is not text.
 
 > **`policyRowId` is empty more often in this flow than in its siblings.** A mistyped GUID, a workspace on an ungoverned capacity and a failure inside `Get_workspace_row` all reach the Catch with nowhere to write, so row 7's `Logging` insert is the only record on those paths. Keep it outside the Condition and above the `Terminate`.
 
-> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a.
+> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5a.
 
 ---
 
@@ -307,4 +307,4 @@ Copy from the code block, not from a table cell — the `|` would need escaping,
 
 **Test 10 verifies a deliberate gap.** It should fail to fire, and somebody should know that.
 
-**Test 1 is the one that breaks if the trigger is `Modified` only** — the most likely way to build this flow wrong, because the equivalent reasoning in [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) points the other way.
+**Test 1 is the one that breaks if the trigger is `Modified` only** — the most likely way to build this flow wrong, because the equivalent reasoning in [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) points the other way.

@@ -4,11 +4,11 @@
 >
 > **The document is kept for the record only.** It is excluded from the handover documentation set, and the `Policy Drift` table it was the sole writer of is not built either.
 >
-> **What is given up.** This was the only thing that would have detected a policy set **deactivated, replaced or deleted** outside the flows — drift a rebuild cannot fix and cannot even see, because a rebuild against a deactivated set writes its rules successfully and reports healthy. That detection now does not exist. Other documents which described it as the safety net behind a caught failure or an orphaned policy set have been corrected to say that nothing catches those cases. See **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **What is given up.** This was the only thing that would have detected a policy set **deactivated, replaced or deleted** outside the flows — drift a rebuild cannot fix and cannot even see, because a rebuild against a deactivated set writes its rules successfully and reports healthy. That detection now does not exist. Other documents which described it as the safety net behind a caught failure or an orphaned policy set have been corrected to say that nothing catches those cases. See **Q11** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7.
 
 Scans the holder workspace, reconciles what Fabric actually holds against the `Capacity Policies` table, and records the differences. Detects policy sets created, replaced or deleted outside the flows.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses.
 
 ---
 
@@ -18,7 +18,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 
 This flow answers a different question: *does Fabric still match what we think it holds?* It exists because the tables are only the source of truth for **rules**. The policy sets themselves can be created, activated, replaced or deleted by anyone with rights on the holder workspace, and nothing stops them.
 
-> **An estate-wide rebuild does not make this redundant.** [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) overwrites every rule from the tables — but it is **manual**, so rule-level drift persists until somebody runs it. **This scan is what tells you a run is due.**
+> **An estate-wide rebuild does not make this redundant.** [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) overwrites every rule from the tables — but it is **manual**, so rule-level drift persists until somebody runs it. **This scan is what tells you a run is due.**
 >
 > What it cannot fix is a policy set that has been **deactivated, replaced or deleted**. In those cases a rebuild writes rules to a set that is not in force, and **reports success**. The capacity is governed by something else entirely and every signal says healthy. That gap is the whole reason this scan exists.
 
@@ -45,11 +45,11 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 ## 1. Before you start
 
-- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0.
+- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header** — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0.
 
 > **Build this flow first, and it is the one that proves the connection.** It is read-only against Fabric, so a wrong or under-privileged identity shows up here as an empty list or a `401` — cheaply, before anything writes rules. See Q45.
 - Needs a **Dataverse connection**.
-- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — so it no longer identifies who owns a table. Pick tables and columns from the dropdowns rather than typing them; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
+- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — so it no longer identifies who owns a table. Pick tables and columns from the dropdowns rather than typing them; see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0.
 
 ### A fourth table — `Policy Drift`
 
@@ -64,7 +64,7 @@ But **matching on `id` needs no scope resolution at all.** The list gives every 
 
 Findings are rewritten each run, so this table is a **current state**, not a log. If an audit trail is wanted, add a second table and append instead — but do not make one table try to be both.
 
-> **This flow is the only writer, and that follows from the wipe.** Step 2b deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
+> **This flow is the only writer, and that follows from the wipe.** Step 2b deletes every row before writing new ones, so anything another flow contributed would disappear at the next scan without warning. [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) reports its failures by mail and through `last_error` on each capacity row for exactly this reason.
 
 ---
 
@@ -279,7 +279,7 @@ Then the columns. **The designer lists them by display name**, which is what the
 | Detected | `ubsppcoe_detected` | `utcNow()` |
 | Details | `ubsppcoe_details` | `concat('Scope ', coalesce(body('Get_untracked_set')?['properties']?['scope']?['type'], 'unknown'), ', status ', coalesce(body('Get_untracked_set')?['properties']?['status'], 'unknown'))` |
 
-> **`ubsppcoe_policysetid` and `ubsppcoe_capacityid` exist on both `Policy Drift` and `Capacity Policies`**, with the same meanings ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2 and §5). Picking the wrong table here writes a malformed capacity row instead of a drift finding. Set **Table name** first and check it before filling anything in.
+> **`ubsppcoe_policysetid` and `ubsppcoe_capacityid` exist on both `Policy Drift` and `Capacity Policies`**, with the same meanings ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2 and §5). Picking the wrong table here writes a malformed capacity row instead of a drift finding. Set **Table name** first and check it before filling anything in.
 
 **Kind is a choice column** — pick `Untracked` from the dropdown rather than typing it. It travels as an integer, not as the label (§1).
 
@@ -329,7 +329,7 @@ Inside it, one **Add a new row** named `Add_drift_missing`, Table name **`Policy
 | Detected | `ubsppcoe_detected` | `utcNow()` |
 | Details | `ubsppcoe_details` | `Policy set recorded in Dataverse no longer exists in the holder workspace.` |
 
-> **The display name comes from our own row, and it has to.** The set is gone from Fabric, so there is no live name to read — `ubsppcoe_policysetname` is the last known one, which is exactly the job that column was given in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3. The `coalesce` falls back to the capacity name because a row written by an older build may not have it.
+> **The display name comes from our own row, and it has to.** The set is gone from Fabric, so there is no live name to read — `ubsppcoe_policysetname` is the last known one, which is exactly the job that column was given in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3. The `coalesce` falls back to the capacity name because a row written by an older build may not have it.
 >
 > This is also the **only** kind that arrives with a capacity ID already attached, because it came out of our table rather than Fabric's list.
 
@@ -415,7 +415,7 @@ Matching by ID inside a filter expression is awkward in Power Automate. If it tu
 >
 > The first is the good news everyone wants. The second means the estate has not been checked at all, and the screen is quietly saying it has.
 
-**Alert on failure instead.** On the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) already uses for its failures.
+**Alert on failure instead.** On the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) already uses for its failures.
 
 Then a failed scan is known by mail rather than by absence, and the drift screen can be labelled *"findings from the last successful scan"* without claiming to be current.
 
@@ -433,7 +433,7 @@ The last action is therefore either `Add_drift_conflict` (Step 7c) or the option
 
 If the app needs the four counts on a screen, it reads them from the table, not from this flow.
 
-> The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](docs/FLOWS.md) §4.
+> The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](../../docs/FLOWS.md) §4.
 
 ---
 

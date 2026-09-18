@@ -4,7 +4,7 @@
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+Related: [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](MIG_ActivateAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -31,9 +31,9 @@ Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_I
 
 ## 1. Before you start
 
-- Build [MIG_InitializeCapacityPolicySet](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) first and run its test 7. This flow is a loop around it.
+- Build [MIG_InitializeCapacityPolicySet](MIG_InitializeCapacityPolicySet.md) first and run its test 7. This flow is a loop around it.
 - Needs the *HTTP with Microsoft Entra ID (preauthorized)* connector for one `GET`. **No Dataverse connection** — every table read and write happens inside the child.
-- **Check for duplicate capacity display names before the first run.** Two capacities with the same name produce one policy set name and the second create fails. See [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) Step 5.
+- **Check for duplicate capacity display names before the first run.** Two capacities with the same name produce one policy set name and the second create fails. See [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md) Step 5.
 - Easiest build path: **copy `MIG_RebuildAllCapacityPolicies`** and make two substitutions.
 
 | | `MIG_RebuildAllCapacityPolicies` | This flow |
@@ -251,7 +251,7 @@ Four things that body is doing, none of them decoration:
 
 **No** → empty. But **read the summary from the run history either way.** This is a supervised one-off, and "registered 187 of 200 with nothing to report" is a contradiction worth noticing.
 
-> **Do not write any of this to `Policy Drift`.** That table was **dropped on 2026-09-18** — its only writer was discarded ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5). The run-history summary is the record. Same reasoning as [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
+> **Do not write any of this to `Policy Drift`.** That table was **dropped on 2026-09-18** — its only writer was discarded ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5). The run-history summary is the record. Same reasoning as [MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) §4.
 
 ---
 
@@ -269,7 +269,7 @@ There is no batching control in the flow, so the tranche is you: run it, and **c
 
 **The first tranche is where a systematic error shows up** — a wrong holder workspace, a bad name prefix, an un-deleted Step 8c activating everything. Five capacities is cheap to unpick; 200 is not.
 
-**Nothing here is enforced**, so even a wholly wrong run is recoverable by deleting the policy sets and the `Capacity Policies` rows. That stops being true after [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md).
+**Nothing here is enforced**, so even a wholly wrong run is recoverable by deleting the policy sets and the `Capacity Policies` rows. That stops being true after [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md).
 
 ---
 

@@ -2,9 +2,9 @@
 
 Operational guide for bringing an existing Fabric estate under capacity item-creation policy. Follow it in order. Each phase names what to check before moving on, and what "stop" looks like.
 
-Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) (schema and seeding), the four `MIG_` flow documents in [flows/capacity-policies/](docs/flows/capacity-policies/).
+Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema and seeding), the four `MIG_` flow documents in [migration/](../migration/).
 
-**Once cutover is done, day-to-day operations are in [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md)** — which flow to run when a capacity or workspace is created, deleted or moved.
+**Once cutover is done, day-to-day operations are in [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](CAPACITY-POLICY-OPERATIONS-RUNBOOK.md)** — which flow to run when a capacity or workspace is created, deleted or moved.
 
 ---
 
@@ -39,7 +39,7 @@ Nothing here changes anything. All of it is cheaper to do now than to discover i
 
 Power Automate → **Solutions** → your solution.
 
-**There is no scheduled flow to turn off.** `SyncCapacityPolicySets` was the only Recurrence flow in the design and it was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). If one exists in your environment, it is a leftover from an earlier build: turn it off and delete it.
+**There is no scheduled flow to turn off.** `SyncCapacityPolicySets` was the only Recurrence flow in the design and it was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md). If one exists in your environment, it is a leftover from an earlier build: turn it off and delete it.
 
 `MIG_RebuildAllCapacityPolicies` is **manual**, so there is no schedule to stop — but leave the flow turned **off** until Phase 3, which turns it on, runs it, and turns it off again. An enabled manual flow is one stray button press from publishing rules at a moment you did not choose, before exceptions are seeded.
 
@@ -163,7 +163,7 @@ Re-run until `Failed` is empty. `No Node row` may stay non-empty — those capac
 
 **Nothing to run.** A data import, and it **must happen before Phase 3**.
 
-`Policy Exceptions` has no upstream — no flow derives those rows, and `ubsppcoe_Workspace` says nothing about them. Use [input/PolicyExceptions.csv](input/PolicyExceptions.csv) as the import template; its headers are the Dataverse logical names, so the mapping is column-for-column.
+`Policy Exceptions` has no upstream — no flow derives those rows, and `ubsppcoe_Workspace` says nothing about them. Use [input/PolicyExceptions.csv](../input/PolicyExceptions.csv) as the import template; its headers are the Dataverse logical names, so the mapping is column-for-column.
 
 > **Delete its three `EXAMPLE` rows first.** They carry placeholder GUIDs that match no workspace, so importing them grants nothing — but they leave junk in a table whose whole value is being short enough to review by eye.
 
@@ -330,7 +330,7 @@ Turn on the four Dataverse-triggered flows switched off in Phase 0.1:
 
 Leave `MIG_RebuildAllCapacityPolicies` **off**. It is manual, so there is no schedule to restore — but keep it in the solution; §7.2 does not delete it.
 
-> **Nothing converges the estate on its own after cutover, and nothing observes it either.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies` — **Q49**. And since the drift scan was discarded, a policy set deactivated, replaced or deleted outside the flows is not detected at all — **Q11**. Both in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **Nothing converges the estate on its own after cutover, and nothing observes it either.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies` — **Q49**. And since the drift scan was discarded, a policy set deactivated, replaced or deleted outside the flows is not detected at all — **Q11**. Both in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
 
 **Before considering migration closed**, run `MIG_RebuildAllCapacityPolicies` once more and read its summary. It is the only estate-wide check there is, and it is what tells you whether anything was left half-done.
 

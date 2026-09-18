@@ -4,7 +4,7 @@ Manual. Rebuilds every capacity's rules from Dataverse in one pass, when somebod
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md).
 
 ---
 
@@ -21,22 +21,22 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 | A `ubsppcoe_oapenabled` or `Node` edit made **outside** these flows | **Yes**, and this is now the common case — `ubsppcoe_Workspace` is owned by another team and nothing triggers a rebuild when they change it |
 | A `PolicyException` row added, deactivated or deleted | **Yes**, and this is the **only** thing that applies it — no flow writes that table, so nothing else notices the edit |
 | A workspace **moved** to a different Node | **Yes**, but only because every capacity is rebuilt. Neither the old nor the new capacity is rebuilt at the time of the move — and this carries rule 3 with it, since an exception applies wherever the workspace currently sits |
-| A missing or blank `node` lookup on the policy row | **No.** The rebuild refuses that capacity and reports it — deliberately, see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a |
+| A missing or blank `node` lookup on the policy row | **No.** The rebuild refuses that capacity and reports it — deliberately, see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 5a |
 | Our policy set **deactivated**, another one active | **No** — see §4 |
 | Our policy set **deleted** | **No.** The rebuild 404s |
 | A policy set created by hand for a capacity we already manage | **No** |
 
-The last three were what `SyncCapacityPolicySets` would have detected. **That flow was discarded on 2026-09-18** ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)), so this flow converges what it can and **nothing reports what it cannot** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7. A run of this flow that reports success against a deactivated policy set is the case to be aware of: the rules are published to a set that is not in force.
+The last three were what `SyncCapacityPolicySets` would have detected. **That flow was discarded on 2026-09-18** ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)), so this flow converges what it can and **nothing reports what it cannot** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7. A run of this flow that reports success against a deactivated policy set is the case to be aware of: the rules are published to a set that is not in force.
 
-> **This flow carries more weight than it did, and now nothing starts it.** When the whitelist lived in a table only these flows wrote to, scheduled convergence was a safety net. It is still the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change, a `Node` move, a hard-deleted exception row or a hand-edited rule — but since 2026-09-16 it does so only when somebody runs it. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **This flow carries more weight than it did, and now nothing starts it.** When the whitelist lived in a table only these flows wrote to, scheduled convergence was a safety net. It is still the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change, a `Node` move, a hard-deleted exception row or a hand-edited rule — but since 2026-09-16 it does so only when somebody runs it. See **Q49** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7.
 >
-> [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) now publishes an exception being granted or revoked, so the ordinary path is covered. What is not is a row **deleted** rather than deactivated: that workspace keeps unrestricted creation on its capacity until this flow is run. **Deactivate, do not delete.**
+> [RebuildOnExceptionChange](../bau/RebuildOnExceptionChange.md) now publishes an exception being granted or revoked, so the ordinary path is covered. What is not is a row **deleted** rather than deactivated: that workspace keeps unrestricted creation on its capacity until this flow is run. **Deactivate, do not delete.**
 
 ---
 
 ## 1. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow is a loop around it.
+- Build [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) first. This flow is a loop around it.
 - Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. No direct Fabric calls — the child flow makes them all.
 
 ---
@@ -49,7 +49,7 @@ Each run processes the **whole estate** — see §5 before considering otherwise
 
 ⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. A run that overlaps its predecessor would have two loops rebuilding the same capacities.
 
-**This flow can set it and the child flow cannot** — a manual trigger has no `Respond` action, so the platform allows trigger concurrency here. [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) is request-response and is rejected if you try. That makes this setting the only thing preventing concurrent rebuilds at scale.
+**This flow can set it and the child flow cannot** — a manual trigger has no `Respond` action, so the platform allows trigger concurrency here. [RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md) is request-response and is rejected if you try. That makes this setting the only thing preventing concurrent rebuilds at scale.
 
 ---
 
@@ -162,7 +162,7 @@ Failed: <b>@{length(variables('failures'))}</b>
 
 **The body leads with what is still true**, not with the list. The reader's first question on seeing a rebuild failure is whether a capacity has been left unenforced; `replaceByPolicy` means it has not, and saying so before the list stops that question being asked.
 
-> **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, and it is now moot — **the table was dropped on 2026-09-18** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5). The reasoning is kept in case drift detection is ever revived.
+> **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, and it is now moot — **the table was dropped on 2026-09-18** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5). The reasoning is kept in case drift detection is ever revived.
 >
 > **The rows would vanish.** The scan deleted every row in that table at the start of each run, because its findings were current state rather than a log. Anything this flow wrote would silently disappear at an interval nobody is thinking about.
 >
@@ -170,7 +170,7 @@ Failed: <b>@{length(variables('failures'))}</b>
 >
 > **One table, one writer.** Two flows writing a table that one of them wipes wholesale is a race with no upside.
 >
-> Per-capacity detail is already recorded where it belongs: `last_error` and `last_rebuild` on the capacity's own `Capacity Policies` row, stamped by the child flow on every attempt. That is queryable, survives the scan, and is what [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) surfaces. This step only needs to raise a human's attention to the summary.
+> Per-capacity detail is already recorded where it belongs: `last_error` and `last_rebuild` on the capacity's own `Capacity Policies` row, stamped by the child flow on every attempt. That is queryable, survives the scan, and is what [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md) surfaces. This step only needs to raise a human's attention to the summary.
 
 **Nothing is sent on a clean run.** That was decided when the flow was scheduled, on the grounds that a recurring "all fine" mail goes unread within a fortnight. **Worth revisiting now it is manual** — an operator who presses Run and gets silence has no confirmation it finished, and there is no longer a steady drumbeat of `lastrebuild` timestamps to infer health from. Until it is revisited, use `last_rebuild` on the table to prove the run happened.
 

@@ -4,7 +4,7 @@
 
 > **It was never built, so nothing needs undoing.** This file is kept so existing links resolve and so the decision is recorded where someone would look for it. **The build steps that were here have been removed** rather than left to be followed by accident.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5, [../nocustomcon/GetFabricToken.md](docs/flows/nocustomcon/GetFabricToken.md) — the workspace-settings equivalent, which **is** built and **is** unaffected by this decision.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5, [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md) — the workspace-settings equivalent, which **is** built and **is** unaffected by this decision.
 
 ---
 
@@ -18,7 +18,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5, [.
 | Tenant-id and client-id environment variables | Not needed. Neither was ever created |
 | Secure Inputs / Secure Outputs on the token actions | Not needed — no token ever reaches the run history |
 
-The connector pattern is set out once in [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0, and every flow doc in this folder now uses it.
+The connector pattern is set out once in [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0, and every flow doc in this folder now uses it.
 
 ---
 
@@ -26,7 +26,7 @@ The connector pattern is set out once in [RebuildCapacityPolicyRules.md](docs/fl
 
 **Gained.** No secret to store, rotate, or leak into run history. No expiry to monitor. No token flow to build, test and keep in step with its callers. The `ActionResponseSkipped` confusion that the old test step had to explain goes with it.
 
-**Given up — read this before treating it as a pure win.** The old design named its own service principal and granted Fabric roles to that. The connector authenticates as **whatever the connection is**, which may be a signed-in user. That moves every role in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5 onto that account, makes the *Service principals can use Fabric APIs* tenant setting irrelevant, and introduces a failure mode the token flow did not have: **the connection breaking when its owner leaves, loses a role, or is asked to re-consent.** It fails as `401` on every capacity at once, with nothing in the run history naming the connection as the cause.
+**Given up — read this before treating it as a pure win.** The old design named its own service principal and granted Fabric roles to that. The connector authenticates as **whatever the connection is**, which may be a signed-in user. That moves every role in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5 onto that account, makes the *Service principals can use Fabric APIs* tenant setting irrelevant, and introduces a failure mode the token flow did not have: **the connection breaking when its owner leaves, loses a role, or is asked to re-consent.** It fails as `401` on every capacity at once, with nothing in the run history naming the connection as the cause.
 
 That was **Q45**, and it is **closed as of 2026-09-18: the connection authenticates as the `workspace provisioning` service account.** A service account rather than a named person, so the leaver case does not arise — but the account still needs an owner and expiry monitoring, because a lapse looks exactly like the failure described above.
 

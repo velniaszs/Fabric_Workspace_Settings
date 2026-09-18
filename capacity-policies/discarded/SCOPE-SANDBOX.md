@@ -1,6 +1,6 @@
 # Sandbox — Scopes, try/catch and `result()`
 
-A throwaway flow for learning how Scope actions and `result()` behave, before wiring them into [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7.
+A throwaway flow for learning how Scope actions and `result()` behave, before wiring them into [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7.
 
 > **Disposable.** Name it `ZZ_ScopeSandbox`, build it in a **non-production** solution or outside a solution entirely, and delete it when the questions below are answered. It touches no Dataverse table and calls nothing real.
 
@@ -114,7 +114,7 @@ The scope holds five actions. `result('Scope_try')` returned **three**: `Compose
 
 > **`result('X')` returns the *immediate children* of `X` and nothing deeper.** A nested container appears as one entry; whatever happened inside it does not appear at all.
 
-This is what the real Catch has to be written around, because in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) the action most likely to fail — `Run_rebuild` — sits **three Conditions deep** inside `Scope_try`. `result('Scope_try')` will never name it. See E8.
+This is what the real Catch has to be written around, because in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) the action most likely to fail — `Run_rebuild` — sits **three Conditions deep** inside `Scope_try`. `result('Scope_try')` will never name it. See E8.
 
 ### The entry shape, from a real run
 
@@ -180,7 +180,7 @@ So the rule this establishes, and it is the one to carry back into every flow th
 
 > **No action inside a Try scope may be configured to run after *has failed*.** Each one silently disables the Catch for whatever path it covers. The two mechanisms do not layer — the inner one wins, and it wins quietly.
 
-For [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) this settles Step 5: unticking **has failed** on `Condition_rebuild_ok` is **essential, not optional**. Left ticked, a hard failure of the child flow would be absorbed by the Condition, `Scope_try` would report Succeeded, and the Catch would never fire — dead code for the single case it was built to handle, and a run history that looks healthy while the error reaches no table at all.
+For [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) this settles Step 5: unticking **has failed** on `Condition_rebuild_ok` is **essential, not optional**. Left ticked, a hard failure of the child flow would be absorbed by the Condition, `Scope_try` would report Succeeded, and the Catch would never fire — dead code for the single case it was built to handle, and a run history that looks healthy while the error reaches no table at all.
 
 **Also worth noting:** this is why E2 and E3 must both be run. They differ by one checkbox and produce opposite outcomes, and neither on its own tells you that the checkbox is what did it.
 
@@ -301,7 +301,7 @@ Not directly observable — the Catch does not run when the Try succeeds. `Compo
 
 ## Round two — testing the expressions that will actually ship
 
-E1–E8 characterised the platform. These three test the **specific expressions written into [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b**, which have never been run. Build the Catch in the sandbox exactly as that document specifies, then run the three scenarios below.
+E1–E8 characterised the platform. These three test the **specific expressions written into [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7b**, which have never been run. Build the Catch in the sandbox exactly as that document specifies, then run the three scenarios below.
 
 The Catch is the worst place in a flow to discover a bad expression: it executes only when something else has already gone wrong, so a defect there stays invisible until the day it matters, and then it destroys the evidence for the original failure.
 
@@ -364,7 +364,7 @@ Condition: An action failed. No dependent actions succeeded. | run 08584…
 
 **Same flow, same failure, same expressions. The only difference is one level of nesting**, and it is the difference between a column somebody can act on and a column nobody can.
 
-So the flattening option in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b is now **evidence-backed rather than inferred**. It does not make it the right call — restructuring a working flow still has to be justified on its own.
+So the flattening option in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7b is now **evidence-backed rather than inferred**. It does not make it the right call — restructuring a working flow still has to be justified on its own.
 
 > **Decided 2026-09-12: `Scope_try` is not being flattened.** The result above stands as evidence of what flattening buys, not as a recommendation. Do not read this experiment as an argument for restructuring the real flow — that was considered, on exactly this evidence, and declined. See Step 7b.
 
@@ -383,7 +383,7 @@ Execution order was `Compose_boom → Compose → Condition → Compose_last`. T
 
 **Consequence: `first(body('Filter_failed'))` picks an arbitrary failed entry, not the first one to fail.** It is safe here only because a sequential flow produces exactly **one** `Failed` entry — whatever broke first — and everything after it is `Skipped`, which the filter excludes. With one match, order cannot matter.
 
-**Where it would bite:** parallel branches, or anything that lets two actions fail in the same scope. Neither exists in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md), so the expression is safe **as long as the flow stays sequential**. If a parallel branch is ever added inside `Scope_try`, revisit this — the Catch will start reporting a random one of the failures with no indication it is choosing.
+**Where it would bite:** parallel branches, or anything that lets two actions fail in the same scope. Neither exists in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md), so the expression is safe **as long as the flow stays sequential**. If a parallel branch is ever added inside `Scope_try`, revisit this — the Catch will start reporting a random one of the failures with no indication it is choosing.
 
 ### Two smaller details from this run
 
@@ -428,7 +428,7 @@ That turns `unknown: no message` into a string that tells the reader the scope n
 no failed action in Scope_try: scope was skipped or timed out | run 08584123618164522272360067699CU30
 ```
 
-Same path, same guards, nothing throws — and the column now explains itself. **This is the version in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b.**
+Same path, same guards, nothing throws — and the column now explains itself. **This is the version in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7b.**
 
 **When this path actually occurs in the real flow:** a **TimedOut** scope, most likely, since a timed-out action does not carry `status: Failed`. `Skipped` needs something above `Scope_try` to fail, and the only things there are `Initialize variable` actions, which cannot.
 
@@ -471,7 +471,7 @@ E11 message on that path is useless without the run ID:          confirmed
 E11 rewritten fallbacks retested on the same path:               Pass [verified 2026-09-12]
 ```
 
-**All eleven are answered.** The Catch as specified in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b is safe to build: nothing throws, the `coalesce` guards are sufficient, and no extra Condition is required.
+**All eleven are answered.** The Catch as specified in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7b is safe to build: nothing throws, the `coalesce` guards are sufficient, and no extra Condition is required.
 
 Two results changed the design rather than confirming it. **E10** proved flattening `Scope_try` recovers the real error text, and disproved the ordering assumption recorded under E9. **E11** showed the fallback text was safe but uninformative, and it has been rewritten.
 
@@ -520,4 +520,4 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 
 ## Cleanup
 
-Delete `ZZ_ScopeSandbox`. Then fold the answers into [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7 — particularly E2's field list, which determines the `Compose_error` expression, and E3, which determines whether the Step 5 note is describing a safety margin or a requirement.
+Delete `ZZ_ScopeSandbox`. Then fold the answers into [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7 — particularly E2's field list, which determines the `Compose_error` expression, and E3, which determines whether the Step 5 note is describing a safety margin or a requirement.

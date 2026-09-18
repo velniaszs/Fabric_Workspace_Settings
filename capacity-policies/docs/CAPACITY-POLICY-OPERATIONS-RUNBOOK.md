@@ -2,9 +2,9 @@
 
 What to run when the estate changes. One section per lifecycle event.
 
-Companion to [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md), which covers the one-off cutover. This document covers everything after it.
+Companion to [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](CAPACITY-POLICY-MIGRATION-RUNBOOK.md), which covers the one-off cutover. This document covers everything after it.
 
-Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) (design), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) (schema).
+Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema).
 
 ---
 
@@ -29,7 +29,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) (design), [CA
 >
 > They still do the second job they always did: **telling you whether the change actually did what you meant.** `NotEnabled` and `StillEnabled` are the whole value; a bare rebuild could not report either.
 >
-> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a deleted capacity (§2), a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a deleted capacity (§2), a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
 
 ---
 
@@ -68,7 +68,7 @@ A `Failed` from activation still leaves the policy set **registered** — that i
 
 **No flow does this yet.** It is manual, and it is the one event with no automation in place.
 
-> ### There is now a design for it — [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md)
+> ### There is now a design for it — [DeleteCapacityPolicySet.md](../bau/DeleteCapacityPolicySet.md)
 >
 > It fires on the `ubsppcoe_Node` soft-delete, asks `GET /v1/capacities` whether the capacity is really gone, and then either **deletes** the policy set (`status = Deleted`) or, if Fabric still has the capacity, **deactivates only** (`status = Suspended`) and reports the disagreement.
 >
@@ -82,7 +82,7 @@ A `Failed` from activation still leaves the policy set **registered** — that i
 | `Capacity Policies` row | Still there, `status = Active` | Every estate-wide rebuild keeps attempting it |
 | `ubsppcoe_Node` row | **Soft-deleted** by the platform team — row and capacity GUID retained, a flag set | Our `node` lookup still resolves |
 
-That last one is the correction that matters: the platform team's tables **soft-delete rather than hard-delete**, so the lookup does *not* go null and `RebuildCapacityPolicyRules` does *not* fail closed at Step 5a. It reads the workspaces quite happily and republishes rules to a policy set whose capacity is gone — so the capacity reports `Failed` on the **Fabric call**, with a `404` that looks like an outage, in the summary of **every** estate-wide rebuild until somebody cleans it up. See [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
+That last one is the correction that matters: the platform team's tables **soft-delete rather than hard-delete**, so the lookup does *not* go null and `RebuildCapacityPolicyRules` does *not* fail closed at Step 5a. It reads the workspaces quite happily and republishes rules to a policy set whose capacity is gone — so the capacity reports `Failed` on the **Fabric call**, with a `404` that looks like an outage, in the summary of **every** estate-wide rebuild until somebody cleans it up. See [MIG_RebuildAllCapacityPolicies.md](../migration/MIG_RebuildAllCapacityPolicies.md) §4.
 
 ### Cleanup, in this order
 
@@ -98,7 +98,7 @@ That last one is the correction that matters: the platform team's tables **soft-
 >
 > Deactivate first only when you are getting ahead of the deprovisioning, i.e. the capacity is still in `GET /v1/capacities`.
 
-**Do not delete the row.** Update it. Deleting the row before the item leaves an orphaned policy set with nothing claiming it — and since the drift scan was discarded, **nothing will ever report it**. Six months later the row is also the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
+**Do not delete the row.** Update it. Deleting the row before the item leaves an orphaned policy set with nothing claiming it — and since the drift scan was discarded, **nothing will ever report it**. Six months later the row is also the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](../bau/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
 
 **Update the row after the Fabric call, not before.** A row saying `Deleted` with the item still present is an orphan that nothing will chase; a row still saying `Active` with the item gone is loud — the next estate-wide rebuild `404`s and you come back and finish the job.
 
@@ -188,7 +188,7 @@ The old capacity keeps granting until something rebuilds it, and **no flow fires
 
 ## 6. An exception is granted or revoked
 
-**No flow writes `Policy Exceptions`.** Rows are created by hand in the maker portal or by the app. [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) **reads** the row and republishes that capacity.
+**No flow writes `Policy Exceptions`.** Rows are created by hand in the maker portal or by the app. [RebuildOnExceptionChange](../bau/RebuildOnExceptionChange.md) **reads** the row and republishes that capacity.
 
 ### To grant
 
@@ -269,4 +269,4 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 >
 > The dangerous state is somebody deactivating our policy set, or creating a replacement and activating that. The capacity is then governed by something nobody in this system controls, **and every signal above still reports healthy** — the rebuild writes its rules to the deactivated set and succeeds.
 >
-> **Nothing detects it.** `SyncCapacityPolicySets` would have, and it was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **Accepted as a known gap** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7, which records two optional implementations if it ever needs closing. Until one is built, the only way to find this is to open the holder workspace and confirm one active policy set per capacity.
+> **Nothing detects it.** `SyncCapacityPolicySets` would have, and it was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)). **Accepted as a known gap** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7, which records two optional implementations if it ever needs closing. Until one is built, the only way to find this is to open the holder workspace and confirm one active policy set per capacity.

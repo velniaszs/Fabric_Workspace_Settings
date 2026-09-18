@@ -22,21 +22,21 @@ Creates the policy set for a newly inventoried capacity, registers it in Dataver
 >
 > **Two things get materially riskier, and both are in §0.** Activation is now automatic, and there is no retry.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses, [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) — the same conversion, done first, and the source of the try/catch pattern.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses, [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md) — the same conversion, done first, and the source of the try/catch pattern.
 
 ---
 
 ## 0. Before you start
 
-- Build [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) first. This flow calls it, and its §0 defines the Fabric connector pattern used below.
+- Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first. This flow calls it, and its §0 defines the Fabric connector pattern used below.
 - **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header**.
 - Needs a **Dataverse connection**.
 - The SPN needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
-- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
+- Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
 
 > ### The capacity is born locked, on purpose — and now nobody asked for it
 >
-> Rule 1 denies creation of every governed item type. A capacity that has just been through this flow permits **no** governed item creation until a workspace is whitelisted through [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md). Power BI items are not governed and stay creatable.
+> Rule 1 denies creation of every governed item type. A capacity that has just been through this flow permits **no** governed item creation until a workspace is whitelisted through [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md). Power BI items are not governed and stay creatable.
 >
 > That was the intended posture when a provisioning app called this flow deliberately and could warn the user. **Under a row trigger, nobody decided.** The platform team adds an inventory row, and a capacity locks down within minutes — with no screen, no message and no acknowledgement anywhere.
 >
@@ -48,9 +48,9 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > A Dataverse row trigger fires **once per change**. If Step 4 answers `Skipped` — the commonest reason being that Fabric does not yet know about a capacity whose inventory row has already been created — **nothing runs this flow again**. The app used to be able to retry; there is no app.
 >
-> `Added or Modified` mitigates it only if something later edits the row. If the platform team writes the Node row once and never touches it, that capacity is never initialised, never governed, and **nothing reports it** — [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) only walks capacities that already have a `Capacity Policies` row, so it cannot notice one that was never registered, and it only runs when somebody starts it.
+> `Added or Modified` mitigates it only if something later edits the row. If the platform team writes the Node row once and never touches it, that capacity is never initialised, never governed, and **nothing reports it** — [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) only walks capacities that already have a `Capacity Policies` row, so it cannot notice one that was never registered, and it only runs when somebody starts it.
 >
-> **That is a governance hole, not an inconvenience.** A capacity silently ungoverned looks identical to one that was never meant to be governed. The fix would be a sweep — list `ubsppcoe_Node`, left-join `Capacity Policies`, report the gaps — which **does not exist and is not specified anywhere**. It would have belonged with `SyncCapacityPolicySets`, and that flow was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **Until something owns it, the only detection is somebody noticing.**
+> **That is a governance hole, not an inconvenience.** A capacity silently ungoverned looks identical to one that was never meant to be governed. The fix would be a sweep — list `ubsppcoe_Node`, left-join `Capacity Policies`, report the gaps — which **does not exist and is not specified anywhere**. It would have belonged with `SyncCapacityPolicySets`, and that flow was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)). **Until something owns it, the only detection is somebody noticing.**
 
 ---
 
@@ -66,7 +66,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 | Select columns | `ubsppcoe_nodeuniqueid` |
 | Filter rows | `ubsppcoe_nodeuniqueid ne null and ubsppcoe_statecode ne 2` |
 
-> **`ubsppcoe_statecode` is a Choice with 11 options, and only `2` means Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). It is a custom column, **not** Dataverse's system `statecode`, and the integer is unquoted. An earlier revision used a placeholder Boolean, `ubsppcoe_isdeleted ne true`, which names the wrong column *and* is an invalid comparison against an option set.
+> **`ubsppcoe_statecode` is a Choice with 11 options, and only `2` means Deleted — confirmed 2026-09-15** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). It is a custom column, **not** Dataverse's system `statecode`, and the integer is unquoted. An earlier revision used a placeholder Boolean, `ubsppcoe_isdeleted ne true`, which names the wrong column *and* is an invalid comparison against an option set.
 >
 > **`ne 2`, not `eq 1`, and the Node table is the opposite of the Workspace table here.** A capacity moves through ten live states; testing `eq 1` would refuse to initialise a policy set for nine of them, leaving most of the estate ungoverned and giving no error to explain why. `ubsppcoe_Workspace` has only `1` and `2`, so the whitelist filters there use `eq 1` — do not copy one form into the other.
 >
@@ -94,7 +94,7 @@ The three values the flow needs all come off the trigger body:
 >
 > The cost is ordering: the name cannot be built until after the eligibility check. That is already true — Step 5 comes after Step 4 — so nothing moves.
 
-⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. Permitted now that there is no `Respond`. It matters more here than in [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md): two concurrent runs for the same capacity would both pass Step 3's `AlreadyExists` check and create **two policy sets**, one of which nothing maps back to. The alternate key on `ubsppcoe_capacityid` recommended in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2 is the real defence; this setting is the cheap one.
+⋯ → **Settings** → **Concurrency Control On, Degree of Parallelism 1**. Permitted now that there is no `Respond`. It matters more here than in [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md): two concurrent runs for the same capacity would both pass Step 3's `AlreadyExists` check and create **two policy sets**, one of which nothing maps back to. The alternate key on `ubsppcoe_capacityid` recommended in [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2 is the real defence; this setting is the cheap one.
 
 ---
 
@@ -121,7 +121,7 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 
 > ### The shape of this flow — this one **does** nest, unlike the rebuild
 >
-> [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) keeps its guards flat, because each one ends in **Terminate** and stops the run. **This flow has no Terminate anywhere.** It has a single `Respond` at the end that every path must reach, so an early exit cannot stop the run — it can only set `outcome` and `message` and let everything else be skipped by *not being on its branch*.
+> [RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) keeps its guards flat, because each one ends in **Terminate** and stops the run. **This flow has no Terminate anywhere.** It has a single `Respond` at the end that every path must reach, so an early exit cannot stop the run — it can only set `outcome` and `message` and let everything else be skipped by *not being on its branch*.
 >
 > That means the work genuinely lives inside the branches, two levels deep:
 >
@@ -150,7 +150,7 @@ Seeding `outcome` with `Failed` means any path nobody anticipated reports failur
 >
 > **Step 4b is gone.** The trigger supplies the Node row, so the eligibility check leads straight into Step 5. One level of nesting disappeared with it.
 >
-> **Terminate still does not belong in the body**, and there is now a sharper reason than *the caller would get nothing*: a Terminate inside `Scope_try` ends the run before `Scope_catch` can execute ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4). The only Terminate in this flow is the last action of the Catch.
+> **Terminate still does not belong in the body**, and there is now a sharper reason than *the caller would get nothing*: a Terminate inside `Scope_try` ends the run before `Scope_catch` can execute ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E4). The only Terminate in this flow is the last action of the Catch.
 
 ---
 
@@ -260,7 +260,7 @@ Three separate reasons, one outcome:
 >
 > So the `Failed — this capacity has no inventory record` outcome **cannot occur any more**. Do not keep it as a defensive branch; it would be unreachable code guarding against a state the trigger makes impossible. Remove it from the outcome list in Step 9 too.
 >
-> **What this does not change** is the fail-closed rule it protected. 8a must still write the `Node` lookup, [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a still refuses a blank one, and a capacity registered with an empty lookup is still permanently un-rebuildable. The guard moved from *check the Node exists* to *the trigger guarantees it*; the consequence of getting 8a wrong is identical.
+> **What this does not change** is the fail-closed rule it protected. 8a must still write the `Node` lookup, [RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) Step 5a still refuses a blank one, and a capacity registered with an empty lookup is still permanently un-rebuildable. The guard moved from *check the Node exists* to *the trigger guarantees it*; the consequence of getting 8a wrong is identical.
 >
 > Keep reading the Node key from the trigger rather than re-querying it "to be safe". A second lookup could disagree with the row that fired the flow — if the row were deleted mid-run, the query returns nothing and the bind silently writes blank, which is the exact outcome this step used to prevent.
 
@@ -397,7 +397,7 @@ Then the columns:
 
 > **The Node bind now comes straight from the trigger.** `triggerOutputs()?['body/ubsppcoe_nodeid']` is the row key of the row that fired the flow — no query, and nothing that can return empty. Step 4b used to fetch it; see that section for why it is gone and why re-querying "to be safe" would be worse.
 
-> **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) fails closed without it. Bind it to `triggerOutputs()?['body/ubsppcoe_nodeid']` — the Node row key, straight off the trigger.
+> **The `Node` lookup is the one that must not be skipped.** It is what every later rebuild reads, and Step 5a of [RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) fails closed without it. Bind it to `triggerOutputs()?['body/ubsppcoe_nodeid']` — the Node row key, straight off the trigger.
 >
 > **Lookups are set with the OData bind form**, not a bare GUID: `/ubsppcoe_nodes(<guid>)`, with the **entity set** name and the target row's **primary key**. That key is `ubsppcoe_nodeid` — display name *Node*, the only unique-identifier column on the table. Step 4b exists to fetch it. If the connector rejects the path, check the entity set name against `/api/data/v9.2/$metadata` — the plural is not always what you would guess.
 >
@@ -441,7 +441,7 @@ Body:
 
 ⋯ → **Configure run after** `Run_rebuild` on **is successful** only. Activating rules that failed to build would put an unknown rule set into force.
 
-**Do not pass `allowReplace`.** `PolicySetActivationConflict` means another policy set already governs this capacity — on a freshly provisioned one that should be impossible, so it signals something worth a human looking at. Taking the capacity over silently is the wrong default here; [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §6 is where that decision belongs.
+**Do not pass `allowReplace`.** `PolicySetActivationConflict` means another policy set already governs this capacity — on a freshly provisioned one that should be impossible, so it signals something worth a human looking at. Taking the capacity over silently is the wrong default here; [MIG_RebuildAllCapacityPolicies.md](../migration/MIG_RebuildAllCapacityPolicies.md) §6 is where that decision belongs.
 
 ### 8d. `Update_status` — Dataverse **Update a row**
 
@@ -502,7 +502,7 @@ Replace it with `Compose_result` — **Compose**, run after **both** `Scope_try`
 
 ## Step 10 — Try and Catch
 
-Build **last**, once the flow works. Identical in shape to [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7 — build that one first and copy it.
+Build **last**, once the flow works. Identical in shape to [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md) Step 7 — build that one first and copy it.
 
 ### 10a. `Scope_try`
 
@@ -510,7 +510,7 @@ Build **last**, once the flow works. Identical in shape to [AddWorkspaceToPolicy
 
 > ### This flow keeps two *has failed* configurations, deliberately
 >
-> [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 5 states the rule: **no action inside a Try scope may run after *has failed***, because it makes the scope report Succeeded and skips the Catch ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3).
+> [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) Step 5 states the rule: **no action inside a Try scope may run after *has failed***, because it makes the scope report Succeeded and skips the Catch ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E3).
 >
 > **8d and 8e break that rule on purpose.** `Update_status` runs after `Activate` on *is successful* **and** *has failed*, and 8e follows it the same way. That is precisely the mechanism the rule warns about — and here it is the behaviour wanted.
 >
@@ -541,9 +541,9 @@ concat(coalesce(first(body('Filter_failed'))?['name'], 'no failed action in Scop
 
 Copy that from the code block, not from a table cell — the `|` would have to be escaped, and a `\|` pasted into the designer fails at runtime rather than at save.
 
-> **`ubsppcoe_lasterror` takes `variables('message')`, never `outputs('Compose_error')`.** The raw `result('Scope_try')` array carries every action's `inputs` and `outputs` verbatim — here that includes the Fabric request bodies — and it overruns the column's 2000 characters. `Compose_error` is there to be read in the run history, not written to a column. See [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) 7c.
+> **`ubsppcoe_lasterror` takes `variables('message')`, never `outputs('Compose_error')`.** The raw `result('Scope_try')` array carries every action's `inputs` and `outputs` verbatim — here that includes the Fabric request bodies — and it overruns the column's 2000 characters. `Compose_error` is there to be read in the run history, not written to a column. See [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md) 7c.
 
-> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a for the full shape and the run-URL expression.
+> **The `Logging` columns' logical names are not confirmed — Q48.** Only the UI display names are known and the table belongs to the platform team. See [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5a for the full shape and the run-URL expression.
 
 > ### The `Logging` insert matters more in this flow than in any of the four
 >
@@ -565,7 +565,7 @@ Copy that from the code block, not from a table cell — the `|` would have to b
 >
 > The Catch does not clean it up, and should not try. Deleting a Fabric item from an error handler, on a run that has just demonstrated it does not understand the current state, is how one bad run becomes two.
 >
-> **Nothing detects the orphan.** The drift scan that would have reported it as `Untracked` was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **So the `Logging` row from a `Caught` run on this flow is the only signal there is** — read it, and check the holder workspace by hand, or the set stays there indefinitely.
+> **Nothing detects the orphan.** The drift scan that would have reported it as `Untracked` was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)). **So the `Logging` row from a `Caught` run on this flow is the only signal there is** — read it, and check the holder workspace by hand, or the set stays there indefinitely.
 
 ---
 

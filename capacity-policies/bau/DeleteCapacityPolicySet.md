@@ -4,9 +4,9 @@ Deactivates and deletes a capacity's policy set when its `ubsppcoe_Node` row is 
 
 > **Not built, and not yet agreed.** This is a specification and an argument, not a description of something that exists. **Read §0 before building any of it** — this is the only flow in the design that *removes* enforcement, and it is triggered by another team's delete.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) — the flow this undoes, [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) — the flow this undoes, [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2.
 
-> **Every reference in this document to a drift scan catching something is now void.** `SyncCapacityPolicySets` was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). Where this document said the scan would eventually notice an orphan, read: **nothing notices it.**
+> **Every reference in this document to a drift scan catching something is now void.** `SyncCapacityPolicySets` was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md). Where this document said the scan would eventually notice an orphan, read: **nothing notices it.**
 
 ---
 
@@ -24,7 +24,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 >
 > **Revised 2026-09-12, replacing a weaker recommendation.** An earlier draft said *deactivate, never delete*, on the grounds that deletion is irreversible and an unused policy set is free. **The second half of that was wrong**, and the first half was answering a question that does not need to be guessed at.
 >
-> A Node soft-delete is an **inventory** event. It does not say whether the Fabric capacity still exists — and that is the only thing that decides what to do here. **`GET /v1/capacities` answers it**, and [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 4 already makes exactly that call.
+> A Node soft-delete is an **inventory** event. It does not say whether the Fabric capacity still exists — and that is the only thing that decides what to do here. **`GET /v1/capacities` answers it**, and [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) Step 4 already makes exactly that call.
 >
 > | Fabric says | Meaning | Do |
 > |---|---|---|
@@ -51,7 +51,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 
 > ### The delete state is `ubsppcoe_statecode`, and on `ubsppcoe_Node` only `2` means deleted
 >
-> **Confirmed 2026-09-15.** It is a **Choice** with **11 options**, and it is a custom column — not Dataverse's system `statecode`. Filters use unquoted integers; `eq true` does not resolve against it. See [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1.
+> **Confirmed 2026-09-15.** It is a **Choice** with **11 options**, and it is a custom column — not Dataverse's system `statecode`. Filters use unquoted integers; `eq true` does not resolve against it. See [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1.
 >
 > **This flow is the one place that tests `eq 2` rather than `ne 2`**, because it is the only flow in the design that wants the deleted rows. Ten of the eleven options are live states of a capacity's lifecycle and none of them should fire this flow.
 
@@ -61,13 +61,13 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 >
 > **None of that is needed.** A soft delete is an ordinary `Modified` event: `ubsppcoe_nodeuniqueid` is present, so the capacity id comes straight off the trigger, and the policy row can be found by either the lookup or the capacity id.
 >
-> **Use the lookup anyway** — `_ubsppcoe_node_value` — for consistency with [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 2b and because it proves the Node link was genuinely established. But read `ubsppcoe_capacityid` off our own row rather than trusting the trigger's copy, for the same reason every other flow does: it is the value `InitializeCapacityPolicySet` wrote, and it is the one Fabric was called with.
+> **Use the lookup anyway** — `_ubsppcoe_node_value` — for consistency with [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) Step 2b and because it proves the Node link was genuinely established. But read `ubsppcoe_capacityid` off our own row rather than trusting the trigger's copy, for the same reason every other flow does: it is the value `InitializeCapacityPolicySet` wrote, and it is the one Fabric was called with.
 
 ---
 
 ## 1. Before you start
 
-- Build [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) first. This flow reverses it, and reuses its connector pattern.
+- Build [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) first. This flow reverses it, and reuses its connector pattern.
 - Needs a **Dataverse connection**, and — for §3 only — the *HTTP with Microsoft Entra ID (preauthorized)* connector.
 - §2 makes **no Fabric calls at all**. That is most of why it is the recommended version.
 
@@ -179,7 +179,7 @@ The second row is the sanity check above. Both must hold before anything is dele
 | 1 | `Delete_policy_set` — **Invoke an HTTP request** | `DELETE .../policySets/{id}` |
 | 2 | `Update_policy_row` — Dataverse **Update a row** | `status` = `Deleted`. Runs after the delete on **is successful** only |
 
-The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}` as the workspace and `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']` as the set. **Confirm the `DELETE` route against the scripts in `ubs-policies` before building** — they are the authority on these paths, not the published reference, which [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 8c already found incomplete once.
+The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}` as the workspace and `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']` as the set. **Confirm the `DELETE` route against the scripts in `ubs-policies` before building** — they are the authority on these paths, not the published reference, which [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) Step 8c already found incomplete once.
 
 > ## No `Deactivate` in this branch — tested 2026-09-13
 >
@@ -205,7 +205,7 @@ The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorks
 
 > ### The Try scope stays clean in this branch, and that is a real gain
 >
-> No `Deactivate` means no tolerated failure, which means **no *has failed* tick anywhere in 3c** — so no exception to the rule in [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 5, and nothing masking `Scope_catch` on this path ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E3).
+> No `Deactivate` means no tolerated failure, which means **no *has failed* tick anywhere in 3c** — so no exception to the rule in [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) Step 5, and nothing masking `Scope_catch` on this path ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E3).
 >
 > Every failure in the delete branch now reaches the Catch, which is what you want from the one flow that destroys things. **3d still carries the exception** — its `Update_policy_row` runs on *has failed* deliberately — so the rule is broken in exactly one place in this flow rather than two.
 
@@ -254,13 +254,13 @@ This is the disagreement case: the inventory says retired, Fabric says live. **D
 concat('Node soft-deleted ', utcNow(), ' but the capacity is still present in Fabric. Policy set deactivated, item retained. Reconcile the inventory against Fabric before deleting anything. | run ', workflow()?['run']?['name'])
 ```
 
-**`Update_policy_row` runs on *has failed* here deliberately** — the same exception [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 10a makes, and for the same reason: a failed deactivation is a fully handled state worth recording with Fabric's own message rather than routing to the Catch for a generic one.
+**`Update_policy_row` runs on *has failed* here deliberately** — the same exception [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) Step 10a makes, and for the same reason: a failed deactivation is a fully handled state worth recording with Fabric's own message rather than routing to the Catch for a generic one.
 
-**`ubsppcoe_status` gains two new values.** It was `Active` / `Inactive`; `Suspended` and `Deleted` are new. Plain text column, so no schema change — but record both in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2, and have [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) render them distinctly from `Inactive`, which means something quite different.
+**`ubsppcoe_status` gains two new values.** It was `Active` / `Inactive`; `Suspended` and `Deleted` are new. Plain text column, so no schema change — but record both in [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2, and have [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md) render them distinctly from `Inactive`, which means something quite different.
 
 > ### Nothing reactivates a `Suspended` capacity
 >
-> If the platform team clears the soft-delete flag, [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) fires, finds our row and returns `AlreadyExists` without reactivating anything — so the capacity comes back **ungoverned while looking registered**, which is the worst combination in this design.
+> If the platform team clears the soft-delete flag, [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) fires, finds our row and returns `AlreadyExists` without reactivating anything — so the capacity comes back **ungoverned while looking registered**, which is the worst combination in this design.
 >
 > **That is a gap and it needs a decision.** Either this flow gains a sibling that reactivates when the flag clears, or `InitializeCapacityPolicySet` learns to reactivate a `Suspended` row instead of reporting `AlreadyExists`. The second is cheaper and keeps one flow per event.
 >
@@ -298,11 +298,11 @@ concat('Node soft-deleted ', utcNow(), ' but the capacity is still present in Fa
 
 ## Step 5 — Try and Catch
 
-Same shape as [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7. `Scope_try` wraps Steps 2 and 3; `Scope_catch` runs after it on **has failed**, **is skipped**, **has timed out**; the Catch ends in `Terminate` status **Failed**.
+Same shape as [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md) Step 7. `Scope_try` wraps Steps 2 and 3; `Scope_catch` runs after it on **has failed**, **is skipped**, **has timed out**; the Catch ends in `Terminate` status **Failed**.
 
 **The Catch cannot write `ubsppcoe_lasterror` here in the usual way.** The row it would write to is the one Step 2 may have failed to find. Guard on a `policyRowId` variable exactly as the other flows do, and set it after Step 2.
 
-**So add `Add_log_row` as well — Dataverse *Add a new row* into `Logging`, outside that guard and before the `Terminate`.** Decided 2026-09-15; this is one of the four flows that logs there ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a).
+**So add `Add_log_row` as well — Dataverse *Add a new row* into `Logging`, outside that guard and before the `Terminate`.** Decided 2026-09-15; this is one of the four flows that logs there ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §5a).
 
 | Column (UI display name) | Value |
 |---|---|
@@ -318,13 +318,13 @@ Same shape as [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspac
 >
 > **This is the only flow that deletes a policy set**, and the failure it cannot currently record is a `List rows` that did not resolve the policy row — meaning the flow does not know whether it was supposed to delete anything. A capacity is being decommissioned, something went wrong before the flow could identify the target, and there was no Dataverse trace of it whatsoever. Whether the policy set was left behind or the row was simply absent are very different situations, and the run history was the only place to tell them apart.
 >
-> **Keep the insert outside `Condition_row_known` and above the `Terminate`.** Inside the guard it is skipped on exactly the path that motivated it; below the Terminate it never runs at all ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E4).
+> **Keep the insert outside `Condition_row_known` and above the `Terminate`.** Inside the guard it is skipped on exactly the path that motivated it; below the Terminate it never runs at all ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E4).
 
-Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can itself fail, or `result('Scope_try')` reports the container rather than the action ([SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E1, E10).
+Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can itself fail, or `result('Scope_try')` reports the container rather than the action ([SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E1, E10).
 
-> **`Scope_try` here contains a Condition with real work in both branches** — 3c and 3d are not `Set variable` branches, they make Fabric calls. So this flow **cannot** get the flat-scope benefit that [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) gets: a failure inside 3c or 3d is reported as `Condition_capacity_gone` with the generic *"An action failed"* message.
+> **`Scope_try` here contains a Condition with real work in both branches** — 3c and 3d are not `Set variable` branches, they make Fabric calls. So this flow **cannot** get the flat-scope benefit that [RemoveWorkspaceFromPolicy](RemoveWorkspaceFromPolicy.md) gets: a failure inside 3c or 3d is reported as `Condition_capacity_gone` with the generic *"An action failed"* message.
 >
-> That is accepted rather than fixed, on the same reasoning as [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b: the run ID in the message is what makes the run findable, and restructuring to recover a better string is not worth it. **But it matters more here**, because this is the only flow that deletes things — so when it fails, knowing exactly which call failed is worth more than usual. If that turns out to hurt in practice, the fix is a nested Try inside each branch, not a flattening.
+> That is accepted rather than fixed, on the same reasoning as [AddWorkspaceToPolicy](AddWorkspaceToPolicy.md) Step 7b: the run ID in the message is what makes the run findable, and restructuring to recover a better string is not worth it. **But it matters more here**, because this is the only flow that deletes things — so when it fails, knowing exactly which call failed is worth more than usual. If that turns out to hurt in practice, the fix is a nested Try inside each branch, not a flattening.
 
 ---
 
@@ -338,7 +338,7 @@ Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can it
 | 3a | *(Answered 2026-09-13 — no longer needs running)* | `deactivate` on a deleted capacity returns `404 Capacity not found`; `DELETE` on the policy set succeeds. See 3c |
 | 4 | **Revoke Capacity Admin from the connection identity, then soft-delete a governed Node row** | `Suspended`, **never `Deleted`**. This is the sanity check in 3b — if it deletes, the guard is wrong and a permissions lapse becomes a destructive event |
 | 5 | Break `Delete_policy_set`, then run test 3 again | The row must **not** say `Deleted`. If it does, the ordering in 3c is wrong and the flow has manufactured an orphan |
-| 6 | After test 2, clear the soft-delete flag on that Node row | [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) fires and returns `AlreadyExists`. **The policy set stays deactivated and the capacity stays ungoverned** — the gap named in 3d. Confirm it, then decide who closes it |
+| 6 | After test 2, clear the soft-delete flag on that Node row | [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) fires and returns `AlreadyExists`. **The policy set stays deactivated and the capacity stays ungoverned** — the gap named in 3d. Confirm it, then decide who closes it |
 | 7 | After test 2, run `MIG_RebuildAllCapacityPolicies` | The capacity is rebuilt as normal — the Node link still resolves. Rules are republished into a **deactivated** set: harmless, but `lastrebuild` keeps moving on a retired capacity. Decide whether the estate-wide rebuild should skip `Suspended` rows |
 | 8 | Soft-delete the same Node row twice | Fires again, deactivates an already-inactive set. Must be harmless |
 

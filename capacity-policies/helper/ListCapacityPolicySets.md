@@ -4,7 +4,7 @@ What the app reads. Returns every managed capacity and the state of its policy s
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and §4, [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3 and §4, [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md).
 
 ---
 
@@ -12,7 +12,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 
 - Needs a **Dataverse connection**, for reads only.
 - **No Fabric calls and no child flows.** This flow reads one table and formats it. If it grows an *Invoke an HTTP request* action, something has gone wrong — see below. It needs a Dataverse connection and nothing else; **not** the Entra ID HTTP connector.
-- Build it after [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), because two of the columns it returns are written by that flow and will be empty until it has run.
+- Build it after [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md), because two of the columns it returns are written by that flow and will be empty until it has run.
 
 > ### One table, one query, no joins
 >
@@ -21,7 +21,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and
 > - **Asking Fabric.** A list call plus a `GET` per policy set to resolve `properties.scope.id`, which the list response frequently omits. Hundreds of round trips.
 > - **Counting workspaces here.** `ubsppcoe_Workspace` filtered by Node and `ubsppcoe_oapenabled`, once per capacity. Hundreds of Dataverse queries, for a number the rebuild already computed.
 >
-> So `workspace_count`, `exception_count` and `rule_count` are **stamped on `CapacityPolicy` by the rebuild** and simply read here ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q26). This flow is a table read and a projection. Keep it that way.
+> So `workspace_count`, `exception_count` and `rule_count` are **stamped on `CapacityPolicy` by the rebuild** and simply read here ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3, Q26). This flow is a table read and a projection. Keep it that way.
 
 ---
 
@@ -122,7 +122,7 @@ The three counts are **as of the last rebuild**, not live. A `ubsppcoe_oapenable
 
 **`'[]'` on failure, not blank.** An empty string throws in `ParseJSON`; an empty array parses to zero rows and the app shows an empty list with whatever `ErrorMessage` says. One of those is a screen the user can read.
 
-Both outputs **Text**. A field typed Number or Boolean fails schema validation at runtime and makes *every* output unreadable to the app, not just the bad one — the trap that cost two flows a field each in [FLOWS.md](docs/FLOWS.md) §4.
+Both outputs **Text**. A field typed Number or Boolean fails schema validation at runtime and makes *every* output unreadable to the app, not just the bad one — the trap that cost two flows a field each in [FLOWS.md](../../docs/FLOWS.md) §4.
 
 ### Setting `errorMessage`
 

@@ -4,16 +4,16 @@ Child flow. **The only flow that writes policy rules.** Reads the desired state 
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2 and §3, [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md).
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §2 and §3, [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md), [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md).
 
 ---
 
 ## 0. Before you start
 
-- **There is no token flow.** Fabric is called through the *HTTP with Microsoft Entra ID (preauthorized)* connector, which attaches the bearer token itself — see the box below. [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md) is retired.
-- The new tables from [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 must exist, and `Policy Item Types` must be seeded. `Policy Exceptions` may legitimately be empty.
+- **There is no token flow.** Fabric is called through the *HTTP with Microsoft Entra ID (preauthorized)* connector, which attaches the bearer token itself — see the box below. [GetPolicyToken.md](../discarded/GetPolicyToken.md) is retired.
+- The new tables from [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3 must exist, and `Policy Item Types` must be seeded. `Policy Exceptions` may legitimately be empty.
 - **This flow needs two connections** — Dataverse, and the Entra ID HTTP connector. Both appear in `connectionReferences` on export. That is expected here.
-- Logical names below use the **`ubsppcoe_`** prefix — for the four tables this project creates **and** for the platform team's two. Since 2026-09-07 they share it, so **the prefix no longer tells you which table you are pointed at.** Pick tables and columns from the designer dropdowns rather than typing them, and see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0 for the two logical names that now exist on more than one table.
+- Logical names below use the **`ubsppcoe_`** prefix — for the four tables this project creates **and** for the platform team's two. Since 2026-09-07 they share it, so **the prefix no longer tells you which table you are pointed at.** Pick tables and columns from the designer dropdowns rather than typing them, and see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0 for the two logical names that now exist on more than one table.
 
 ### How every Fabric call in this folder is made
 
@@ -31,9 +31,9 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §2 and
 
 **Headers, in full:** a `GET` needs none — `Accept: application/json` is optional and harmless, and the flow docs include it only so every `GET` looks alike. A `POST` or `PATCH` carrying a body needs `Content-Type: application/json`. Nothing in this design needs any other header.
 
-> **The connection's identity is what Fabric sees**, not the flow and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §5 must be held by that identity — **the `workspace provisioning` service account**, settled 2026-09-18 (Q45).
+> **The connection's identity is what Fabric sees**, not the flow and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5 must be held by that identity — **the `workspace provisioning` service account**, settled 2026-09-18 (Q45).
 
-> **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.
+> **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.
 
 ### The two tables this flow does not own
 
@@ -56,9 +56,9 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 >
 > **This flow needed no change when that was corrected on 2026-09-09.** It already routes the value through the `node` lookup rather than reusing the trigger input — see the note at Step 4.
 
-> **The capacity id is never filtered against a Node row here.** `Capacity Policies` carries a `node` lookup, so Step 4 reads the policy set id and the Node row GUID in one call. Confirming the Node row exists happens once, in [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), when that row is created.
+> **The capacity id is never filtered against a Node row here.** `Capacity Policies` carries a `node` lookup, so Step 4 reads the policy set id and the Node row GUID in one call. Confirming the Node row exists happens once, in [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md), when that row is created.
 
-> **`ubsppcoe_oapenabled` = `true` is the whitelist, and this flow only reads it.** `false`, null, or no Node lookup means the workspace is in **no** rule — it is never added explicitly anywhere, and rule 1's deny-all is what applies to it. The flag is owned by another team — nothing in this design writes it, or any other column on either table. See [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3.
+> **`ubsppcoe_oapenabled` = `true` is the whitelist, and this flow only reads it.** `false`, null, or no Node lookup means the workspace is in **no** rule — it is never added explicitly anywhere, and rule 1's deny-all is what applies to it. The flag is owned by another team — nothing in this design writes it, or any other column on either table. See [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3.
 
 | Environment variable | Value |
 |---|---|
@@ -67,7 +67,7 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
 | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 
-**Create these before building — they do not exist by default**, and a missing one fails at runtime with `The workflow parameter … is not found`. Steps in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §8.11.
+**Create these before building — they do not exist by default**, and a missing one fails at runtime with `The workflow parameter … is not found`. Steps in [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11.
 
 > ### The one thing that must not go wrong
 >
@@ -107,7 +107,7 @@ Add one input: **+ Add an input** → **Text**, titled `capacityId`. Referenced 
 >
 > **The consequence: two rebuilds of the same capacity can overlap, and the later write wins.** That is tolerable, because both runs read the same Dataverse state and `replaceByPolicy` publishes the whole rule set from it — so the two agree unless the data changed in the seconds between their reads. If it did, the loser's view is at most seconds stale and the next rebuild of that capacity converges it.
 >
-> **Serialisation happens where the volume is**, not here: [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) has no `Respond`, so it *can* set Degree of Parallelism 1 — both on its trigger and on its loop. The estate-wide batch therefore never overlaps itself, which is the only case that would have produced concurrent rebuilds at scale.
+> **Serialisation happens where the volume is**, not here: [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) has no `Respond`, so it *can* set Degree of Parallelism 1 — both on its trigger and on its loop. The estate-wide batch therefore never overlaps itself, which is the only case that would have produced concurrent rebuilds at scale.
 
 > ### The shape of this flow — three guards, and you do **not** nest them
 >
@@ -249,7 +249,7 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 | `Set_nodeRowId` | `nodeRowId` | `first(body('Get_policy_row')?['value'])?['_ubsppcoe_node_value']` |
 | `Set_policyRowId` | `policyRowId` | `first(body('Get_policy_row')?['value'])?['ubsppcoe_capacitypolicyid']` |
 
-> **One read, three values.** `Capacity Policies` carries a `node` lookup to `ubsppcoe_Node` ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3), so this row already holds the Node row GUID. There is no second query against the Node table — confirming the Node exists happens once, in flow 1, when the row is created.
+> **One read, three values.** `Capacity Policies` carries a `node` lookup to `ubsppcoe_Node` ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3), so this row already holds the Node row GUID. There is no second query against the Node table — confirming the Node exists happens once, in flow 1, when the row is created.
 >
 > **`nodeRowId` is a Node row GUID and is *not* equal to `triggerBody()['text']`.** Using the variable rather than the trigger input is what makes this flow correct: the workspace table's `Node` lookup stores the Node row key, so only a value that came from a lookup can be compared against it. **Corrected 2026-09-09** — the two were previously documented as the same GUID, and the advice to use the variable anyway is what kept this flow working.
 >
@@ -257,7 +257,7 @@ That is why `policySetId`, `nodeRowId` and `policyRowId` start empty and are ass
 >
 > Read the Node value from the **`_ubsppcoe_node_value`** form, with the leading underscore and the `_value` suffix. `ubsppcoe_node` on a `List rows` result is not the GUID; it is either absent or an expanded object, depending on what was selected.
 >
-> **This is `Capacity Policies`.`_ubsppcoe_node_value` — note the missing `id`.** The workspace table's lookup is `ubsppcoe_nodeid`, read as `_ubsppcoe_nodeid_value`, and Step 5 uses that one. Two different columns four characters apart, both holding the same **Node row GUID** — which is what makes Step 5b's comparison valid; see [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §0.
+> **This is `Capacity Policies`.`_ubsppcoe_node_value` — note the missing `id`.** The workspace table's lookup is `ubsppcoe_nodeid`, read as `_ubsppcoe_nodeid_value`, and Step 5 uses that one. Two different columns four characters apart, both holding the same **Node row GUID** — which is what makes Step 5b's comparison valid; see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0.
 
 **Leave the *No* branch empty and continue at the top level.** Step 5 onwards are siblings of this Condition, not children of it — the *Yes* branch terminates, so nothing after it runs on that path. See the shape box in Step 1.
 
@@ -333,13 +333,13 @@ Everything except 5l, 5m and 5n sits at the top level.
 
 > ## ⚠ The soft-delete clause is not optional — added 2026-09-12, column confirmed 2026-09-15
 >
-> **`ubsppcoe_statecode` is a Choice: `1` = Active, `2` = Deleted on `ubsppcoe_Workspace`** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). It is a custom column, **not** Dataverse's system `statecode`, and the integer is unquoted.
+> **`ubsppcoe_statecode` is a Choice: `1` = Active, `2` = Deleted on `ubsppcoe_Workspace`** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). It is a custom column, **not** Dataverse's system `statecode`, and the integer is unquoted.
 >
 > **Without this clause a soft-deleted workspace stays whitelisted for ever.** Deleting a workspace does not clear `ubsppcoe_oapenabled` — it sets a state on a row that otherwise keeps every value it had. So the row still matches `_ubsppcoe_nodeid_value` and still matches `ubsppcoe_oapenabled eq true`, and every rebuild from now until the capacity is decommissioned re-publishes its GUID into rule 2.
 >
 > Fabric accepts a well-formed GUID for a workspace that no longer exists and never matches it, so **nothing fails and nothing reports it**. The rule set looks correct, the counts look correct, and the only symptom is a whitelist that grows and never shrinks.
 >
-> **`eq 1`, not `ne 2`.** This clause decides membership of a deny-all exemption, and [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) Q38's rule applies: a membership filter states what it wants, never what it excludes. If the platform team adds a third option, `eq 1` leaves those workspaces out of the whitelist until somebody decides; `ne 2` would publish them.
+> **`eq 1`, not `ne 2`.** This clause decides membership of a deny-all exemption, and [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) Q38's rule applies: a membership filter states what it wants, never what it excludes. If the platform team adds a third option, `eq 1` leaves those workspaces out of the whitelist until somebody decides; `ne 2` would publish them.
 >
 > **The old `ne true` form was wrong twice over.** Revisions before 2026-09-15 used a placeholder Boolean, `ubsppcoe_isdeleted ne true`. Against an option set that does not merely name the wrong column — the comparison itself is invalid. Do not carry it forward from an older copy.
 
@@ -407,7 +407,7 @@ Text mode is what makes this produce an array of plain strings rather than an ar
 | Select columns | `ubsppcoe_workspaceid` |
 | Row count | `5000` |
 
-Pagination on, threshold `5000`. **This query is tenant-wide, not per capacity** — `Policy Exceptions` has no capacity column, because which capacity an exception applies to is read from the workspace's `Node` in 5k ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3). A few hundred rows across the estate is a cheap read; if it ever stops being one, filter it down in 5k rather than adding a capacity column here.
+Pagination on, threshold `5000`. **This query is tenant-wide, not per capacity** — `Policy Exceptions` has no capacity column, because which capacity an exception applies to is read from the workspace's `Node` in 5k ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3). A few hundred rows across the estate is a cheap read; if it ever stops being one, filter it down in 5k rather than adding a capacity column here.
 
 > **Filter on `ubsppcoe_active eq true`, and remember it is nullable.** A row created by hand with the Yes/No column left untouched is `null`, and `eq true` excludes it — so a new exception that appears to do nothing is almost always an unset `active` flag. That is the right default (grant nothing), but say it on the screen that creates these rows.
 >
@@ -491,7 +491,7 @@ A bad filter now fails in well under half a minute instead of hanging.
 >
 > The symptom is nastier than a plain failure. `501` is a `5xx`, so the **default** retry policy treats it as transient and keeps retrying something that can never succeed — presenting as a `List rows` stuck at *0 seconds duration* with a climbing retry count for **thirty minutes**, rather than as an error.
 >
-> **That is not survivable for a child flow.** `Run a Child Flow` gives this flow roughly 120 seconds to answer ([MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5). An action that can burn thirty minutes takes the caller down with it, and in the estate-wide batch it would stall the whole queue behind one bad capacity.
+> **That is not survivable for a child flow.** `Run a Child Flow` gives this flow roughly 120 seconds to answer ([MIG_RebuildAllCapacityPolicies.md](../migration/MIG_RebuildAllCapacityPolicies.md) §5). An action that can burn thirty minutes takes the caller down with it, and in the estate-wide batch it would stall the whole queue behind one bad capacity.
 >
 > Two retries still cover a genuine Dataverse `429`, which is the only transient failure worth waiting for here.
 >
@@ -750,7 +750,7 @@ The body is the bare `@outputs(...)` form. Wrapping it in `@{ }` would send the 
 
 If throttling ever turns out to be routine rather than rare, tune it then. `migrate_policy_sets.ps1` settled on 5 retries with a 30-second floor, which is the obvious next step — but there is no reason to pay for it up front.
 
-> A `429` that survives the retries fails this flow, which stamps `last_error` and reports `Failed`. **Nothing retries it on its own** — the capacity keeps its stale `last_rebuild`, which puts it near the front of the next estate-wide run, but that run only happens when somebody starts it. **`Run a Child Flow` is not retried by callers**, which is deliberate — see [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5.
+> A `429` that survives the retries fails this flow, which stamps `last_error` and reports `Failed`. **Nothing retries it on its own** — the capacity keeps its stale `last_rebuild`, which puts it near the front of the next estate-wide run, but that run only happens when somebody starts it. **`Run a Child Flow` is not retried by callers**, which is deliberate — see [MIG_RebuildAllCapacityPolicies.md](../migration/MIG_RebuildAllCapacityPolicies.md) §5.
 
 Retries do not show as failures. To see whether they are happening, open a run, select `Replace_rules`, and check the attempt count.
 
@@ -774,7 +774,7 @@ Runs after `Replace_rules` on **is successful** and **has failed**.
 
 Writing the row on both paths is the point — a failed rebuild that leaves `last_error` blank is indistinguishable from a healthy one, and this table is what the app shows.
 
-> **The three counts are written for [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md), which cannot afford to compute them.** Counting enabled workspaces per capacity at read time is one Dataverse query per capacity, 200–300 of them inside a 120-second budget. This flow has all three numbers already.
+> **The three counts are written for [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md), which cannot afford to compute them.** Counting enabled workspaces per capacity at read time is one Dataverse query per capacity, 200–300 of them inside a 120-second budget. This flow has all three numbers already.
 >
 > They are stamped **on the failure path too, and that is deliberate**: they describe what Dataverse said at the time of the attempt, not what Fabric ended up holding. Paired with a non-blank `last_error` they read correctly — *"this is what we tried to publish, and it did not land"*. Writing them only on success would leave the previous run's numbers sitting next to a fresh failure, which is the more misleading of the two options.
 >
@@ -799,7 +799,7 @@ Status code lives on `outputs('Replace_rules')`, the payload on `body('Replace_r
 
 ### `PolicySetId` costs nothing and answers the support question
 
-It is already in a variable, so returning it is free. What it buys is a run history where **the policy set that was written is on the record next to the outcome**, rather than something you re-derive from `Capacity Policies` as it stands today — which is the wrong day to be reading it, because by then it may have been repointed. The estate-wide batch in [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) is where this pays: 250 child-flow runs in one parent, and the id is what ties a failure to a capacity without a second query.
+It is already in a variable, so returning it is free. What it buys is a run history where **the policy set that was written is on the record next to the outcome**, rather than something you re-derive from `Capacity Policies` as it stands today — which is the wrong day to be reading it, because by then it may have been repointed. The estate-wide batch in [MIG_RebuildAllCapacityPolicies.md](../migration/MIG_RebuildAllCapacityPolicies.md) is where this pays: 250 child-flow runs in one parent, and the id is what ties a failure to a capacity without a second query.
 
 > **Do not return the rule IDs.** `replaceByPolicy` responds with the rules it created, and it is tempting to keep them. They are regenerated with new IDs on every rebuild, so anything that stored them would be stale within a day, and nothing in this design addresses a rule by ID — that is the entire point of rebuilding wholesale.
 
@@ -830,20 +830,20 @@ A caller reading a field that the branch it happened to take never declared gets
 
 **This flow never creates a policy set.** It rewrites the rules of one that already exists, addressed by `policySetId`. With nothing seeded, the very first thing you hit is the Step 4 guard — which is test 6, not test 1.
 
-The build order deliberately puts this flow **before** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md), the flow that would normally create and register the set. So for now, seed it by hand:
+The build order deliberately puts this flow **before** [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md), the flow that would normally create and register the set. So for now, seed it by hand:
 
 | # | What | How |
 |---|---|---|
 | 1 | A **throwaway capacity that already has a `ubsppcoe_Node` row** | Pick an existing one — see below for how to tell. **Do not create the Node row** — that table belongs to the platform team and nothing in this project writes it (§0). If no spare capacity has one, that is a request to them, not a workaround |
 | 2 | A **policy set** in the holder workspace, scoped to that capacity | `POST /v1/workspaces/{holderWs}/policySets` by hand, or the Fabric portal. **Leave it deactivated** |
 | 3 | A row in **`Capacity Policies`**, created **by hand** | Tables → Capacity Policies → Data → **+ New row**. `ubsppcoe_capacityid` = the capacity GUID · `ubsppcoe_policysetid` = the set's GUID from 2 · `ubsppcoe_node` = the Node row from 1 · `ubsppcoe_status` = `Inactive`. Leave `lastrebuild`, `lasterror` and the three counts **empty** — Step 10a fills them, and watching that happen is part of the test |
-| 4 | At least one active row in **`Policy Item Types`** | Import [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv). Only needed once a workspace is whitelisted — see the warning below |
+| 4 | At least one active row in **`Policy Item Types`** | Import [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv). Only needed once a workspace is whitelisted — see the warning below |
 
 **Rules: none needed.** A freshly created policy set has no rules at all, and that is the right starting point — `replaceByPolicy` overwrites whatever is there, including nothing. Test 1 then proves the flow puts the deny-all baseline in.
 
 > **The `Node` lookup is picked by name, not by GUID.** The row selector shows `ubsppcoe_nodename`, so you need the node's name rather than the capacity id you started from. The Web API check below returns exactly that — `?$select=ubsppcoe_nodename`.
 
-> **This hand-made row will make flow 1 skip this capacity later.** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) returns `AlreadyExists` and stops when a `Capacity Policies` row already carries a `policy_set_id` — correct behaviour, but it means your test row masks the path you will want to test next. Delete it before building flow 1, or test flow 1 against a different capacity.
+> **This hand-made row will make flow 1 skip this capacity later.** [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) returns `AlreadyExists` and stops when a `Capacity Policies` row already carries a `policy_set_id` — correct behaviour, but it means your test row masks the path you will want to test next. Delete it before building flow 1, or test flow 1 against a different capacity.
 
 **Names: irrelevant to this flow.** It addresses the policy set by GUID and never reads or writes its display name. `pol_<capacity>` is a convention that flow 1 applies at creation, and `ubsppcoe_policysetname` on the row is only read by the drift scan and the app. Call your test set anything.
 

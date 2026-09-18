@@ -2,7 +2,7 @@
 
 Everything that has to exist in Dataverse before any capacity policy flow can be built. **Four tables are created by this project; two existing tables are read and never written.**
 
-Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3. This file is the build sheet — what to create, what to type into each column, and the rules that make the flows work.
+Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3. This file is the build sheet — what to create, what to type into each column, and the rules that make the flows work.
 
 > **Nothing is built yet.** Specification, not a description of something that exists.
 
@@ -10,7 +10,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ## 0. Rules that apply to every table here
 
-**Create tables and columns in the maker portal. Never by editing [customizations.xml](customizations.xml).** Hand-edited solution XML is how a column ends up with a schema name the designer will not show you and the connector will not offer.
+**Create tables and columns in the maker portal. Never by editing [customizations.xml](../../customizations.xml).** Hand-edited solution XML is how a column ends up with a schema name the designer will not show you and the connector will not offer.
 
 > ### The prefix is `ubsppcoe_`, and it is **not** a placeholder
 >
@@ -110,12 +110,12 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 >
 > | # | File | Where | What it does |
 > |---|---|---|---|
-> | 1 | [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Step 5b, `List_workspace_rows` | Excludes deleted workspaces from **rule 2**. Without it a deleted workspace stays whitelisted for ever |
-> | 2 | [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) | Step 5l, `List_exception_workspace_rows` | Excludes deleted workspaces from **rule 3** |
-> | 3 | [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | Step 1, trigger `Filter rows` | Stops a deleted workspace being treated as an addition |
-> | 4 | [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | Step 1, trigger `Filter rows` **and** `Select columns` | Makes a soft-delete fire the removal |
-> | 5 | [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Step 1, trigger `Filter rows` | Stops a decommissioned capacity being initialised |
-> | 6 | [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | Step 1, trigger `Filter rows` | The whole trigger for that flow |
+> | 1 | [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) | Step 5b, `List_workspace_rows` | Excludes deleted workspaces from **rule 2**. Without it a deleted workspace stays whitelisted for ever |
+> | 2 | [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) | Step 5l, `List_exception_workspace_rows` | Excludes deleted workspaces from **rule 3** |
+> | 3 | [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) | Step 1, trigger `Filter rows` | Stops a deleted workspace being treated as an addition |
+> | 4 | [RemoveWorkspaceFromPolicy.md](../bau/RemoveWorkspaceFromPolicy.md) | Step 1, trigger `Filter rows` **and** `Select columns` | Makes a soft-delete fire the removal |
+> | 5 | [InitializeCapacityPolicySet.md](../bau/InitializeCapacityPolicySet.md) | Step 1, trigger `Filter rows` | Stops a decommissioned capacity being initialised |
+> | 6 | [DeleteCapacityPolicySet.md](../bau/DeleteCapacityPolicySet.md) | Step 1, trigger `Filter rows` | The whole trigger for that flow |
 >
 > ### What the earlier draft got wrong, and why it matters
 >
@@ -139,11 +139,11 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 >
 > `_ubsppcoe_nodeid_value eq <nodeRowId>` — unquoted, as always for a lookup.
 >
-> Flows that already read a `ubsppcoe_CapacityPolicy` row get the second hop for free: `_ubsppcoe_node_value` is the same Node row GUID, so no query against `ubsppcoe_Node` is needed. Only [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) and [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) resolve it directly.
+> Flows that already read a `ubsppcoe_CapacityPolicy` row get the second hop for free: `_ubsppcoe_node_value` is the same Node row GUID, so no query against `ubsppcoe_Node` is needed. Only [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) and [AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md) resolve it directly.
 
 > ### No flow writes either table. Ever.
 >
-> `ubsppcoe_oapenabled` is an internal flag meaning *this workspace has OAP enabled and gets the rest of the Fabric treatment*. Capacity policy is a downstream consumer of it. If a build step wants an `Update a row` against **`ubsppcoe_Workspace` or `ubsppcoe_Node`**, the design has been misread — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3.
+> `ubsppcoe_oapenabled` is an internal flag meaning *this workspace has OAP enabled and gets the rest of the Fabric treatment*. Capacity policy is a downstream consumer of it. If a build step wants an `Update a row` against **`ubsppcoe_Workspace` or `ubsppcoe_Node`**, the design has been misread — see [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3.
 >
 > **State this by table name, never by prefix.** Since 2026-09-07 our own tables carry `ubsppcoe_` too, so "do not write `ubsppcoe_`" is no longer a rule that means anything.
 
@@ -189,17 +189,17 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **`ubsppcoe_node` is a lookup, not a text column.** It stores the Node row GUID, so renaming a node cannot break it, and it lets the rebuild read the policy set id and the Node row in **one** `List rows` call. Read it as `_ubsppcoe_node_value`; plain `ubsppcoe_node` on a `List rows` result is either absent or an expanded object depending on what was selected.
 
-**This table's lookup is `ubsppcoe_node` / `_ubsppcoe_node_value`; the workspace table's is `ubsppcoe_nodeid` / `_ubsppcoe_nodeid_value`.** Different columns, different tables, four characters apart — see the near-miss box in §0. Both hold the same **Node row GUID**, which is what makes comparing them meaningful in [RemoveWorkspaceFromPolicy.md](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) Step 3b.
+**This table's lookup is `ubsppcoe_node` / `_ubsppcoe_node_value`; the workspace table's is `ubsppcoe_nodeid` / `_ubsppcoe_nodeid_value`.** Different columns, different tables, four characters apart — see the near-miss box in §0. Both hold the same **Node row GUID**, which is what makes comparing them meaningful in [RemoveWorkspaceFromPolicy.md](../bau/RemoveWorkspaceFromPolicy.md) Step 3b.
 
-**`_ubsppcoe_node_value` and `ubsppcoe_capacityid` hold *different* GUIDs.** The lookup holds the Node row key `ubsppcoe_nodeid`; `ubsppcoe_capacityid` holds the Fabric capacity id, which lives on the Node row as `ubsppcoe_nodeuniqueid` (§1). Both are needed and neither substitutes for the other: `ubsppcoe_capacityid` is what callers pass and what Fabric understands, and it survives the Node row being deleted; the lookup enforces that the Node exists and gives navigation from the platform team's side. **Corrected 2026-09-09** — they were previously documented as the same value, and Q29's agreement check was defined on that basis; it must now compare `ubsppcoe_capacityid` against the linked Node's `ubsppcoe_nodeuniqueid`, not against the lookup. See Q29 in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+**`_ubsppcoe_node_value` and `ubsppcoe_capacityid` hold *different* GUIDs.** The lookup holds the Node row key `ubsppcoe_nodeid`; `ubsppcoe_capacityid` holds the Fabric capacity id, which lives on the Node row as `ubsppcoe_nodeuniqueid` (§1). Both are needed and neither substitutes for the other: `ubsppcoe_capacityid` is what callers pass and what Fabric understands, and it survives the Node row being deleted; the lookup enforces that the Node exists and gives navigation from the platform team's side. **Corrected 2026-09-09** — they were previously documented as the same value, and Q29's agreement check was defined on that basis; it must now compare `ubsppcoe_capacityid` against the linked Node's `ubsppcoe_nodeuniqueid`, not against the lookup. See Q29 in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
 
-**A blank `ubsppcoe_node` makes the rebuild fail closed.** That is deliberate — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a. It means the column must be *allowed* to be blank at the schema level, because flow 1 writes it and a partially-created row has to be legible rather than rejected.
+**A blank `ubsppcoe_node` makes the rebuild fail closed.** That is deliberate — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 5a. It means the column must be *allowed* to be blank at the schema level, because flow 1 writes it and a partially-created row has to be legible rather than rejected.
 
 **The three counts are a cache, not a source of truth.** They exist so `ListCapacityPolicySets` is one table read instead of a query per capacity. Always render them beside `ubsppcoe_lastrebuild`, or a stale number will be read as current.
 
 **Consider an alternate key on `ubsppcoe_capacityid`.** Flow 1 checks for an existing row and then writes one, with nothing between the two. Two concurrent calls for the same capacity produce two rows and one orphaned policy set in Fabric that nothing maps back to. A uniqueness constraint turns that into a clean failure.
 
-**Do not put these columns on `ubsppcoe_Node` instead.** Ownership, write churn, lifecycle and deletion all decide against it — see [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3, Q22.
+**Do not put these columns on `ubsppcoe_Node` instead.** Ownership, write churn, lifecycle and deletion all decide against it — see [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3, Q22.
 
 ---
 
@@ -222,7 +222,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **`ubsppcoe_itemtype` is passed to Fabric unchanged.** No mapping, no casing fix, no trimming. A typo here produces a rule Fabric accepts and never matches.
 
-**Seed from [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv)** — 14 rows, ready to import. An empty table means rule 2 is emitted with an empty `item.type` list, which Fabric rejects.
+**Seed from [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv)** — 14 rows, ready to import. An empty table means rule 2 is emitted with an empty `item.type` list, which Fabric rejects.
 
 > ### One row per `ubsppcoe_itemtype`, and the source file is not
 >
@@ -269,7 +269,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ### Rules
 
-**There is no capacity column, and adding one is a design change.** The capacity an exception applies to is read from the workspace's `Node` lookup at rebuild time. That is what makes a capacity move behave correctly with no cleanup step — and it is also why an exception follows its workspace without re-approval. Both consequences are argued in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3; do not add a `capacity` lookup without reopening Q35.
+**There is no capacity column, and adding one is a design change.** The capacity an exception applies to is read from the workspace's `Node` lookup at rebuild time. That is what makes a capacity move behave correctly with no cleanup step — and it is also why an exception follows its workspace without re-approval. Both consequences are argued in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3; do not add a `capacity` lookup without reopening Q35.
 
 **`ubsppcoe_active` must default to No.** A row created by hand with the flag untouched is `null`, and the rebuild's `ubsppcoe_active eq true` filter excludes it. Granting nothing is the correct default, but the screen that creates these rows should say so — a new exception that appears to do nothing is almost always an unset flag.
 
@@ -277,7 +277,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **No flow writes this table.** Rows are created by hand in the maker portal or by the app through the Dataverse connector. **A row edit does not publish itself** — deactivating an exception is not live until that capacity is rebuilt.
 
-**Seed before cutover, from [input/PolicyExceptions.csv](input/PolicyExceptions.csv).** Rule 3 membership is derived from nothing else, so a migrated exception that was never copied here disappears at the first rebuild — quietly, from a workspace that until then could create anything.
+**Seed before cutover, from [input/PolicyExceptions.csv](../input/PolicyExceptions.csv).** Rule 3 membership is derived from nothing else, so a migrated exception that was never copied here disappears at the first rebuild — quietly, from a workspace that until then could create anything.
 
 > **That file is a template with three example rows, not data. Delete them.** Every row is marked `EXAMPLE` and carries a placeholder GUID; importing it as shipped grants nothing, because the GUIDs match no workspace — but it leaves three rows in a table whose whole purpose is to be short and reviewable.
 >
@@ -289,7 +289,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ## 5. `Policy Drift` — **dropped**
 
-> **Dropped from Dataverse on 2026-09-18. Do not recreate it.** Its only writer was `SyncCapacityPolicySets`, which was discarded — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). A table with no writer is an empty table somebody will one day read and take for a clean bill of health.
+> **Dropped from Dataverse on 2026-09-18. Do not recreate it.** Its only writer was `SyncCapacityPolicySets`, which was discarded — [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md). A table with no writer is an empty table somebody will one day read and take for a clean bill of health.
 >
 > The specification below is kept for the record, and is what to build from if drift detection is ever revived (**Q11**).
 
@@ -340,16 +340,16 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 >
 > Table `Logging`, three columns, **picked from the designer dropdowns by display name**. That is what closes this: *Add a new row* lists columns by display name, so nothing here has to know the logical names.
 >
-> **The logical names are still unrecorded, and that is acceptable only because this table is insert-only.** Nothing filters it, reads a row back, or references a column in an OData expression — the one place a logical name would be needed. If that ever changes, get the names from the platform team rather than deriving them from the display names; that is the `ubsppcoe_isdeleted` mistake of 2026-09-15 ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) Q46) waiting to happen again.
+> **The logical names are still unrecorded, and that is acceptable only because this table is insert-only.** Nothing filters it, reads a row back, or references a column in an OData expression — the one place a logical name would be needed. If that ever changes, get the names from the platform team rather than deriving them from the display names; that is the `ubsppcoe_isdeleted` mistake of 2026-09-15 ([CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) Q46) waiting to happen again.
 
 ### Only four flows write here
 
 | Flow | Event |
 |---|---|
-| [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | Workspace added to a policy |
-| [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | Workspace removed |
-| [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | Capacity added |
-| [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | Capacity deleted |
+| [AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md) | Workspace added to a policy |
+| [RemoveWorkspaceFromPolicy](../bau/RemoveWorkspaceFromPolicy.md) | Workspace removed |
+| [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) | Capacity added |
+| [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) | Capacity deleted |
 
 **The rebuild, sync and `MIG_` flows do not.** That is a deliberate scope limit, not an oversight. These four are the ones that change who can create what, one event at a time, in response to another team's edit — so a silent failure in one of them is a governance gap nobody would otherwise notice. The rebuild already stamps `ubsppcoe_lasterror`; the `MIG_` flows are supervised by a person watching the run.
 
@@ -367,13 +367,13 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 > concat('https://flow.microsoft.com/manage/environments/', workflow()?['tags']?['environmentName'], '/flows/', workflow()?['name'], '/runs/', workflow()?['run']?['name'])
 > ```
 >
-> **Keep `workflow()?['run']?['name']` in the string whatever happens.** The bare run ID is portal-independent and is what makes a run findable by search if the URL format changes. It is already load-bearing for the same reason in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b.
+> **Keep `workflow()?['run']?['name']` in the string whatever happens.** The bare run ID is portal-independent and is what makes a run findable by search if the URL format changes. It is already load-bearing for the same reason in [AddWorkspaceToPolicy.md](../bau/AddWorkspaceToPolicy.md) Step 7b.
 
 **`Log Source Name` is the flow's display name, not its GUID** — `workflow()?['tags']?['flowDisplayName']`. Plain `workflow()?['name']` is the flow's GUID, which is stable but unreadable in a log somebody else reads too.
 
 **`ubsppcoe_lasterror` stays exactly as it is.** It is now the *only* place the actual error text lands, which makes it more important than before rather than redundant. The split is: `Capacity Policies`.`ubsppcoe_lasterror` holds **what went wrong**, `Logging` holds **that it went wrong and where to look**. Neither replaces the other, and the guard that made this worth revisiting still bites — where `policyRowId` is empty there is no row to write to, so for those runs the `Logging` row and the run history are the only trace.
 
-**Writing a row here does not substitute for the `Terminate`.** Verified in [SCOPE-SANDBOX.md](docs/flows/capacity-policies/SCOPE-SANDBOX.md) E7: a Catch that only logs produces a **green run**. Nobody watches a table, least of all a shared one. Every Catch still ends with `Terminate` status **Failed**.
+**Writing a row here does not substitute for the `Terminate`.** Verified in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E7: a Catch that only logs produces a **green run**. Nobody watches a table, least of all a shared one. Every Catch still ends with `Terminate` status **Failed**.
 
 **Insert only. Never update, never delete, never query it for logic.** It is a shared append-only log; another team's retention job may remove rows on a schedule we do not control, so nothing in these flows may read a row back and act on it.
 
@@ -406,10 +406,10 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 3. **On each *New table* screen, set the primary column before saving** — expand **Advanced options** to set its logical name. This is the one thing you cannot change afterwards (§0).
 4. Add the remaining columns with **+ New column**. Everything marked *Add manually* in §2–§5; nothing marked *Automatic*.
 5. Set both `ubsppcoe_active` columns to default **No**.
-4. Seed `ubsppcoe_PolicyItemType` from [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv) — **not** from the raw `fabric_item_types.csv`, which has nine rows sharing one item type (§3).
-7. Seed `ubsppcoe_PolicyException` from [input/PolicyExceptions.csv](input/PolicyExceptions.csv) — **a template, not data.** Delete its three `EXAMPLE` rows and replace them with the real workspace GUIDs (§4).
-8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1.
-9. Only then start on [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+4. Seed `ubsppcoe_PolicyItemType` from [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv) — **not** from the raw `fabric_item_types.csv`, which has nine rows sharing one item type (§3).
+7. Seed `ubsppcoe_PolicyException` from [input/PolicyExceptions.csv](../input/PolicyExceptions.csv) — **a template, not data.** Delete its three `EXAMPLE` rows and replace them with the real workspace GUIDs (§4).
+8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](../../docs/OPEN-ISSUES.md) §8.1.
+9. Only then start on [GetPolicyToken.md](../discarded/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -592,7 +592,7 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 
 **The schema name comes from your solution's publisher**, so creating these inside the solution from 8.2 produces the `ubsppcoe_` names above automatically. Type only the part after the prefix — the box already shows `ubsppcoe_`.
 
-**Five, not six.** [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
+**Five, not six.** [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
 
 **Both numeric ones are Text, deliberately.** The flows wrap them in `int(...)` at the point of use. A Dataverse *Number* environment variable returns a value the expression engine handles inconsistently; Text plus an explicit cast is the version that behaves.
 

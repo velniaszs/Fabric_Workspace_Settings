@@ -4,7 +4,7 @@
 
 > **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) (the loop that calls this), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) (the BAU flow this is derived from), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
+Related: [MIG_RegisterAllCapacityPolicySets.md](MIG_RegisterAllCapacityPolicySets.md) (the loop that calls this), [MIG_ActivateAllCapacityPolicySets.md](MIG_ActivateAllCapacityPolicySets.md), [InitializeCapacityPolicySet.md](../bau/InitializeCapacityPolicySet.md) (the BAU flow this is derived from), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 
 ---
 
@@ -12,7 +12,7 @@ Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG
 
 Three reasons, and the first is the one that forces the issue.
 
-**A Power Apps (V2) trigger cannot be called by `Run a Child Flow`.** [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) has one, so a loop cannot call it. Something with a *Manually trigger a flow* trigger has to exist.
+**A Power Apps (V2) trigger cannot be called by `Run a Child Flow`.** [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) has one, so a loop cannot call it. Something with a *Manually trigger a flow* trigger has to exist.
 
 **Migration must not activate.** The estate has to land **deactivated**, so that flags and exceptions can be reconciled and rules rebuilt before anything is enforced. Bolting a `mode` input onto the BAU flow would put a branch in a tested flow that is dead weight for the rest of its life.
 
@@ -27,17 +27,17 @@ Three reasons, and the first is the one that forces the issue.
 > | Step 8c — `Activate` | Separate, deliberate step. See §0 above |
 > | Step 8d/8e — the status flip | Nothing to flip. Rows are written `Inactive` and stay that way until activation |
 >
-> **Dropping Step 4 makes this flow unsafe to run standalone.** It will happily create a policy set for a paused capacity, a P-SKU, or a GUID that is not a capacity at all, because nothing checks. That is acceptable for a tool that only ever runs behind [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) — but do not hand this flow to anyone as a one-off fixer. Use the BAU flow for that.
+> **Dropping Step 4 makes this flow unsafe to run standalone.** It will happily create a policy set for a paused capacity, a P-SKU, or a GUID that is not a capacity at all, because nothing checks. That is acceptable for a tool that only ever runs behind [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md) — but do not hand this flow to anyone as a one-off fixer. Use the BAU flow for that.
 
 ---
 
 ## 1. Before you start
 
-- Build this **before** [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md), which calls it.
-- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
-- The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md).
+- Build this **before** [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md), which calls it.
+- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
+- The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md).
 
-> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](docs/flows/nocustomcon/GetFabricToken.md).
+> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md).
 >
 > It is about twenty actions and every value is below, so building it from this document is quicker than fighting the platform. **Use ⋯ → *Copy to my clipboard* on the three Step 5 Composes** and paste them into the new flow — those expressions are long enough that retyping them is where a typo would come from, and they are unchanged from the BAU flow.
 
@@ -151,15 +151,15 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 
 > ## ⚠ The `ne 2` clause was missing until 2026-09-15
 >
-> **`ubsppcoe_statecode` is a Choice; on `ubsppcoe_Node`, `2` = Deleted and the other ten of eleven options are live** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Unquoted integer. It is a custom column, not Dataverse's system `statecode`.
+> **`ubsppcoe_statecode` is a Choice; on `ubsppcoe_Node`, `2` = Deleted and the other ten of eleven options are live** ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). Unquoted integer. It is a custom column, not Dataverse's system `statecode`.
 >
 > **Without it this flow registers capacities the inventory has decommissioned.** The parent filters on what Fabric reports, and Fabric knows nothing about a soft-deleted Node row — so a capacity that is still Active and F-SKU in Fabric, but marked Deleted in `ubsppcoe_Node`, sails through the parent and lands here. The lookup would find the row, Step 8 would bind to it, and the capacity would enter the migration backlog as a normal registration.
 >
-> **It does not stop there, which is why this is worth a box.** That row is written `Inactive`, so `MIG_RebuildAllCapacityPolicies` builds rules for it and [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) then activates it — putting deny-all on a capacity the platform team has retired, with nothing anywhere reporting it. It also contradicts [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md), whose entire trigger is `ubsppcoe_statecode eq 2`: BAU deletes those policy sets, migration was creating them.
+> **It does not stop there, which is why this is worth a box.** That row is written `Inactive`, so `MIG_RebuildAllCapacityPolicies` builds rules for it and [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md) then activates it — putting deny-all on a capacity the platform team has retired, with nothing anywhere reporting it. It also contradicts [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md), whose entire trigger is `ubsppcoe_statecode eq 2`: BAU deletes those policy sets, migration was creating them.
 >
-> **`ne 2`, not `eq 1`** — the same asymmetry as the BAU [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) Step 1. `eq 1` would exclude nine live states and quietly skip most of the estate.
+> **`ne 2`, not `eq 1`** — the same asymmetry as the BAU [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 1. `eq 1` would exclude nine live states and quietly skip most of the estate.
 
-**This step exists to fetch `ubsppcoe_nodeid`, the Node row's primary key** — a *different* GUID from the capacity id, and the one Step 8's lookup must bind to ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1). Leave **Select columns** empty, or include `ubsppcoe_nodeid` explicitly.
+**This step exists to fetch `ubsppcoe_nodeid`, the Node row's primary key** — a *different* GUID from the capacity id, and the one Step 8's lookup must bind to ([CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §1). Leave **Select columns** empty, or include `ubsppcoe_nodeid` explicitly.
 
 `Condition_node_missing` — **Condition**:
 
@@ -180,9 +180,9 @@ Seeding `outcome` with `Failed` means a path nobody anticipated reports failure 
 >
 > **Splitting them into two outcomes is a reasonable enhancement and is deliberately not built.** It needs the filter relaxed back to `ubsppcoe_nodeuniqueid` alone, a second Condition on the returned row's `ubsppcoe_statecode`, a fifth outcome, and a fifth `Switch` case plus a third bucket in the parent. For a disposable migration tool the message text buys most of the value for none of that.
 
-> **`NoNode`, not `Failed`, and the distinction is the point.** This is not something you can fix — it is a gap in the platform team's inventory, and it needs a different conversation from a duplicate name or a permissions error. The parent switches on this value directly to keep the two lists apart ([MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) §2).
+> **`NoNode`, not `Failed`, and the distinction is the point.** This is not something you can fix — it is a gap in the platform team's inventory, and it needs a different conversation from a duplicate name or a permissions error. The parent switches on this value directly to keep the two lists apart ([MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md) §2).
 
-> **This is the finding migration exists to surface.** Nothing else in the estate reveals a capacity with no inventory record, and the consequence is severe: registered, activated, and permanently un-rebuildable, because [RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) Step 5a fails closed on a blank `node` lookup, for the life of that capacity.
+> **This is the finding migration exists to surface.** Nothing else in the estate reveals a capacity with no inventory record, and the consequence is severe: registered, activated, and permanently un-rebuildable, because [RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md) Step 5a fails closed on a blank `node` lookup, for the life of that capacity.
 >
 > Failing **before** anything is created in Fabric is what keeps that recoverable. The parent's failure list is the deliverable: it is the list to hand the platform team.
 
@@ -276,7 +276,7 @@ Status code is on `outputs(...)`, never on `body(...)`.
 4. `Get_operation_result` — **Invoke an HTTP request**, `GET https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}/result`.
 5. `Set_policySetId_async` — Set variable → `policySetId` = `body('Get_operation_result')?['id']`.
 
-> **`PT90S`, not the BAU flow's `PT10M`.** This flow is called by `Run a Child Flow`, which must get its `Respond` back within roughly **120 seconds** ([MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §5). A ten-minute poll would hang the parent and take the whole migration run down with it.
+> **`PT90S`, not the BAU flow's `PT10M`.** This flow is called by `Run a Child Flow`, which must get its `Respond` back within roughly **120 seconds** ([MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) §5). A ten-minute poll would hang the parent and take the whole migration run down with it.
 >
 > Ninety seconds fails *inside* the parent's budget, so a slow create costs one capacity in the failure list instead of the run. Creation almost always answers `201`, so this branch should be rare — but "rare" across 200 capacities is not "never".
 
@@ -309,7 +309,7 @@ Status code is on `outputs(...)`, never on `body(...)`.
 
 > **`ubsppcoe_status` is the plain text column, not the system `statecode`/`statuscode` pair.** Writing the system pair would soft-deactivate the row, hiding it from `List rows` — so the next run would report `Registered` again and create a second policy set.
 >
-> `Inactive` is not a placeholder here. It is the value [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) selects on, so it is the migration backlog.
+> `Inactive` is not a placeholder here. It is the value [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md) selects on, so it is the migration backlog.
 
 Leave `ubsppcoe_lastrebuild`, `ubsppcoe_lasterror` and the three counts **empty**. `MIG_RebuildAllCapacityPolicies` fills them later, and an empty `lastrebuild` is what proves a capacity has not yet been through the rebuild phase.
 
