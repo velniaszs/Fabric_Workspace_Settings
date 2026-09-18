@@ -2,7 +2,7 @@
 
 What the app reads. Returns every managed capacity and the state of its policy set, as one JSON string.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3 and §4, [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md).
 

@@ -2,7 +2,7 @@
 
 Confirms that a workspace really is whitelisted on a capacity, then rebuilds that capacity's rules. **Writes nothing to Dataverse except an error, and only when one occurs.**
 
-> **Built in the customer environment — not verified against an export.** Both conversions below are **done**: the Dataverse trigger replaced the Power Apps (V2) one, and the try/catch scopes are in place. The tables below are kept as the record of how the flow got here. The solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition — treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** Both conversions below are **done**: the Dataverse trigger replaced the Power Apps (V2) one, and the try/catch scopes are in place. The tables below are kept as the record of how the flow got here.
 
 > ## Converting the built flow — 2026-09-11
 >

@@ -2,7 +2,7 @@
 
 Creates the policy set for a newly inventoried capacity, registers it in Dataverse, builds the default rules and activates it. **Fires on a `ubsppcoe_Node` row appearing.**
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 > ## Retriggered 2026-09-12 — no longer called by the provisioning app
 >

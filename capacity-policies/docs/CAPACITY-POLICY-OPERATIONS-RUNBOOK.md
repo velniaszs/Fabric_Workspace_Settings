@@ -13,7 +13,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACIT
 | Event | Run | Who triggers it |
 |---|---|---|
 | **Capacity created** | `InitializeCapacityPolicySet` | Provisioning app |
-| **Capacity deleted** | Manual cleanup — §2. `DeleteCapacityPolicySet` is **specified but not built** | You |
+| **Capacity deleted** | `DeleteCapacityPolicySet` — fires on the `ubsppcoe_Node` soft-delete. Manual cleanup only if it did not run, §2 | Platform team's delete |
 | **Workspace added and to be whitelisted** | `AddWorkspaceToPolicy` | App |
 | **Workspace deleted** | `RemoveWorkspaceFromPolicy` | App |
 | **Workspace moved between capacities** | `RemoveWorkspaceFromPolicy` on the **old**, then `AddWorkspaceToPolicy` on the **new** | App |
@@ -29,7 +29,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACIT
 >
 > They still do the second job they always did: **telling you whether the change actually did what you meant.** `NotEnabled` and `StillEnabled` are the whole value; a bare rebuild could not report either.
 >
-> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a deleted capacity (§2), a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
+> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
 
 ---
 
@@ -66,13 +66,13 @@ A `Failed` from activation still leaves the policy set **registered** — that i
 
 ## 2. A capacity is deleted
 
-**No flow does this yet.** It is manual, and it is the one event with no automation in place.
+**Run:** nothing. [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) fires on the `ubsppcoe_Node` soft-delete and handles it.
 
-> ### There is now a design for it — [DeleteCapacityPolicySet.md](../bau/DeleteCapacityPolicySet.md)
+> ### What it does
 >
-> It fires on the `ubsppcoe_Node` soft-delete, asks `GET /v1/capacities` whether the capacity is really gone, and then either **deletes** the policy set (`status = Deleted`) or, if Fabric still has the capacity, **deactivates only** (`status = Suspended`) and reports the disagreement.
+> It asks `GET /v1/capacities` whether the capacity is really gone, and then either **deletes** the policy set (`status = Deleted`) or, if Fabric still has the capacity, **deactivates only** (`status = Suspended`) and reports the disagreement. §0 of that document carries the argument it was agreed on — it is the only flow in the design that removes enforcement, on a signal another team controls.
 >
-> **It is a specification, not a built flow, and §0 of that document is an open decision** — it is the only flow in the design that removes enforcement, on a signal another team controls. Until it is agreed and built, the manual steps below are the procedure.
+> **The manual steps below are the fallback**, for a capacity retired before this flow existed, or one where the run failed and nobody acted on it.
 
 ### What happens if you do nothing
 

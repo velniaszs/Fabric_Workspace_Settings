@@ -2,7 +2,7 @@
 
 Deactivates and deletes a capacity's policy set when its `ubsppcoe_Node` row is removed, and clears the `Capacity Policies` row that pointed at it.
 
-> **Not built, and not yet agreed.** This is a specification and an argument, not a description of something that exists. **Read §0 before building any of it** — this is the only flow in the design that *removes* enforcement, and it is triggered by another team's delete.
+> **Built in the customer environment.** §0 records the argument this flow was agreed on — it is the only one in the design that *removes* enforcement, and it is triggered by another team's delete. Read it before changing anything here.
 
 Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) — the flow this undoes, [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §2.
 

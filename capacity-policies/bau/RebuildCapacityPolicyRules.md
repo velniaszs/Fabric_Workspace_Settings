@@ -2,7 +2,7 @@
 
 Child flow. **The only flow that writes policy rules.** Reads the desired state from Dataverse — the OAP-enabled workspaces under a capacity's Node row, plus this project's own exception list — and replaces every `ItemCreation` rule on that capacity's policy set in a single call.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §2 and §3, [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md), [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md).
 

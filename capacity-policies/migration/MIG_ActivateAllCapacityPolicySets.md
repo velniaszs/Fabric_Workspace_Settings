@@ -2,7 +2,7 @@
 
 **Migration only.** Activates every registered-but-inactive policy set. **This is the step that puts deny-all into force across the estate**, and it is the only migration flow that changes anyone's access.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [MIG_RegisterAllCapacityPolicySets.md](MIG_RegisterAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) (must have run first), [InitializeCapacityPolicySet.md](../bau/InitializeCapacityPolicySet.md) 8c (the same call, for one capacity), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 
@@ -138,7 +138,7 @@ Each clause earns its place:
 >
 > **[DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) is what closes the gap**, by moving the row's `ubsppcoe_status` to `Deleted` or `Suspended`. Neither matches `eq 'Inactive'`, so the row drops out of this query without any clause here.
 >
-> **That only holds if the flow is switched on before the registration run**, and it is still marked *new, not agreed* ([CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8). **If it is not live, do not rely on this query** — take the `noNode` list from the registration run as the exclusion list and check it by hand before activating, because activation is the step that actually denies people access.
+> **That only holds if [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) is switched on before the registration run.** **If it is not live, do not rely on this query** — take the `noNode` list from the registration run as the exclusion list and check it by hand before activating, because activation is the step that actually denies people access.
 
 `Compose_candidate_count` — **Compose**, `@{length(body('List_inactive_rows')?['value'])}`. So the run history answers "how many?" without expanding the array.
 

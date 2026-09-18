@@ -2,7 +2,7 @@
 
 **Migration only.** Child flow. Creates one capacity's policy set and registers it in Dataverse — and stops there. It does **not** build rules and does **not** activate.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [MIG_RegisterAllCapacityPolicySets.md](MIG_RegisterAllCapacityPolicySets.md) (the loop that calls this), [MIG_ActivateAllCapacityPolicySets.md](MIG_ActivateAllCapacityPolicySets.md), [InitializeCapacityPolicySet.md](../bau/InitializeCapacityPolicySet.md) (the BAU flow this is derived from), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 

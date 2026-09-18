@@ -2,7 +2,7 @@
 
 **Migration only.** The loop. Walks every eligible Fabric capacity, creates and registers a policy set for each, and leaves them all **deactivated**. Run by hand, once, in tranches.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](MIG_ActivateAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](MIG_RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §8.
 

@@ -271,7 +271,7 @@ Build instructions are one file per flow — the seven BAU flows in [bau/](../ba
 |---|---|---|
 | [RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md) | Manual (child) | **The only writer of rules.** Rebuilds one capacity from the tables |
 | [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` added/modified** | Creates, registers, builds and activates a new capacity's policy set |
-| [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` soft-deleted** | Deactivates and suspends a retired capacity's policy set. **New, not agreed** |
+| [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` soft-deleted** | Deactivates and suspends a retired capacity's policy set |
 | [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md) | Power Apps (V2) | What the app reads. One table, no Fabric calls |
 | [AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md) | **Dataverse — `ubsppcoe_Workspace` added or modified**, `oapenabled eq true` | Publish a workspace becoming whitelisted |
 | [RemoveWorkspaceFromPolicy](../bau/RemoveWorkspaceFromPolicy.md) | **Dataverse — `ubsppcoe_Workspace` added or modified**, `oapenabled ne true` or soft-deleted | Publish a workspace losing its whitelist |
@@ -295,7 +295,7 @@ Build instructions are one file per flow — the seven BAU flows in [bau/](../ba
 >
 > **Q17 is closed by soft delete, partially — and reopened by the 2026-09-16 retrigger.** A deleted workspace is now a `Modified` event that `RemoveWorkspaceFromPolicy` can act on. A workspace **moving** capacity still is not: the flag does not change, so neither flow fires, and the old capacity keeps it. That used to be corrected by the nightly rebuild **within a day**; with no schedule it is corrected only when somebody runs [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md). See Q49.
 >
-> **Two decisions are outstanding and both are in the flow documents rather than here.** `InitializeCapacityPolicySet` now activates a deny-all with nobody deciding, and nothing retries a capacity it skipped. `DeleteCapacityPolicySet` removes enforcement on another team's signal, and nothing restores it when they reverse that signal.
+> **Two accepted risks live in the flow documents rather than here.** `InitializeCapacityPolicySet` activates a deny-all with nobody deciding, and nothing retries a capacity it skipped. `DeleteCapacityPolicySet` removes enforcement on another team's signal, and nothing restores it when they reverse that signal — if the platform team clears the soft-delete flag, the capacity comes back **ungoverned while looking registered**.
 
 ### Plus four `MIG_` flows, which are not part of BAU
 

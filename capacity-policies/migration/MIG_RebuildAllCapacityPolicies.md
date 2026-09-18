@@ -2,7 +2,7 @@
 
 Manual. Rebuilds every capacity's rules from Dataverse in one pass, when somebody runs it. The backstop that makes Dataverse genuinely the source of truth rather than merely the intended one.
 
-> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
+> **Built in the customer environment.** This document is the specification it was built from.
 
 Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md).
 
