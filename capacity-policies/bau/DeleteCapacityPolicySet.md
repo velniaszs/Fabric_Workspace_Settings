@@ -4,7 +4,9 @@ Deactivates and deletes a capacity's policy set when its `ubsppcoe_Node` row is 
 
 > **Not built, and not yet agreed.** This is a specification and an argument, not a description of something that exists. **Read §0 before building any of it** — this is the only flow in the design that *removes* enforcement, and it is triggered by another team's delete.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) — the flow this undoes, [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md), [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2.
+Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) — the flow this undoes, [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §2.
+
+> **Every reference in this document to a drift scan catching something is now void.** `SyncCapacityPolicySets` was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). Where this document said the scan would eventually notice an orphan, read: **nothing notices it.**
 
 ---
 
@@ -35,9 +37,9 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 >
 > The earlier draft claimed a deactivated set scoped to a retired capacity costs nothing. Three reasons it does:
 >
-> **It degrades the detector.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) reports policy sets it cannot map to a live capacity as `Untracked` — that is how a genuine orphan is found. Manufacturing them deliberately, one per retired capacity, buries the real ones in noise until nobody reads the report.
+> **It leaves orphans nothing will ever find.** A deactivated set scoped to a retired capacity is indistinguishable from one left behind by a failure. There is no drift scan to report either — so manufacturing orphans deliberately, one per retired capacity, means the holder workspace fills with items no process accounts for.
 >
-> **The holder workspace accumulates.** One workspace holds every policy set in the estate, 200–300 of them, and the scheduled drift scan walks all of them inside a fixed budget. Every capacity ever retired would stay in that list permanently.
+> **The holder workspace accumulates.** One workspace holds every policy set in the estate, 200–300 of them, and anyone auditing it by hand — which is now the only way it gets audited — has to read past every capacity ever retired.
 >
 > **The audit value is not in the Fabric item.** Rules are regenerated wholesale on every rebuild, so the item carries no history. Everything worth keeping — policy set name and id, last rebuild, last error, the Node link — is on the `Capacity Policies` row, and **that row is what should be retained**, not the item.
 
@@ -85,7 +87,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 
 **`eq 2` here, not `ne 2`.** This is the one filter in the design that wants the deleted rows rather than the live ones, so the test inverts. `ubsppcoe_Node` has **11 options** and only `2` is Deleted — so `ne 2` here would fire this flow on every ordinary lifecycle change and start deleting policy sets for capacities that are merely being reprovisioned. **Getting this one backwards destroys policy sets on live capacities**, which is why it is stated twice.
 
-**`Modified`, not `Deleted`.** A soft delete is a column change. Ticking `Deleted` as well would add a trigger for hard deletes, which this flow cannot service — the row would be unreadable and the capacity underivable. **Leave `Deleted` off**, and accept that a genuine hard delete is invisible here; [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) is what would eventually notice the orphan.
+**`Modified`, not `Deleted`.** A soft delete is a column change. Ticking `Deleted` as well would add a trigger for hard deletes, which this flow cannot service — the row would be unreadable and the capacity underivable. **Leave `Deleted` off**, and accept that a genuine hard delete is invisible here — and, since the drift scan was discarded, invisible everywhere. The orphaned policy set stays in the holder workspace until somebody finds it by hand.
 
 **`Select columns` must contain `ubsppcoe_statecode`**, or the flow never fires — the deletion *is* the change being watched for.
 
@@ -209,7 +211,7 @@ The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorks
 
 > ### Update the Dataverse row after the Fabric call, never before
 >
-> If our row is marked `Deleted` and the Fabric call then fails, the policy set is live with nothing claiming it — the exact orphan [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) exists to find, manufactured by the cleanup flow.
+> If our row is marked `Deleted` and the Fabric call then fails, the policy set is live with nothing claiming it — an orphan manufactured by the cleanup flow, and since the drift scan was discarded there is nothing that will ever report it.
 >
 > This ordering means a partial failure leaves the row saying `Suspended` or `Active` with the item still present, which is **recoverable**: the next run of this flow finds it and tries again.
 
@@ -219,17 +221,15 @@ The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorks
 >
 > **Do not clear the `node` lookup either.** It still identifies which Node this was, and the Node row still exists — it is only flagged.
 
-> ### This probably also affects the drift report
+> ### A `404` when reading activation state — tested 2026-09-13
 >
-> **Tested 2026-09-13: `deactivate` on a policy set whose capacity is gone returns `404 Capacity not found`** — the endpoint resolves the activation scope first. Anything else that interrogates a policy set's activation state is likely to hit the same wall.
+> **`deactivate` on a policy set whose capacity is gone returns `404 Capacity not found`** — the endpoint resolves the activation scope first. Anything else that interrogates a policy set's activation state is likely to hit the same wall, so treat a `404` there as *the capacity is gone*, not as an outage.
 >
-> [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects *ours deactivated* as drift, which means it reads activation state. **For a `Suspended` or `Deleted` capacity that read may `404` rather than answer** — so the scan would report an error, or a false drift, for every retired capacity, permanently.
->
-> Two things follow, and both belong in that document rather than this one. **`Suspended` and `Deleted` rows should be excluded from the drift comparison**, or the sync reports as problems the two states this flow deliberately creates. And **the sync needs to tolerate a `404` on activation state**, because a capacity can be deprovisioned between our row being written and the scan running.
+> This used to carry a second consequence: the drift scan read activation state for every tracked set, and would have reported an error or a false drift for every retired capacity, permanently. **That scan was discarded on 2026-09-18**, so there is no report to pollute — and equally no report at all.
 
 > ### Update the Dataverse row after the Fabric call, never before
 >
-> If our row is marked `Deleted` and the Fabric call then fails, the policy set is live with nothing claiming it — the exact orphan [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) exists to find, manufactured by the cleanup flow.
+> If our row is marked `Deleted` and the Fabric call then fails, the policy set is live with nothing claiming it — an orphan manufactured by the cleanup flow, and since the drift scan was discarded there is nothing that will ever report it.
 >
 > This ordering means a partial failure leaves the row saying `Suspended` or `Active` with the item still present, which is **recoverable**: the next run of this flow finds it and tries again.
 

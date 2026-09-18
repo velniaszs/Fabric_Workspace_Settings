@@ -1,0 +1,4 @@
+ubsppcoe_workspacename,ubsppcoe_workspaceid,ubsppcoe_reason,ubsppcoe_approvedby,ubsppcoe_active
+EXAMPLE - Data Science Sandbox,00000000-0000-0000-0000-000000000001,Example row - delete before import. Research team needs item types outside the governed list,jane.doe@example.com,Yes
+EXAMPLE - Platform Engineering,00000000-0000-0000-0000-000000000002,Example row - delete before import. Builds and tests new Fabric item types ahead of approval,john.smith@example.com,Yes
+EXAMPLE - Revoked Exception,00000000-0000-0000-0000-000000000003,Example row - delete before import. Shows a revoked exception: the row is kept for history and Active set to No,jane.doe@example.com,No

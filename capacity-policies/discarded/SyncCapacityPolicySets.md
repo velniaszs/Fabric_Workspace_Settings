@@ -1,8 +1,12 @@
-# Flow — `SyncCapacityPolicySets`
+# Flow — `SyncCapacityPolicySets` — **DISCARDED, do not build**
+
+> **Decision 2026-09-18: this flow is not part of the solution.** It was the only Recurrence-triggered flow in the design, and the decision is that the solution contains no scheduled flows at all — only manual (`MIG_`) and Dataverse row-triggered ones. It was never built, so nothing needs undoing.
+>
+> **The document is kept for the record only.** It is excluded from the handover documentation set, and the `Policy Drift` table it was the sole writer of is not built either.
+>
+> **What is given up.** This was the only thing that would have detected a policy set **deactivated, replaced or deleted** outside the flows — drift a rebuild cannot fix and cannot even see, because a rebuild against a deactivated set writes its rules successfully and reports healthy. That detection now does not exist. Other documents which described it as the safety net behind a caught failure or an orphaned policy set have been corrected to say that nothing catches those cases. See **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 
 Scans the holder workspace, reconciles what Fabric actually holds against the `Capacity Policies` table, and records the differences. Detects policy sets created, replaced or deleted outside the flows.
-
-> **Not built yet.** Specification, not a description of something that exists.
 
 Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 — which sets out the connector pattern every Fabric call here uses.
 
@@ -405,46 +409,19 @@ Matching by ID inside a filter expression is awkward in Power Automate. If it tu
 
 ## Step 9 — Optional: record that the scan ran
 
-**Build this only if the app shows a drift screen.** It is not needed for the flow to work, and it costs a small table. Decide with the problem in front of you:
-
-> ### The problem it solves
+> ### The problem it would have solved
 >
 > Step 2b deletes before it writes, so **an empty `Policy Drift` table has two very different meanings**: a clean scan found nothing, or a scan died after the delete and before writing. They look identical.
 >
 > The first is the good news everyone wants. The second means the estate has not been checked at all, and the screen is quietly saying it has.
 
-There are two honest ways to resolve that. **Pick one.**
-
-### Option A — do not build it, and alert on failure instead *(recommended to start)*
-
-Add nothing here. Instead, on the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) already uses for its failures.
+**Alert on failure instead.** On the flow's ⋯ → **Settings**, or via a `Send an email` in a parallel branch configured to run **has failed**, notify someone when a run fails — the same treatment [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) already uses for its failures.
 
 Then a failed scan is known by mail rather than by absence, and the drift screen can be labelled *"findings from the last successful scan"* without claiming to be current.
 
-**Cost:** the screen cannot show *when* that scan was. Acceptable while this is a daily job somebody watches; less so once it is forgotten infrastructure.
+**Cost:** the screen cannot show *when* that scan was.
 
-### Option B — a one-row state table
-
-Create a small table alongside the four in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md):
-
-| | |
-|---|---|
-| Schema name | `ubsppcoe_ScanState` |
-| Primary name column | `ubsppcoe_scanname` — Text (100) |
-| Column | `ubsppcoe_lastrun` — Date and time |
-
-**Seed exactly one row by hand**, with `ubsppcoe_scanname` = `CapacityPolicyDrift`.
-
-Then two actions at the very end of the flow:
-
-1. `Get_scan_state` — Dataverse **List rows** on `ubsppcoe_ScanState`, Filter rows `ubsppcoe_scanname eq 'CapacityPolicyDrift'`, Row count `1`.
-2. `Stamp_last_run` — Dataverse **Update a row** on `ubsppcoe_ScanState`, Row ID `first(body('Get_scan_state')?['value'])?['ubsppcoe_scanstateid']`, setting `ubsppcoe_lastrun` = `utcNow()`.
-
-**Look the row up rather than hard-coding its GUID** — the row is created by hand per environment, so a literal ID works in dev and silently fails everywhere else.
-
-> **The timestamp only means anything next to the table.** If the app shows drift rows without it, Option B has bought nothing — the whole point is that *empty plus a fresh timestamp* reads differently from *empty plus a stale one*.
-
-> **Do not use an environment variable for this.** A flow can update one through the Dataverse connector, but environment variable **values** do not travel reliably with a solution export ([OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1) — so the thing recording whether the scan is healthy becomes the thing that breaks on every deployment.
+> **An earlier draft proposed a one-row `ubsppcoe_ScanState` table** holding a `lastrun` timestamp, so that *empty plus a fresh timestamp* read differently from *empty plus a stale one*. **It was never created**, and it is not part of this design — removed 2026-09-18 along with the rest of the scan.
 
 ---
 
@@ -452,7 +429,7 @@ Then two actions at the very end of the flow:
 
 **Nothing, and it must stay that way.** The Recurrence trigger has no caller waiting, so there is no `Respond to a Power App or flow` action — adding one would fail at runtime with nothing to answer.
 
-The last action is therefore either `Add_drift_conflict` (Step 7c), the optional status refresh (Step 8), or `Stamp_last_run` if you built Option B above. The output of a run *is* the contents of `Policy Drift`.
+The last action is therefore either `Add_drift_conflict` (Step 7c) or the optional status refresh (Step 8). The output of a run *is* the contents of `Policy Drift`.
 
 If the app needs the four counts on a screen, it reads them from the table, not from this flow.
 

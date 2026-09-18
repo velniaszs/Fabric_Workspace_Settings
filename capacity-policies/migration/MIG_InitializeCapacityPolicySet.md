@@ -2,7 +2,7 @@
 
 **Migration only.** Child flow. Creates one capacity's policy set and registers it in Dataverse — and stops there. It does **not** build rules and does **not** activate.
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
 Related: [MIG_RegisterAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) (the loop that calls this), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [InitializeCapacityPolicySet.md](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) (the BAU flow this is derived from), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
 
@@ -37,7 +37,7 @@ Three reasons, and the first is the one that forces the issue.
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
 - The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md).
 
-> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. This is the same constraint recorded in [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) Step 1 and [GetFabricToken.md](docs/flows/nocustomcon/GetFabricToken.md).
+> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](docs/flows/nocustomcon/GetFabricToken.md).
 >
 > It is about twenty actions and every value is below, so building it from this document is quicker than fighting the platform. **Use ⋯ → *Copy to my clipboard* on the three Step 5 Composes** and paste them into the new flow — those expressions are long enough that retyping them is where a typo would come from, and they are unchanged from the BAU flow.
 

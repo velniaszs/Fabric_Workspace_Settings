@@ -14,13 +14,13 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 > ### The prefix is `ubsppcoe_`, and it is **not** a placeholder
 >
-> **Decision 2026-09-07: the four tables this project creates use the `ubsppcoe_` publisher prefix — the same prefix as the platform team's `ubsppcoe_Workspace` and `ubsppcoe_Node`.** Earlier revisions of these documents used `crbab_` and told you to substitute your own. Do not. `crbab_` belongs to the workspace-settings canvas app, which was built on a different platform and is unrelated to policy rules.
+> **Decision 2026-09-07: the tables this project creates use the `ubsppcoe_` publisher prefix — the same prefix as the platform team's `ubsppcoe_Workspace` and `ubsppcoe_Node`.** Earlier revisions of these documents used `crbab_` and told you to substitute your own. Do not. `crbab_` belongs to the workspace-settings canvas app, which was built on a different platform and is unrelated to policy rules.
 >
 > **The consequence is that the prefix no longer tells you who owns a table.** Every guardrail in these documents that used to read *"never write a `ubsppcoe_` column"* is now stated **by table name**, because it has to be. The boundary is:
 >
 > | Never written by any flow | Written by our flows |
 > |---|---|
-> | `ubsppcoe_Workspace`, `ubsppcoe_Node` | `ubsppcoe_CapacityPolicy`, `ubsppcoe_PolicyDrift` |
+> | `ubsppcoe_Workspace`, `ubsppcoe_Node` | `ubsppcoe_CapacityPolicy` |
 >
 > If you find yourself reasoning about whether a write is allowed by looking at the prefix, stop — the prefix is the same on both sides of that line now.
 
@@ -277,11 +277,21 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 **No flow writes this table.** Rows are created by hand in the maker portal or by the app through the Dataverse connector. **A row edit does not publish itself** — deactivating an exception is not live until that capacity is rebuilt.
 
-**Seed from `fabric_workspaces_exceptions.csv` before cutover.** Rule 3 membership is derived from nothing else, so a migrated exception that was never copied here disappears at the first rebuild — quietly, from a workspace that until then could create anything.
+**Seed before cutover, from [input/PolicyExceptions.csv](input/PolicyExceptions.csv).** Rule 3 membership is derived from nothing else, so a migrated exception that was never copied here disappears at the first rebuild — quietly, from a workspace that until then could create anything.
+
+> **That file is a template with three example rows, not data. Delete them.** Every row is marked `EXAMPLE` and carries a placeholder GUID; importing it as shipped grants nothing, because the GUIDs match no workspace — but it leaves three rows in a table whose whole purpose is to be short and reviewable.
+>
+> **The real GUIDs come from the migration's `fabric_workspaces_exceptions.csv`**, if the estate has one — take the `workspace_id` column only. If there is no such file, the rows are gathered by asking, which is the honest answer: this table is the one thing in the design with no upstream.
+>
+> **Headers are the Dataverse logical names**, so the import maps column-for-column with no manual mapping. Leave `ubsppcoe_policyexceptionid` out — mapping the row key turns the import from an insert into an upsert against GUIDs you do not have.
 
 ---
 
-## 5. `Policy Drift` — findings from the scan
+## 5. `Policy Drift` — **dropped**
+
+> **Dropped from Dataverse on 2026-09-18. Do not recreate it.** Its only writer was `SyncCapacityPolicySets`, which was discarded — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). A table with no writer is an empty table somebody will one day read and take for a clean bill of health.
+>
+> The specification below is kept for the record, and is what to build from if drift detection is ever revived (**Q11**).
 
 | | |
 |---|---|
@@ -303,9 +313,9 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ### Rules
 
-**This is current state, not a log.** `SyncCapacityPolicySets` deletes every row before writing new ones. If an audit trail is wanted, add a second table and append to that — do not make one table try to be both.
+**This would have been current state, not a log.** The scan deleted every row before writing new ones. If an audit trail is ever wanted, add a second table and append to that — do not make one table try to be both.
 
-**That flow is the only writer, and the wipe is why.** Anything another flow contributed would vanish at the next scan without warning.
+**That flow was the only writer, and the wipe is why.** Anything another flow contributed would have vanished at the next scan without warning.
 
 ---
 
@@ -318,24 +328,19 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 | | |
 |---|---|
 | Display name | `Logging` |
-| Schema name | `ubsppcoe_Logging` — ⚠ **not confirmed**, see below |
 | Ownership | **Platform team.** Write-only for us |
 
-| Column (UI display name) | Logical name | What we write |
-|---|---|---|
-| Log Category | ⚠ **unconfirmed** | The literal text `Error` |
-| Log Source Name | ⚠ **unconfirmed** | The flow's identity, from `workflow()` |
-| Log Source URL | ⚠ **unconfirmed** | A link back to the failed run — **see below, this is the important one** |
+| Column (UI display name) | What we write |
+|---|---|
+| Log Category | The literal text `Error` |
+| Log Source Name | `workflow()?['tags']?['flowDisplayName']` — the flow's display name |
+| Log Source URL | A link back to the failed run — **see below, this is the important one** |
 
-> ## ⚠ Do not build against these names until they are confirmed — Q48
+> ## Confirmed 2026-09-18 — Q48 closed
 >
-> **Only the UI display names are known.** The logical names, the types, whether `Log Category` is a Choice or plain text, and which column is the primary name are all outstanding.
+> Table `Logging`, three columns, **picked from the designer dropdowns by display name**. That is what closes this: *Add a new row* lists columns by display name, so nothing here has to know the logical names.
 >
-> **Do not derive the logical names from the display names.** `Log Category` is not reliably `ubsppcoe_logcategory`; Dataverse derives the logical name from whatever was typed at creation, and the platform team's other columns in §1 already show they do not follow a predictable pattern — `ubsppcoe_nodeuniqueid` holds a capacity id, and `ubsppcoe_workspaceid` is a Fabric GUID where the name suggests a row key.
->
-> **This is the `ubsppcoe_isdeleted` mistake, and it was made once already.** Six filters were written against a guessed soft-delete column name and had to be rewritten on 2026-09-15 — the guess was wrong in the name *and* in the operator, because the column turned out to be a Choice rather than a Boolean ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) Q46). Guessing three more names from three more display names is the same bet.
->
-> **Ask for an existing row instead.** The table already has writers, so one populated example settles the logical names, the types, the `Log Category` vocabulary and the `Log Source URL` convention in a single look — and the convention matters more than the names, because we are joining someone else's log rather than starting our own.
+> **The logical names are still unrecorded, and that is acceptable only because this table is insert-only.** Nothing filters it, reads a row back, or references a column in an OData expression — the one place a logical name would be needed. If that ever changes, get the names from the platform team rather than deriving them from the display names; that is the `ubsppcoe_isdeleted` mistake of 2026-09-15 ([CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) Q46) waiting to happen again.
 
 ### Only four flows write here
 
@@ -356,17 +361,15 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 >
 > Everything else is a constant or near-constant: `Log Category` is always `Error`, `Log Source Name` is one of four flow names. **A row with no usable URL records nothing that a count of red runs would not.**
 >
-> The run history URL is the natural content, and `workflow()` carries every part needed to build one:
+> The run history URL is the content, and `workflow()` carries every part needed to build one:
 >
 > ```
-> concat('https://make.powerautomate.com/environments/', workflow()?['tags']?['environmentName'], '/flows/', workflow()?['name'], '/runs/', workflow()?['run']?['name'])
+> concat('https://flow.microsoft.com/manage/environments/', workflow()?['tags']?['environmentName'], '/flows/', workflow()?['name'], '/runs/', workflow()?['run']?['name'])
 > ```
 >
-> **Verify that URL opens the run before committing to it**, and check it against an existing row first — the solution-aware path differs, and a link that 404s is worse than a bare run ID because it looks like it works. If the platform team's convention turns out to be something else entirely, follow theirs.
->
-> **Keep `workflow()?['run']?['name']` in the string whatever happens.** The bare run ID is portal-independent and is what makes a run findable by search when a URL format changes. It is already load-bearing for the same reason in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b.
+> **Keep `workflow()?['run']?['name']` in the string whatever happens.** The bare run ID is portal-independent and is what makes a run findable by search if the URL format changes. It is already load-bearing for the same reason in [AddWorkspaceToPolicy.md](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) Step 7b.
 
-**`Log Source Name` should be the flow's display name, not its GUID.** `workflow()?['tags']?['flowDisplayName']` returns it; plain `workflow()?['name']` is the flow's GUID, which is stable but unreadable in a log somebody else reads too. Confirm against an existing row — if other writers put a system name there, match them.
+**`Log Source Name` is the flow's display name, not its GUID** — `workflow()?['tags']?['flowDisplayName']`. Plain `workflow()?['name']` is the flow's GUID, which is stable but unreadable in a log somebody else reads too.
 
 **`ubsppcoe_lasterror` stays exactly as it is.** It is now the *only* place the actual error text lands, which makes it more important than before rather than redundant. The split is: `Capacity Policies`.`ubsppcoe_lasterror` holds **what went wrong**, `Logging` holds **that it went wrong and where to look**. Neither replaces the other, and the guard that made this worth revisiting still bites — where `policyRowId` is empty there is no row to write to, so for those runs the `Logging` row and the run history are the only trace.
 
@@ -378,20 +381,19 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 
 ## 6. Who writes what
 
-**By table name, not by prefix** — all seven carry `ubsppcoe_`.
+**By table name, not by prefix** — all six carry `ubsppcoe_`.
 
 | Table | Read by | Written by |
 |---|---|---|
 | `ubsppcoe_Workspace` | Rebuild, Add, Remove | **Nothing here. Ever** |
 | `ubsppcoe_Node` | Initialize (once, to resolve the Node row) | **Nothing here. Ever** |
 | `Logging` | **Nothing here. Ever** | Add, Remove, Initialize, Delete — **Catch blocks only, insert only** |
-| `ubsppcoe_CapacityPolicy` | Rebuild, List, Remove, RebuildAll, Sync | Initialize (insert), Rebuild (stamp), Sync (status) |
+| `ubsppcoe_CapacityPolicy` | Rebuild, List, Remove, RebuildAll | Initialize (insert), Rebuild (stamp) |
 | `ubsppcoe_PolicyItemType` | Rebuild | **No flow.** Maker portal or app |
 | `ubsppcoe_PolicyException` | Rebuild, Remove | **No flow.** Maker portal or app |
-| `ubsppcoe_PolicyDrift` | — | Sync only, wipe-and-rewrite |
+| ~~`ubsppcoe_PolicyDrift`~~ | — | **Dropped 2026-09-18** — its only writer was discarded (§5) |
 
 **`Logging` is the only table we write but never read**, and the only one another team writes too. Treat a row there as fire-and-forget: nothing in these flows may query it back.
-| `ubsppcoe_PolicyErrorLog` | — | **Add, Remove** — Catch blocks only, **insert only** |
 
 ---
 
@@ -400,12 +402,12 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-PO
 **If you have not built Dataverse tables before, follow §8 instead** — it is the same list with every click spelled out. This is the short form for someone who has.
 
 1. **No names are outstanding.** Every logical name on `ubsppcoe_Workspace` and `ubsppcoe_Node` was confirmed on 2026-09-07 — Q19 is closed.
-2. Create the four tables in §2–§5 in the maker portal, in one solution, using a publisher whose prefix is **`ubsppcoe`**. Not `crbab` — that prefix belongs to the workspace-settings canvas app and has nothing to do with policy rules. **`Logging` (§5a) is not one of them** — it already exists and belongs to the platform team.
+2. Create the three tables in §2–§4 in the maker portal, in one solution, using a publisher whose prefix is **`ubsppcoe`**. Not `crbab` — that prefix belongs to the workspace-settings canvas app and has nothing to do with policy rules. **`Logging` (§5a) is not one of them** — it already exists and belongs to the platform team, and **`Policy Drift` (§5) was dropped on 2026-09-18**.
 3. **On each *New table* screen, set the primary column before saving** — expand **Advanced options** to set its logical name. This is the one thing you cannot change afterwards (§0).
 4. Add the remaining columns with **+ New column**. Everything marked *Add manually* in §2–§5; nothing marked *Automatic*.
 5. Set both `ubsppcoe_active` columns to default **No**.
 4. Seed `ubsppcoe_PolicyItemType` from [input/PolicyItemTypes.csv](docs/flows/capacity-policies/input/PolicyItemTypes.csv) — **not** from the raw `fabric_item_types.csv`, which has nine rows sharing one item type (§3).
-7. Seed `ubsppcoe_PolicyException` from `fabric_workspaces_exceptions.csv`, if one is in use.
+7. Seed `ubsppcoe_PolicyException` from [input/PolicyExceptions.csv](input/PolicyExceptions.csv) — **a template, not data.** Delete its three `EXAMPLE` rows and replace them with the real workspace GUIDs (§4).
 8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1.
 9. Only then start on [GetPolicyToken.md](docs/flows/capacity-policies/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
 
@@ -518,9 +520,11 @@ On `Capacity Policies`, add the `Node` column:
 
 > **This creates a relationship** from `Capacity Policy` to `Node`. That is expected. It does **not** give any flow permission to write `Node`, and it does not modify their table.
 
-### 8.7. The choice column on Policy Drift
+### 8.7. The choice column on Policy Drift — **skip this step**
 
-`ubsppcoe_driftkind` is the only choice column in the set.
+> **`Policy Drift` was dropped on 2026-09-18** (§5), so there is no choice column to create. The steps are kept for the record only, in case drift detection is revived.
+
+`ubsppcoe_driftkind` would be the only choice column in the set.
 
 1. **+ New column** → Display name `Kind`, Schema name `driftkind`.
 2. **Data type**: **Choice** → **Choice**.
@@ -537,23 +541,22 @@ On `Capacity Policies`, add the `Node` column:
 
 > **Flows write choices by integer, not by label.** The Dataverse connector shows you the labels, but what travels is the number. Do not renumber or delete these items once `SyncCapacityPolicySets` is built, or old drift rows become unreadable and new ones land under the wrong kind.
 
-### 8.8. Repeat for the other three tables
+### 8.8. Repeat for the other two tables
 
-Same shape as 8.3–8.5, with the primary column from §3, §4 and §5:
+Same shape as 8.3–8.5, with the primary column from §3 and §4:
 
 | Table | Schema name | Primary column display / schema | Max length |
 |---|---|---|---|
 | `Policy Item Types` | `PolicyItemType` | `Item Name` / `itemname` | 100 |
 | `Policy Exceptions` | `PolicyException` | `Workspace Name` / `workspacename` | 256 |
-| `Policy Drift` | `PolicyDrift` | `Display Name` / `displayname` | 256 |
 
 ### 8.9. Verify before building anything
 
-**This is the step that catches a divergence while it is still cheap to fix.** For each of the four tables:
+**This is the step that catches a divergence while it is still cheap to fix.** For each of the three tables:
 
 1. Open the table → **Columns**.
 2. Change the view filter from **Default** to **All**.
-3. Read the **Name** column — that is the logical name — and compare it against §2–§5, character by character.
+3. Read the **Name** column — that is the logical name — and compare it against §2–§4, character by character.
 
 What you are looking for:
 

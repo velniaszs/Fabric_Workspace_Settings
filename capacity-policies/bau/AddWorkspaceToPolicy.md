@@ -2,7 +2,7 @@
 
 Confirms that a workspace really is whitelisted on a capacity, then rebuilds that capacity's rules. **Writes nothing to Dataverse except an error, and only when one occurs.**
 
-> **Built, and being converted.** The flow exists as an instant flow with a Power Apps (V2) trigger. Two changes are in flight: the trigger swap immediately below, and the try/catch scopes in Step 7.
+> **Built in the customer environment — not verified against an export.** Both conversions below are **done**: the Dataverse trigger replaced the Power Apps (V2) one, and the try/catch scopes are in place. The tables below are kept as the record of how the flow got here. The solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition — treat any disagreement as the flow being right and this document being stale.
 
 > ## Converting the built flow — 2026-09-11
 >
@@ -22,7 +22,7 @@ Confirms that a workspace really is whitelisted on a capacity, then rebuilds tha
 >
 > Three new actions, three expression edits, one action swapped. **No branch moves, and the nesting is untouched.**
 >
-> **`RemoveWorkspaceFromPolicy` is not converted yet** and still expects a caller, so `ubsppcoe_oapenabled` going `true` → `false` still reaches Fabric only when an estate-wide rebuild is run.
+> **`RemoveWorkspaceFromPolicy` is converted too**, so `ubsppcoe_oapenabled` going `true` → `false` now publishes itself rather than waiting for an estate-wide rebuild.
 
 > ## Adding try/catch scopes — 2026-09-12
 >

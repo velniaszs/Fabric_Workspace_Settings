@@ -2,7 +2,7 @@
 
 **Migration only.** The loop. Walks every eligible Fabric capacity, creates and registers a policy set for each, and leaves them all **deactivated**. Run by hand, once, in tranches.
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
 Related: [MIG_InitializeCapacityPolicySet.md](docs/flows/capacity-policies/MIG_InitializeCapacityPolicySet.md) (the child it calls), [MIG_ActivateAllCapacityPolicySets.md](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md), [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) (the same shape, and migration's rebuild phase), [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §8.
 
@@ -251,7 +251,7 @@ Four things that body is doing, none of them decoration:
 
 **No** → empty. But **read the summary from the run history either way.** This is a supervised one-off, and "registered 187 of 200 with nothing to report" is a contradiction worth noticing.
 
-> **Do not write any of this to `Policy Drift`.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, so anything written here would vanish at an interval nobody is thinking about. The same reasoning as [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
+> **Do not write any of this to `Policy Drift`.** That table was **dropped on 2026-09-18** — its only writer was discarded ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5). The run-history summary is the record. Same reasoning as [MIG_RebuildAllCapacityPolicies.md](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §4.
 
 ---
 

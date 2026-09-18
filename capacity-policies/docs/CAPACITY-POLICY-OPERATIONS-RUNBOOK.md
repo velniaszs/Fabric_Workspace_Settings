@@ -98,7 +98,7 @@ That last one is the correction that matters: the platform team's tables **soft-
 >
 > Deactivate first only when you are getting ahead of the deprovisioning, i.e. the capacity is still in `GET /v1/capacities`.
 
-**Do not delete the row.** Update it. `SyncCapacityPolicySets` would report an untracked policy set if the row went before the item, and six months later the row is the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
+**Do not delete the row.** Update it. Deleting the row before the item leaves an orphaned policy set with nothing claiming it — and since the drift scan was discarded, **nothing will ever report it**. Six months later the row is also the only record that this capacity was ever governed, by which policy set, and when it was stood down — the same reasoning as [DeleteCapacityPolicySet.md](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) §3c. Rows are cheap.
 
 **Update the row after the Fabric call, not before.** A row saying `Deleted` with the item still present is an orphan that nothing will chase; a row still saying `Active` with the item gone is loud — the next estate-wide rebuild `404`s and you come back and finish the job.
 
@@ -261,9 +261,12 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 | Signal | Where | Means |
 |---|---|---|
 | `MIG_RebuildAllCapacityPolicies` failure summary | Mail, after each manual run | Capacities whose rules are stale |
-| `SyncCapacityPolicySets` drift report | Scheduled mail | A policy set deactivated, replaced, deleted or untracked |
 | `lasterror` non-empty | `Capacity Policies` | That capacity's last rebuild failed |
 | `lastrebuild` growing stale | `Capacity Policies` | Nothing has rebuilt that capacity. **No longer self-correcting** — an estate-wide rebuild only happens when someone runs it |
-| `Inactive` + `Untracked` together | Drift report | **Someone created a replacement policy set and activated it.** The rebuild is now writing rules to a set that is not in force, and reporting success |
+| A `Failed` or `Caught` run on any BAU flow | Flow run history | The change was not published. **Nothing retries it** |
 
-That last pair is the one to act on immediately. It is the only state in which everything reports healthy while the capacity is governed by something nobody in this system controls.
+> ### The blind spot — a policy set that is not in force
+>
+> The dangerous state is somebody deactivating our policy set, or creating a replacement and activating that. The capacity is then governed by something nobody in this system controls, **and every signal above still reports healthy** — the rebuild writes its rules to the deactivated set and succeeds.
+>
+> **Nothing detects it.** `SyncCapacityPolicySets` would have, and it was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **Accepted as a known gap** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7, which records two optional implementations if it ever needs closing. Until one is built, the only way to find this is to open the holder workspace and confirm one active policy set per capacity.

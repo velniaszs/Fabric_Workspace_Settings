@@ -2,7 +2,7 @@
 
 What the app reads. Returns every managed capacity and the state of its policy set, as one JSON string.
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
 Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §3 and §4, [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
 

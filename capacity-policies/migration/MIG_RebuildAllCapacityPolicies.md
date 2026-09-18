@@ -2,9 +2,9 @@
 
 Manual. Rebuilds every capacity's rules from Dataverse in one pass, when somebody runs it. The backstop that makes Dataverse genuinely the source of truth rather than merely the intended one.
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
-Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md), [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md).
+Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [RebuildCapacityPolicyRules.md](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md).
 
 ---
 
@@ -26,7 +26,7 @@ Every rule in every managed capacity is regenerated from the tables. Anything an
 | Our policy set **deleted** | **No.** The rebuild 404s |
 | A policy set created by hand for a capacity we already manage | **No** |
 
-The last three are exactly what [SyncCapacityPolicySets.md](docs/flows/capacity-policies/SyncCapacityPolicySets.md) detects. Run both: this one converges what it can, the scan reports what it cannot.
+The last three were what `SyncCapacityPolicySets` would have detected. **That flow was discarded on 2026-09-18** ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)), so this flow converges what it can and **nothing reports what it cannot** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7. A run of this flow that reports success against a deactivated policy set is the case to be aware of: the rules are published to a set that is not in force.
 
 > **This flow carries more weight than it did, and now nothing starts it.** When the whitelist lived in a table only these flows wrote to, scheduled convergence was a safety net. It is still the **only** thing that applies an out-of-band `ubsppcoe_oapenabled` change, a `Node` move, a hard-deleted exception row or a hand-edited rule — but since 2026-09-16 it does so only when somebody runs it. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 >
@@ -162,9 +162,9 @@ Failed: <b>@{length(variables('failures'))}</b>
 
 **The body leads with what is still true**, not with the list. The reader's first question on seeing a rebuild failure is whether a capacity has been left unenforced; `replaceByPolicy` means it has not, and saying so before the list stops that question being asked.
 
-> **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, for three reasons.
+> **Do not write these to `Policy Drift`.** An earlier draft of this document suggested it; that was a mistake, and it is now moot — **the table was dropped on 2026-09-18** ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5). The reasoning is kept in case drift detection is ever revived.
 >
-> **The rows would vanish.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) deletes every row in that table at the start of each scan, because its findings are current state rather than a log. Anything this flow wrote would silently disappear on the next run, at an interval nobody is thinking about.
+> **The rows would vanish.** The scan deleted every row in that table at the start of each run, because its findings were current state rather than a log. Anything this flow wrote would silently disappear at an interval nobody is thinking about.
 >
 > **`Missing` means something else.** In the drift table it means *a policy set recorded in Dataverse no longer exists in Fabric*. "The rebuild failed for this capacity" is a different fact with a different remedy, and overloading the kind would make the scan's own output untrustworthy.
 >
@@ -233,7 +233,7 @@ Dataverse service-protection limits are not a concern at this volume either — 
 
 **Not by default.** The decision deserves stating rather than defaulting into.
 
-If our policy set has been deactivated and another is active on the capacity, this flow rebuilds rules on a set that is **not in force**. It reports success, and the capacity is governed by something else entirely. That is the `Inactive` + `Untracked` pair `SyncCapacityPolicySets` exists to catch.
+If our policy set has been deactivated and another is active on the capacity, this flow rebuilds rules on a set that is **not in force**. It reports success, and the capacity is governed by something else entirely. **Nothing detects that** — the scan that would have was discarded on 2026-09-18 — which strengthens the case for re-activating, and is why the decision is stated rather than defaulted into.
 
 The flow *could* call `activate` with `allowReplace=true` and take the capacity back every night. Do not turn that on without deciding it explicitly:
 

@@ -35,15 +35,15 @@ PHASE 7   Clean up
 
 Nothing here changes anything. All of it is cheaper to do now than to discover in Phase 5.
 
-### 0.1 Turn off `SyncCapacityPolicySets`
+### 0.1 Confirm no flow is armed
 
-Power Automate → **Solutions** → your solution → select the row → **Turn off**.
+Power Automate → **Solutions** → your solution.
 
-| Flow | Why |
-|---|---|
-| `SyncCapacityPolicySets` | Every policy set is deactivated *by design* through this migration, and `Inactive` is a drift kind. A scheduled scan would report the whole estate as drift and train whoever reads it to ignore the report |
+**There is no scheduled flow to turn off.** `SyncCapacityPolicySets` was the only Recurrence flow in the design and it was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). If one exists in your environment, it is a leftover from an earlier build: turn it off and delete it.
 
 `MIG_RebuildAllCapacityPolicies` is **manual**, so there is no schedule to stop — but leave the flow turned **off** until Phase 3, which turns it on, runs it, and turns it off again. An enabled manual flow is one stray button press from publishing rules at a moment you did not choose, before exceptions are seeded.
+
+**The Dataverse-triggered BAU flows are the ones to watch.** `InitializeCapacityPolicySet`, `AddWorkspaceToPolicy`, `RemoveWorkspaceFromPolicy` and `RebuildOnExceptionChange` fire on row changes, so they act without anybody pressing anything — including on the `Policy Exceptions` rows seeded in Phase 2. Turn them **off** for the duration and back on at Phase 7.
 
 **Do not turn off `RebuildCapacityPolicyRules`.** It is a child flow, and a flow that is off cannot be called as one.
 
@@ -54,7 +54,8 @@ Power Automate → **Solutions** → your solution → select the row → **Turn
 | `Capacity Policies` | Exists, empty or nearly so |
 | `Policy Item Types` | **Seeded and active.** Rule 2 with an empty `item.type` array is rejected by Fabric |
 | `Policy Exceptions` | Exists. Seeding happens in Phase 2 |
-| `Policy Drift` | Exists. Nothing writes it during migration |
+
+`Policy Drift` is **not** part of the solution — dropped on 2026-09-18, its only writer having been discarded.
 
 ### 0.3 Confirm the environment variables
 
@@ -95,7 +96,7 @@ Any policy set in the holder workspace created while building the flows, and any
 
 **Checklist before Phase 1**
 
-- [ ] `SyncCapacityPolicySets` off, `MIG_RebuildAllCapacityPolicies` off
+- [ ] `MIG_RebuildAllCapacityPolicies` off, and the four Dataverse-triggered BAU flows off
 - [ ] `Policy Item Types` seeded and active
 - [ ] All five environment variables set
 - [ ] Contributor on the holder workspace confirmed
@@ -162,7 +163,11 @@ Re-run until `Failed` is empty. `No Node row` may stay non-empty — those capac
 
 **Nothing to run.** A data import, and it **must happen before Phase 3**.
 
-`Policy Exceptions` has no upstream — no flow derives those rows, and `ubsppcoe_Workspace` says nothing about them. If the estate has existing exceptions, import them from `fabric_workspaces_exceptions.csv`:
+`Policy Exceptions` has no upstream — no flow derives those rows, and `ubsppcoe_Workspace` says nothing about them. Use [input/PolicyExceptions.csv](input/PolicyExceptions.csv) as the import template; its headers are the Dataverse logical names, so the mapping is column-for-column.
+
+> **Delete its three `EXAMPLE` rows first.** They carry placeholder GUIDs that match no workspace, so importing them grants nothing — but they leave junk in a table whose whole value is being short enough to review by eye.
+
+Fill it from the estate's existing exceptions — `fabric_workspaces_exceptions.csv`, if the migration has one:
 
 | Column | Value |
 |---|---|
@@ -310,17 +315,24 @@ Per capacity, using the scripts in `C:\GIT\ubs-policies`:
 
 ## Phase 7 — Clean up
 
-### 7.1 Turn `SyncCapacityPolicySets` back on
+### 7.1 Turn the BAU flows back on
 
-| Flow | |
+Turn on the four Dataverse-triggered flows switched off in Phase 0.1:
+
+| Flow | Fires on |
 |---|---|
-| `SyncCapacityPolicySets` | Drift detection. It is the only thing that notices a policy set being deactivated, replaced or deleted |
+| `InitializeCapacityPolicySet` | `ubsppcoe_Node` added/modified |
+| `AddWorkspaceToPolicy` | `ubsppcoe_Workspace`, `oapenabled` becoming true |
+| `RemoveWorkspaceFromPolicy` | `ubsppcoe_Workspace`, `oapenabled` ceasing to be true, or soft-deleted |
+| `RebuildOnExceptionChange` | `Policy Exceptions` added/modified |
+
+**This is the moment BAU starts.** From here, row changes publish themselves.
 
 Leave `MIG_RebuildAllCapacityPolicies` **off**. It is manual, so there is no schedule to restore — but keep it in the solution; §7.2 does not delete it.
 
-> **Nothing converges the estate on its own after cutover.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies`. See **Q49** in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **Nothing converges the estate on its own after cutover, and nothing observes it either.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies` — **Q49**. And since the drift scan was discarded, a policy set deactivated, replaced or deleted outside the flows is not detected at all — **Q11**. Both in [CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §7.
 
-Let one `SyncCapacityPolicySets` cycle run and read its report before considering migration closed. The first run after cutover is the one that will tell you whether anything was left half-done.
+**Before considering migration closed**, run `MIG_RebuildAllCapacityPolicies` once more and read its summary. It is the only estate-wide check there is, and it is what tells you whether anything was left half-done.
 
 ### 7.2 Delete the three disposable `MIG_` flows
 

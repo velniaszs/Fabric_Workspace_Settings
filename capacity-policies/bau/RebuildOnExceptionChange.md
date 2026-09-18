@@ -2,7 +2,7 @@
 
 Fires when a `Policy Exceptions` row is created or edited, derives which capacity that workspace sits on, and rebuilds that capacity's rules. **Writes nothing to Dataverse except an error, and only when one occurs.**
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
 > ## Why it exists
 >

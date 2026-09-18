@@ -52,7 +52,7 @@ Why, against the incremental alternative that was considered and rejected:
 | Relationship to the PowerShell | Diverges | Same algorithm |
 | Auditability | The policy set is the only record | The table is queryable, and answers flow 2 without calling Fabric |
 
-The cost is a drift story if somebody edits rules by hand in the portal, or edits `OapEnabled` without triggering a rebuild. Both are covered by the scheduled flows in §4.
+The cost is a drift story. An `OapEnabled` edit is covered — it fires its own Dataverse-triggered flow (§4). A rule **edited by hand in the portal** is not: nothing detects it, and it is corrected only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md). **There is no scheduled flow in this solution** — the scan that would have reported it was discarded on 2026-09-18.
 
 ### The invariant that makes this safe
 
@@ -68,9 +68,11 @@ This is the single most dangerous line of code in the design. It should be a har
 
 **Decision 2026-09-03: the desired state is not a new table.** It already exists, in the two tables the platform team maintains — `ubsppcoe_Workspace` and `ubsppcoe_Node`. The rebuild reads them directly. The planned `CapacityWorkspace` junction table is **dropped**; building it would have been a second copy of a list that is already mastered, with a synchronisation problem attached.
 
-So: **two existing tables are read, four new tables are created** — `CapacityPolicy`, `PolicyItemType`, `PolicyException`, and `PolicyDrift` for §4's scan. Create the new ones in the maker portal, never by editing `customizations.xml`.
+So: **two existing tables are read, three new tables are created** — `CapacityPolicy`, `PolicyItemType` and `PolicyException`. Create them in the maker portal, never by editing `customizations.xml`.
 
-> **Decision 2026-09-07: the new tables use the `ubsppcoe_` prefix too** — `ubsppcoe_CapacityPolicy`, `ubsppcoe_PolicyItemType`, `ubsppcoe_PolicyException`, `ubsppcoe_PolicyDrift`. This section keeps using the short conceptual names; the logical names are in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md).
+> **`PolicyDrift` is dropped.** It existed only to hold the scan's findings; the scan was discarded and the table deleted from Dataverse on 2026-09-18 — see [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). A table with no writer is a table somebody will one day read and believe.
+
+> **Decision 2026-09-07: the new tables use the `ubsppcoe_` prefix too** — `ubsppcoe_CapacityPolicy`, `ubsppcoe_PolicyItemType`, `ubsppcoe_PolicyException`. This section keeps using the short conceptual names; the logical names are in [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md).
 >
 > **The cost is that the prefix stops being a boundary marker.** Ours and theirs now look alike, so every "never write this" rule below is stated by **table name**. Do not restate any of them as a rule about `ubsppcoe_` columns — that sentence is now true of tables we write on every rebuild.
 
@@ -100,7 +102,7 @@ So: **two existing tables are read, four new tables are created** — `CapacityP
 >
 > Same for the `Node` lookup, and same for every other column on either table. These flows **read, filter, and rebuild**. If a build step ever wants an `Update a row` against **`ubsppcoe_Workspace` or `ubsppcoe_Node`**, the design has been misread. Name the two tables when you state this rule — since 2026-09-07 the prefix is shared with tables we do write.
 >
-> The only Dataverse tables these flows write are the **new** ones this project creates — `CapacityPolicy` and `PolicyDrift`. `PolicyException` is ours too, but no flow writes it either — see below. *(See Q25: the instruction was "we do not insert or change any Dataverse data", and this design reads it as covering the platform team's tables. Writing our own state tables is still assumed, because the policy set id has to be stored somewhere. If it was meant literally, say so — the consequence is resolving every policy set from Fabric on every run, which §5 explains does not fit the Power Apps budget.)*
+> The only Dataverse table these flows write is **`CapacityPolicy`**, which this project creates. `PolicyException` is ours too, but no flow writes it — see below. *(See Q25: the instruction was "we do not insert or change any Dataverse data", and this design reads it as covering the platform team's tables. Writing our own state table is still assumed, because the policy set id has to be stored somewhere. If it was meant literally, say so — the consequence is resolving every policy set from Fabric on every run, which §5 explains does not fit the Power Apps budget.)*
 
 > **Both tables separate their Fabric GUID from their row key, and both name them confusingly.** Three consequences the flows must respect:
 >
@@ -271,10 +273,15 @@ Build instructions are one file per flow in [flows/capacity-policies/](docs/flow
 | [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` added/modified** | Creates, registers, builds and activates a new capacity's policy set |
 | [DeleteCapacityPolicySet](docs/flows/capacity-policies/DeleteCapacityPolicySet.md) | **Dataverse — `ubsppcoe_Node` soft-deleted** | Deactivates and suspends a retired capacity's policy set. **New, not agreed** |
 | [ListCapacityPolicySets](docs/flows/capacity-policies/ListCapacityPolicySets.md) | Power Apps (V2) | What the app reads. One table, no Fabric calls |
-| [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled eq true`** | Publish a workspace becoming whitelisted |
-| [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | **Dataverse — `ubsppcoe_Workspace`, `oapenabled ne true` or soft-deleted** | Publish a workspace losing its whitelist |
+| [AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md) | **Dataverse — `ubsppcoe_Workspace` added or modified**, `oapenabled eq true` | Publish a workspace becoming whitelisted |
+| [RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md) | **Dataverse — `ubsppcoe_Workspace` added or modified**, `oapenabled ne true` or soft-deleted | Publish a workspace losing its whitelist |
 | [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) | **Dataverse — `Policy Exceptions` added/modified** | Publish an exception being granted or revoked. **New — closes Q16 and Q33** |
-| [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) | Recurrence | Detects drift the rebuild cannot fix |
+
+> ### No flow in this solution runs on a schedule — decided 2026-09-18
+>
+> Every trigger above is either **Dataverse row added/modified** or **manual**, and the four `MIG_` flows below are manual. `SyncCapacityPolicySets` was the one Recurrence flow in the design and it is **discarded** — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md). `ListCapacityPolicySets` is the one remaining Power Apps (V2) trigger, and it only reads a table.
+>
+> **What goes with it is detection, not correction.** A rebuild has never been able to fix a policy set that was deactivated, replaced or deleted outside these flows — it writes rules to a set that is not in force and reports success. The scan was the only thing that would have noticed. Nothing does now. That is **Q11**, and it is a deliberate acceptance rather than an oversight.
 
 > ### Retriggered 2026-09-11 and 2026-09-12 — four flows moved off Power Apps
 >
@@ -344,11 +351,11 @@ Remove **proceeds anyway**, because republishing current truth can only narrow o
 
 ### Why both flows exist
 
-A full rebuild makes Dataverse the source of truth in practice, not just in intent: hand-edited rules, a deleted rule, even a removed rule 1 are all overwritten. **Since 2026-09-16 that happens only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md)** — [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) is the only one of the two still on a schedule, which makes its report the thing that tells you a rebuild is due.
+A full rebuild makes Dataverse the source of truth in practice, not just in intent: hand-edited rules, a deleted rule, even a removed rule 1 are all overwritten. **Since 2026-09-16 that happens only when somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md)**, and since 2026-09-18 there is no scan to tell you a run is due.
 
 It also converges every `OapEnabled` or `Node` change that reached Dataverse without anyone calling the refresh — which, since the flag is owned elsewhere and editable by bulk import, is not an edge case. **It is the only backstop for a whole class of change this project cannot see happen.**
 
-What it **cannot** fix is drift in the policy set itself — ours deactivated, replaced, or deleted. In those cases the rebuild writes rules to a set that is not in force and reports success. That is precisely what the scan detects, and why the two are complementary rather than redundant.
+What it **cannot** fix is drift in the policy set itself — ours deactivated, replaced, or deleted. In those cases the rebuild writes rules to a set that is not in force and reports success. **Nothing detects that any more**, since the scan that would have was discarded; see Q11.
 
 ### Flow 0 — `RebuildCapacityPolicyRules`
 
@@ -473,7 +480,7 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 > | `Item.ReadWrite.All` etc. | Delegated scopes, and therefore **not** the mechanism | **The mechanism, if the connection is delegated** — this inverts |
 > | Breaks when | The secret expires | The secret expires **or the connection owner leaves, loses the role, or has the connection revoked** |
 >
-> **Whichever identity is chosen, the Fabric-side roles below attach to that identity** — they do not follow the flow. See Q45; this is unresolved and it blocks granting.
+> **The Fabric-side roles below attach to the connection's identity** — they do not follow the flow. **Settled 2026-09-18 (Q45): that identity is the `workspace provisioning` service account.** Grant against it, not against whoever builds or runs the flows.
 
 | Need | Where | Notes |
 |---|---|---|
@@ -495,9 +502,13 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 >
 > Nothing in these flows can fix that, because the GUIDs come from `ubsppcoe_Workspace` and we do not write it. A stale or mistyped workspace GUID on an enabled row goes into the rules verbatim and matches nothing. **The validation has to happen where the row is created** — confirm the workspace exists and is actually assigned to that capacity. The API will not do it, and neither will we.
 
-> **A user connection makes the whole subsystem depend on one person's account.** The estate-wide rebuild is the sharp end: it runs against 200–300 capacities, and it stops the day that account is disabled, loses Capacity Admin, or is prompted to re-consent. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
+> ### The connection is the `workspace provisioning` service account — settled 2026-09-18
 >
-> If a service-principal connection is available for this connector, prefer it. If not, the connection should be owned by a **service account**, never a named individual, and its expiry should be monitored. That is Q45.
+> A service account, not a named individual, which is what Q45 asked for. The subsystem therefore does not depend on anybody's personal account, and a leaver does not stop the estate-wide rebuild.
+>
+> **It is still a single point of failure, and it is silent when it fails.** The rebuild runs against 200–300 capacities and stops the day that account is disabled, loses Capacity Admin, or has its credential expire. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
+>
+> So two obligations survive the decision, and both belong to whoever operates this: **name an owner for the account and monitor its credential expiry.**
 
 ---
 
@@ -576,7 +587,7 @@ Environment variables travel with a solution export; their **values** may not. S
 | # | Question | Answer |
 |---|---|---|
 | Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on every Fabric call. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven |
-| Q45 | What identity does that connection use? | **Unresolved, and it blocks granting Fabric roles** — see §5. A service-principal connection keeps the current model; a delegated user connection moves every role onto that account and makes the tenant SPN setting irrelevant. **If it must be a user, use a service account, not a named person** — an estate-wide rebuild across 200–300 capacities is otherwise one leaver away from stopping |
+| Q45 | What identity does that connection use? | **Answered 2026-09-18 — the `workspace provisioning` service account.** See the 2026-09-18 table below |
 
 ### Decision taken 2026-09-15
 
@@ -584,24 +595,45 @@ Environment variables travel with a solution export; their **values** may not. S
 |---|---|---|
 | Q46 | What are the real logical names of the soft-delete columns, and are they Boolean or Choice? | **Both tables use a column called `ubsppcoe_statecode`, and both are Choices, not Booleans.** On `ubsppcoe_Workspace`, `1` = Active and `2` = Deleted. On `ubsppcoe_Node`, `2` = Deleted and the other **ten of eleven options are live states**. So the two tables need *different* tests — `eq 1` for workspaces, `ne 2` for nodes — and the placeholder `ubsppcoe_isdeleted ne true` was wrong in name *and* in operator. All six filters rewritten; [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §1 is authoritative. **`ubsppcoe_statecode` is a custom column and has nothing to do with Dataverse's system `statecode`** |
 
+### Decisions taken 2026-09-18
+
+| # | Question | Answer |
+|---|---|---|
+| Q45 | Which identity does the connector connection authenticate as? | **The `workspace provisioning` service account.** A service account, not a named person — so no leaver stops the estate-wide rebuild. Every Fabric role in §5 is granted to it: Contributor on the holder workspace, Capacity Admin on every managed capacity. **Granting is unblocked.** Residual, and now an operations task rather than a design question: the account needs a named owner and its credential expiry needs monitoring, because a lapse presents as `401` on every capacity at once |
+| Q49 | Operator-initiated rebuild, or does the nightly Recurrence come back? | **Operator-initiated. No Recurrence.** Migration is a single run; anything it leaves behind is fixed by hand at the time, and ongoing change is carried by the per-event BAU flows. [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) stays in the solution, switched off, as the repair tool. **What this accepts** is that the five cases which fire no event — a `Failed` event-flow run nobody acts on, a `Node` move (Q17), a hard-deleted `PolicyException` row, a `Policy Item Types` edit, and any rule edited by hand in the portal — persist until somebody runs that flow. BAU does not cover them, because there is no event for it to fire on |
+| Q50 | Does the solution contain any scheduled flow at all? | **No.** Every flow is either Dataverse row-triggered or manual, plus one Power Apps read. `SyncCapacityPolicySets` was the only Recurrence flow and it is **discarded** — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md) — along with the `Policy Drift` table it was the sole writer of. **The cost is detection, not correction:** a policy set deactivated, replaced or deleted outside these flows is now invisible, because a rebuild writes to it and reports success. That is Q11, and it wants a named owner doing a periodic manual check of the holder workspace |
+| Q48 | What do the four Catch blocks write to `Logging`? | **Table `Logging`, three columns, picked from the designer dropdowns by display name.** `Log Category` = the literal `Error`; `Log Source Name` = `workflow()?['tags']?['flowDisplayName']`; `Log Source URL` = the run link built with `concat('https://flow.microsoft.com/manage/environments/', workflow()?['tags']?['environmentName'], '/flows/', workflow()?['name'], '/runs/', workflow()?['run']?['name'])`. **The logical names remain unrecorded and that is fine** — the table is insert-only, so nothing ever filters it or reads a row back. [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a is authoritative |
+| Q47 | What do the other ten `ubsppcoe_Node` statecode options mean? | **Not pursued. `ne 2` stands.** Only `2` = Deleted is confirmed and every other option is treated as live. Accepted deliberately rather than answered — if one of the ten turns out to mean archived, pending or rejected, `ne 2` is too generous and [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) will govern a capacity it should have left alone. The symptom would be a capacity locked down that nobody expected to be governed |
+| Q18 | Who owns the three tables we do not control, and what are they responsible for? | **The platform team owns and populates `ubsppcoe_Workspace`, `ubsppcoe_Node` and `Logging`, and is responsible for not changing column names.** That is the agreement this design rests on. **It is an undertaking, not a control** — nothing enforces it and nothing warns us if it lapses, so the failure modes stay worth knowing: a renamed column makes a filter return nothing and the rebuild emits rule 1 alone, locking the capacity silently; a widened *meaning* for `ubsppcoe_oapenabled` whitelists workspaces nobody intended, with every signal reporting healthy. Neither is detectable from this side. **Put the owning team and a named contact in the handover** |
+
 ### Still open
-Ordered by what they block. **No column name blocks the build any more** — Q19 closed on 2026-09-07, Q46 on 2026-09-15. Q45 is the only remaining build blocker.
+Ordered by what they block. **No column name blocks the build any more** — Q19 closed on 2026-09-07, Q46 on 2026-09-15. **Q45, Q47, Q48 and Q49 closed on 2026-09-18. Nothing blocks the build.** What remains is operational: who owns the manual obligations, and who tells us when the platform team's tables change.
 
 | # | Question | Blocks |
 |---|---|---|
-| **Q48** | **What are the logical names, types and conventions of the three `Logging` columns?** Only the UI display names are known — *Log Category*, *Log Source Name*, *Log Source URL*. The table belongs to the platform team, already has other writers, and is written by four Catch blocks ([CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a). **Ask for one populated row** — it settles the names, the types, the `Log Category` vocabulary and the URL convention at once. **Do not derive the names from the display names**; that is the Q46 mistake repeated | **Flow build** |
-| **Q18** | Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed, `ubsppcoe_oapenabled` stops being a boolean, or its **meaning** widens for OAP reasons? Any of the three breaks or silently redefines the whitelist. **Now covers `ubsppcoe_statecode` too** — a new option added to the Node table's eleven changes which capacities get governed, silently | Pre-launch |
-| **Q47** | **What do the other ten `ubsppcoe_statecode` options on `ubsppcoe_Node` actually mean?** Only `2` = Deleted is confirmed. Every filter treats the remaining ten as live. If any of them means archived, pending or rejected, `ne 2` is too generous and [InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md) will govern capacities it should leave alone | Pre-launch |
-| **Q45** | Which identity does the connector connection authenticate as, and who owns it? Every Fabric role in §5 attaches to that identity, so nothing can be granted until it is decided | **Flow build** |
+| **Q48** | ~~What do the Catch blocks write to `Logging`?~~ **Answered 2026-09-18** — see the decisions table above and [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) §5a | ~~Flow build~~ Closed |
+| **Q18** | ~~Who owns `ubsppcoe_Workspace`, and how are we told before a column is renamed?~~ **Answered 2026-09-18** — the platform team owns and populates `ubsppcoe_Workspace`, `ubsppcoe_Node` and `Logging`, and is responsible for not renaming columns. **Contact: Panuganti, Saikirankumar-Reddy.** Residual: **no notification mechanism exists**, so a breach is discovered as a capacity that has silently locked down | ~~Pre-launch~~ Agreement |
+| **Q47** | ~~What do the other ten `ubsppcoe_statecode` options on `ubsppcoe_Node` mean?~~ **Closed 2026-09-18 by acceptance, not by an answer** — `ne 2` stands, all ten treated as live. The residual risk now lives in Q18 | ~~Pre-launch~~ Accepted |
+| **Q45** | ~~Which identity does the connector connection authenticate as?~~ **Answered 2026-09-18 — the `workspace provisioning` service account**, and granting is unblocked. Residual: the account needs a named owner and expiry monitoring | ~~Flow build~~ Operations |
 | **Q9** | ~~Who seeds `CapacityWorkspace`?~~ **Resolved by Q12** — there is nothing to seed. Replaced by: who signs off the pre-cutover reconciliation between `fabric_workspaces.csv` and `ubsppcoe_oapenabled`? **Narrowed 2026-09-10:** this applies to the **script** migration path only. Under a flow-driven migration no CSV is read, `ubsppcoe_Workspace` is the source of truth from the first publish, and the question does not arise. Seeding `PolicyException` still does, on both paths | Cutover |
 | **Q16** | ~~Nothing triggers a rebuild when somebody edits `PolicyException`.~~ **Answered 2026-09-16 by [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md)** — yes, it needed a modified-row trigger. Narrowed to: a `Node` **move** still fires nothing, which is Q17 | Post-launch |
 | **Q33** | ~~Does taking an exception away need a flow of its own?~~ **Answered 2026-09-16 — yes.** [RebuildOnExceptionChange](docs/flows/capacity-policies/RebuildOnExceptionChange.md) fires on both directions of `ubsppcoe_active`. Residual: a **hard delete** of the row still fires nothing, so *deactivate, do not delete* is now procedure rather than preference | Post-launch |
 | **Q35** | An exception follows its workspace to a new capacity with nobody on that capacity approving it (§3). Acceptable, or does `PolicyException` need a `capacity` lookup and a re-approval step on move? | Post-launch |
-| **Q49** | **Nothing converges the estate automatically since the 2026-09-16 retrigger.** A `Failed` outcome from any event flow, a `Node` move, a hard-deleted exception row and any hand-edited rule now persist until somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md). Is an operator-initiated rebuild acceptable, or does a Recurrence copy need to come back? **If it does, it is this flow on a schedule — no per-event flow can cover those four cases, because none of them fires an event** | **Pre-launch** |
-| **Q17** | A `Node` move needs remove-then-add from the app. If it makes only the add call, the workspace stays whitelisted on the old capacity, and nothing reports it. Is that acceptable, or does the move need to be detected rather than declared? **Sharper since Q49** — there is no longer a scheduled run behind it | Post-launch |
+| **Q49** | ~~Operator-initiated rebuild, or does the Recurrence come back?~~ **Answered 2026-09-18 — operator-initiated, no Recurrence.** **Owner: the Dataverse team (Panuganti, Saikirankumar-Reddy), one run during migration.** Accepted deliberately: nothing converges the estate on its own afterwards, and the five no-event cases persist until somebody runs [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) again | ~~Pre-launch~~ Owned |
+| **Q17** | A `Node` move needs remove-then-add from the app. If it makes only the add call, the workspace stays whitelisted on the old capacity, and nothing reports it. Is that acceptable, or does the move need to be detected rather than declared? **Sharper since Q49 was settled** — there is deliberately no scheduled run behind it, so a missed call is permanent until a manual rebuild | Post-launch |
 | **Q10** | Should the app confirm against Fabric that a workspace exists and is on the capacity? The `Node` lookup answers it from the CMDB's point of view, but the CMDB can lag the real assignment, and a stale GUID is published verbatim and matches nothing — see §5 | Flow 3 |
-| **Q11** | What reconciles drift if someone edits rules in the portal? A scheduled compare-and-report, or compare-and-correct? | Post-launch |
+| **Q11** | **Nothing detects a policy set that is no longer in force. Accepted 2026-09-18; two optional implementations are specified below if it ever needs closing.** Anyone with rights on the holder workspace can deactivate our set, or create a replacement and activate it — Fabric allows only one active set per capacity, so ours is deactivated rather than removed and still looks present. **Every signal then reports healthy while the capacity is governed by something else, or by nothing.** A rebuild does not correct it and cannot see it: `replaceByPolicy` writes our rules to the deactivated set, returns `200`, and stamps `lastrebuild` with `lasterror` empty | Accepted — optional |
 | **Q29** | `capacity_id` on `CapacityPolicy` and the `node` lookup now hold the **same GUID** (Q41), so they can only disagree if one was written wrong. Should the drift scan assert they match, or is that too cheap a check to bother stating? | Post-launch |
+
+> ### Q11 — the two optional implementations
+>
+> **Neither is built, and neither is part of the handover.** They are recorded so that closing Q11 later is a decision rather than a design exercise.
+>
+> **Option 1 — detect.** A periodic manual check: open the holder workspace and confirm one active policy set per capacity, ours. No build, no cost, and it depends entirely on somebody remembering. Automating it means rebuilding the discarded scan — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md) is the complete specification, and its `Inactive` + `Untracked` pair is exactly this signature.
+>
+> **Option 2 — correct, and never detect at all.** [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) §6 calls `activate` with `allowReplace=true` on every capacity it rebuilds, taking the capacity back whether or not anything took it. Cheaper than Option 1 and needs no new flow — but it is a flow that **silently seizes capacities**, so a replacement set somebody created deliberately is overwritten with no record that it existed. That is why §6 leaves it off by default and asks for the decision to be stated rather than defaulted into.
+>
+> **They are not alternatives so much as different questions.** Option 1 tells you somebody intervened; Option 2 undoes the intervention without ever telling you. If the concern is governance — *who changed this* — only Option 1 answers it.
 
 ---
 
@@ -609,9 +641,9 @@ Ordered by what they block. **No column name blocks the build any more** — Q19
 
 One document per flow in [flows/capacity-policies/](docs/flows/capacity-policies/); build them in this order.
 
-1. **The four new tables** — `Capacity Policies`, `Policy Item Types`, `Policy Exceptions`, `Policy Drift` — plus the environment variables in §6. **Build them from [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md)**, which carries every column and type. Seed `Policy Item Types` from `fabric_item_types.csv`, and `Policy Exceptions` from `fabric_workspaces_exceptions.csv` if one is in use. Every column read from `ubsppcoe_Workspace` and `ubsppcoe_Node` is now confirmed (Q19 closed), so no filter is blocked on a name.
-2. **The connector connection.** Create one *HTTP with Microsoft Entra ID (preauthorized)* connection against `https://api.fabric.microsoft.com`, decide whose identity it uses (**Q45**), and grant that identity Contributor on the holder workspace and Capacity Admin on a throwaway capacity. There is no token flow to build — that is the whole of the auth work.
-3. **[SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md)** — read-only against Fabric. Proves the connection, the permissions and the Dataverse wiring with nothing at risk. **This is where a wrong identity surfaces**, as an empty list or a `401`, rather than halfway through the first rebuild.
+1. **The three new tables** — `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` — plus the environment variables in §6. **Build them from [CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md)**, which carries every column and type. `Policy Drift` is **dropped** — its only writer was discarded (§3). Seed `Policy Item Types` from [input/PolicyItemTypes.csv](input/PolicyItemTypes.csv), and `Policy Exceptions` from [input/PolicyExceptions.csv](input/PolicyExceptions.csv) — **a template whose three `EXAMPLE` rows must be deleted first**. Every column read from `ubsppcoe_Workspace` and `ubsppcoe_Node` is now confirmed (Q19 closed), so no filter is blocked on a name.
+2. **The connector connection.** Create one *HTTP with Microsoft Entra ID (preauthorized)* connection against `https://api.fabric.microsoft.com` as the **`workspace provisioning` service account** (Q45), and grant that account Contributor on the holder workspace and Capacity Admin on a throwaway capacity. There is no token flow to build — that is the whole of the auth work.
+3. **Prove the connection before anything writes.** A throwaway manual flow with a single *Invoke an HTTP request* — `GET https://api.fabric.microsoft.com/v1/capacities` — and nothing else. **This is where a wrong or under-privileged identity surfaces**, as an empty list or a `401`, rather than halfway through the first rebuild. Compare the count against the size of the estate: the list is scoped to the connection's identity, so a short list means the wrong identity and you have found it at the cheapest possible moment. Delete the flow afterwards. *(This step used to be `SyncCapacityPolicySets`, which was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md).)*
 4. **[RebuildCapacityPolicyRules](docs/flows/capacity-policies/RebuildCapacityPolicyRules.md)** — the writer. Test on one throwaway capacity. Exercise the **zero-enabled-workspace** case first and confirm it emits rule 1 alone; that is the path that silently unlocks a capacity if it is wrong. Then blank the policy row's **`node` lookup**, and confirm it fails rather than emitting rule 1. Add one `Policy Exceptions` row last and confirm rule 3 appears with **one** condition.
 5. **[InitializeCapacityPolicySet](docs/flows/capacity-policies/InitializeCapacityPolicySet.md)** — end to end on the same throwaway capacity, including activation. Confirms Capacity Admin is sufficient (§5).
 6. **[AddWorkspaceToPolicy](docs/flows/capacity-policies/AddWorkspaceToPolicy.md)**, then **[RemoveWorkspaceFromPolicy](docs/flows/capacity-policies/RemoveWorkspaceFromPolicy.md)** — build add first and copy it. Verify the validation outcomes before the happy path: `NotEnabled` on add and `StillEnabled` on remove are the two that a bare rebuild wrapper could not report, and they are the reason both flows exist.
@@ -659,7 +691,7 @@ Migration and BAU must not overlap on the same capacity.
 > | # | Do | Reversible? |
 > |---|---|---|
 > | 1 | [MIG_RegisterAllCapacityPolicySets](docs/flows/capacity-policies/MIG_RegisterAllCapacityPolicySets.md) — in tranches, checking the first five | Yes — delete the items and rows |
-> | 2 | Seed `Policy Exceptions` from `fabric_workspaces_exceptions.csv`, `workspace_id` column only | Yes |
+> | 2 | Seed `Policy Exceptions` — [input/PolicyExceptions.csv](input/PolicyExceptions.csv) is the template; fill it from `fabric_workspaces_exceptions.csv`, `workspace_id` column only | Yes |
 > | 3 | [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) | Yes — nothing is enforced yet |
 > | 4 | [MIG_ActivateAllCapacityPolicySets](docs/flows/capacity-policies/MIG_ActivateAllCapacityPolicySets.md) in `Report` mode, and read the list | — |
 > | 5 | The same in `Activate` mode, stopping after five to verify | **No.** Deny-all is now in force |

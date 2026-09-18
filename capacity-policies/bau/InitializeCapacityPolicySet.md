@@ -2,7 +2,7 @@
 
 Creates the policy set for a newly inventoried capacity, registers it in Dataverse, builds the default rules and activates it. **Fires on a `ubsppcoe_Node` row appearing.**
 
-> **Not built yet.** Specification, not a description of something that exists.
+> **Built in the customer environment — not verified against an export.** The flow exists. This document is the specification it was built from, and the solution cannot be exported out of that environment, so action names, `runAfter` wiring and expressions here have **not** been reconciled against the live definition. Treat any disagreement as the flow being right and this document being stale.
 
 > ## Retriggered 2026-09-12 — no longer called by the provisioning app
 >
@@ -40,7 +40,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > That was the intended posture when a provisioning app called this flow deliberately and could warn the user. **Under a row trigger, nobody decided.** The platform team adds an inventory row, and a capacity locks down within minutes — with no screen, no message and no acknowledgement anywhere.
 >
-> **This needs agreeing before the flow is turned on.** The failure mode is a capacity owner who cannot create a Lakehouse, does not know a policy exists, and finds nobody who admits to having done it. The likely resolution is that somebody deactivates the policy set, which is the one outcome this design cannot detect from the rebuild ([SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) is what catches it, a day later).
+> **This needs agreeing before the flow is turned on.** The failure mode is a capacity owner who cannot create a Lakehouse, does not know a policy exists, and finds nobody who admits to having done it. The likely resolution is that somebody deactivates the policy set — the one outcome this design cannot detect from the rebuild, and **since the drift scan was discarded on 2026-09-18, cannot detect at all**.
 >
 > Three ways out, in rough order of cost: have the platform team's process notify the capacity owner; create the set **deactivated** and activate it on a separate signal; or keep activation with a caller and let this flow do everything up to 8c. **Decide before turning this on, not after the first ticket.**
 
@@ -50,7 +50,7 @@ Related: [../../CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md), [Rebui
 >
 > `Added or Modified` mitigates it only if something later edits the row. If the platform team writes the Node row once and never touches it, that capacity is never initialised, never governed, and **nothing reports it** — [MIG_RebuildAllCapacityPolicies](docs/flows/capacity-policies/MIG_RebuildAllCapacityPolicies.md) only walks capacities that already have a `Capacity Policies` row, so it cannot notice one that was never registered, and it only runs when somebody starts it.
 >
-> **That is a governance hole, not an inconvenience.** A capacity silently ungoverned looks identical to one that was never meant to be governed. The fix is a scheduled sweep — list `ubsppcoe_Node`, left-join `Capacity Policies`, report the gaps — which does not exist and is not specified here. **Raise it with [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md), which is the flow that ought to own it.**
+> **That is a governance hole, not an inconvenience.** A capacity silently ungoverned looks identical to one that was never meant to be governed. The fix would be a sweep — list `ubsppcoe_Node`, left-join `Capacity Policies`, report the gaps — which **does not exist and is not specified anywhere**. It would have belonged with `SyncCapacityPolicySets`, and that flow was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **Until something owns it, the only detection is somebody noticing.**
 
 ---
 
@@ -405,9 +405,9 @@ Then the columns:
 >
 > **This value goes in the ƒx tab**, unlike the string form used elsewhere in this table — it is a pure expression with no `@{}` interpolation.
 
-> **`ubsppcoe_policysetname` is written here and nowhere else.** [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) uses it to spot a policy set renamed by hand without spending a `GET` per set, and the rebuild never touches it. Leave it blank and that check silently compares against nothing.
+> **`ubsppcoe_policysetname` is written here and nowhere else**, and nothing reads it any more — the drift scan that compared it against Fabric was discarded. Write it anyway: it is free, and it is the only record of what the set was called if anyone ever has to match items in the holder workspace back to rows by hand.
 
-**Write the row before activating.** If activation fails, the policy set still exists in Fabric and must be recorded, or the next run creates a second one and `SyncCapacityPolicySets` reports a `Conflict` nobody caused.
+**Write the row before activating.** If activation fails, the policy set still exists in Fabric and must be recorded, or the next run creates a second one — two sets scoped to one capacity, which nothing now reports.
 
 ### 8b. `Run_rebuild` — **Run a Child Flow** → `RebuildCapacityPolicyRules`, passing `triggerOutputs()?['body/ubsppcoe_nodeuniqueid']`.
 
@@ -549,7 +549,7 @@ Copy that from the code block, not from a table cell — the `|` would have to b
 >
 > The box below explains that five of this flow's six failure points happen **before** `Add_policy_row`, so there is no row to write `ubsppcoe_lasterror` to. Until now those five produced no Dataverse record at all.
 >
-> **The worst of them is a policy set created in Fabric with no `Capacity Policies` row** — an orphan that nothing maps back to and that `SyncCapacityPolicySets` will later report as `Untracked` drift with no explanation of how it got there. The `Logging` row is what connects the two, so keep row 7 outside the Condition.
+> **The worst of them is a policy set created in Fabric with no `Capacity Policies` row** — an orphan that nothing maps back to and, since the drift scan was discarded, **nothing will ever report**. The `Logging` row is the only trace it leaves, so keep row 7 outside the Condition.
 
 > ### The `empty(policyRowId)` guard matters more here than anywhere else
 >
@@ -565,7 +565,7 @@ Copy that from the code block, not from a table cell — the `|` would have to b
 >
 > The Catch does not clean it up, and should not try. Deleting a Fabric item from an error handler, on a run that has just demonstrated it does not understand the current state, is how one bad run becomes two.
 >
-> [SyncCapacityPolicySets](docs/flows/capacity-policies/SyncCapacityPolicySets.md) reports it as `Untracked`. **Check the sync report after any `Caught` run on this flow** — it is the only thing that will find the orphan.
+> **Nothing detects the orphan.** The drift scan that would have reported it as `Untracked` was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](discarded/SyncCapacityPolicySets.md)). **So the `Logging` row from a `Caught` run on this flow is the only signal there is** — read it, and check the holder workspace by hand, or the set stays there indefinitely.
 
 ---
 
