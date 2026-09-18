@@ -29,6 +29,10 @@
 .PARAMETER IncludeAll
     Return denied rules too, not just active ones.
 
+.PARAMETER CsvPath
+    Also write the results to this path as CSV. Lists are flattened to semicolon-separated
+    text so the file opens cleanly in Excel.
+
 .EXAMPLE
     Connect-AzAccount
     .\Get-FabricOutboundRules.ps1 -WorkspaceId '00000000-0000-0000-0000-000000000000'
@@ -42,6 +46,14 @@
     $env:FABRIC_CLIENT_ID     = '<client>'
     $env:FABRIC_CLIENT_SECRET = '<secret>'
     .\Get-FabricOutboundRules.ps1 -WorkspaceId $ws
+
+.EXAMPLE
+    # Export to CSV. -CsvPath goes on the same call, after -WorkspaceId.
+    .\Get-FabricOutboundRules.ps1 -WorkspaceId '00000000-0000-0000-0000-000000000000' -CsvPath '.\outbound-rules.csv'
+
+.EXAMPLE
+    # Everything together: service principal, denied rules included, exported.
+    .\Get-FabricOutboundRules.ps1 -WorkspaceId $ws -TenantId $tid -ClientId $cid -ClientSecret $secret -IncludeAll -CsvPath 'C:\temp\rules.csv'
 
 .NOTES
     Requires Contributor (or higher) on the workspace.
@@ -57,6 +69,8 @@ param(
     [string]$ClientId,
 
     [securestring]$ClientSecret,
+
+    [string]$CsvPath,
 
     [switch]$IncludeAll
 )
@@ -136,15 +150,40 @@ if (-not $rules) {
     return
 }
 
-$rules | ForEach-Object {
+# Flattens anything the API returns - string, array or nested object - into one CSV-safe cell.
+function ConvertTo-FlatString {
+    param($Value)
+
+    if ($null -eq $Value) { return '' }
+    if ($Value -is [string]) { return $Value }
+    if ($Value -is [System.Collections.IEnumerable]) {
+        return (($Value | ForEach-Object { ConvertTo-FlatString $_ }) -join '; ')
+    }
+    if ($Value -is [psobject] -and $Value.PSObject.Properties.Count -gt 0) {
+        # An object where a plain value was expected - keep every field rather than lose data.
+        return (ConvertTo-Json $Value -Compress -Depth 5)
+    }
+    return [string]$Value
+}
+
+$results = $rules | ForEach-Object {
     [pscustomobject]@{
         WorkspaceId       = $WorkspaceId
         OapEnabled        = $oapEnabled
-        ConnectionType    = $_.connectionType
-        DefaultAction     = $_.defaultAction
+        ConnectionType    = ConvertTo-FlatString $_.connectionType
+        DefaultAction     = ConvertTo-FlatString $_.defaultAction
         EndpointCount     = @($_.allowedEndpoints).Count
         WorkspaceCount    = @($_.allowedWorkspaces).Count
-        AllowedEndpoints  = @($_.allowedEndpoints  | ForEach-Object { $_.hostnamePattern })
-        AllowedWorkspaces = @($_.allowedWorkspaces | ForEach-Object { $_.workspaceId })
+        AllowedEndpoints  = ConvertTo-FlatString @($_.allowedEndpoints  | ForEach-Object { $_.hostnamePattern })
+        AllowedWorkspaces = ConvertTo-FlatString @($_.allowedWorkspaces | ForEach-Object { $_.workspaceId })
     }
 }
+
+if ($CsvPath) {
+    $dir = Split-Path -Parent $CsvPath
+    if ($dir -and -not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    $results | Export-Csv -Path $CsvPath -NoTypeInformation -Encoding UTF8
+    Write-Host "Wrote $($results.Count) row(s) to $CsvPath" -ForegroundColor Green
+}
+
+$results
