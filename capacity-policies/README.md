@@ -40,7 +40,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 | Building or repairing a table | [docs/CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) |
 | Editing a flow | The flow's own document in [bau/](bau/) or [migration/](migration/), plus [docs/PLATFORM-FINDINGS.md](docs/PLATFORM-FINDINGS.md) |
 | Taking this over | [docs/HANDOVER-REGISTER.md](docs/HANDOVER-REGISTER.md) — obligations, dependencies, accepted risks |
-| Deploying to another environment | [docs/DEPLOYMENT-ALM.md](docs/DEPLOYMENT-ALM.md) |
+| Deploying to another tenant or environment | [docs/DEPLOYMENT-RUNBOOK.md](docs/DEPLOYMENT-RUNBOOK.md), then [docs/DEPLOYMENT-ALM.md](docs/DEPLOYMENT-ALM.md) |
 | Something is broken | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Granting access, or diagnosing a `401` | [docs/SECURITY-AND-IDENTITY.md](docs/SECURITY-AND-IDENTITY.md) |
 | Asking *why is it like this* | [docs/ADR.md](docs/ADR.md) — the Q1–Q50 decision log |

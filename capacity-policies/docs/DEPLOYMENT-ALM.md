@@ -1,6 +1,8 @@
 # Capacity policies — deployment and ALM
 
-What the solution contains, what travels with an export, and what must be done by hand in every environment.
+What the solution contains, what travels with an export, and how source control works.
+
+> **For the step-by-step procedure — prerequisites, flows, tables, seeding, order of operations — use [DEPLOYMENT-RUNBOOK.md](DEPLOYMENT-RUNBOOK.md).** This document covers what is in the solution and what does not travel with it.
 
 ---
 
@@ -64,21 +66,11 @@ All five are **Text**, created inside the solution so they inherit the `ubsppcoe
 
 ## 4. Deploying to a new environment
 
-Order matters — each step depends on the one before.
+**Superseded by [DEPLOYMENT-RUNBOOK.md](DEPLOYMENT-RUNBOOK.md) §7**, which carries the full order of operations including the identity, Fabric and Dataverse prerequisites this section omitted.
 
-1. **Confirm the platform team's tables exist** (`ubsppcoe_Workspace`, `ubsppcoe_Node`, `Logging`)
-2. **Confirm the publisher** — prefix `ubsppcoe`. Creating a new one makes every logical name in every document wrong
-3. **Import the solution**
-4. **Publish all customizations.** Nothing is live to the connectors until this runs
-5. **Set all five environment variable current values** (§3)
-6. **Create and authorise the three connections** as the `workspace provisioning` account, and map the connection references
-7. **Seed the two tables** — [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv), then [input/PolicyExceptions.csv](../input/PolicyExceptions.csv) with the example rows deleted
-8. **Grant Fabric roles** — Contributor on the holder workspace, Capacity Admin on each capacity ([SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.2)
-9. **Check every Dataverse trigger's Scope is `Organization`**, not `User`
-10. **Turn the flows on.** Imported flows are off by default. Leave all four `MIG_` flows **off**
-11. **Smoke-test read-only first** — one `GET /v1/capacities` before anything writes
+The one step worth repeating here, because it is the one that is missed:
 
-> **Step 9 is the one that is missed.** A flow left at `User` scope never fires for the platform team's edits, produces no error and no run history, and looks perfectly healthy.
+> **Check every Dataverse trigger's Scope is `Organization`, not `User`.** A flow left at `User` scope never fires for the platform team's edits, produces no error and no run history, and looks perfectly healthy.
 
 ---
 
