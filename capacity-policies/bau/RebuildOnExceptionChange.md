@@ -8,7 +8,7 @@ Fires when a `Policy Exceptions` row is created or edited, derives which capacit
 >
 > `Policy Exceptions` is the only table in this design that **nothing triggers on**. Rule 3 is rebuilt from it only when somebody runs [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md), so approving an exception — or revoking one — is not live in Fabric until then. This flow closes that gap.
 >
-> It answers **Q16** and **Q33** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7, both of which ask whether the table needs a modified-row trigger of its own. Update them when this is built.
+> It answers **Q16** and **Q33** in [ADR.md](../docs/ADR.md), both of which ask whether the table needs a modified-row trigger of its own. Update them when this is built.
 
 Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3, [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md), [RemoveWorkspaceFromPolicy.md](RemoveWorkspaceFromPolicy.md) — build that one first, then copy it.
 

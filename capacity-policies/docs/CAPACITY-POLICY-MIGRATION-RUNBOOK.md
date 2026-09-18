@@ -330,7 +330,7 @@ Turn on the four Dataverse-triggered flows switched off in Phase 0.1:
 
 Leave `MIG_RebuildAllCapacityPolicies` **off**. It is manual, so there is no schedule to restore — but keep it in the solution; §7.2 does not delete it.
 
-> **Nothing converges the estate on its own after cutover, and nothing observes it either.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies` — **Q49**. And since the drift scan was discarded, a policy set deactivated, replaced or deleted outside the flows is not detected at all — **Q11**. Both in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
+> **Nothing converges the estate on its own after cutover, and nothing observes it either.** The per-event flows publish their own change, but a failed one, a `Node` move, a hard-deleted exception row and any hand-edited rule all persist until somebody runs `MIG_RebuildAllCapacityPolicies` — **Q49**. And since the drift scan was discarded, a policy set deactivated, replaced or deleted outside the flows is not detected at all — **Q11**. Both in [ADR.md](ADR.md).
 
 **Before considering migration closed**, run `MIG_RebuildAllCapacityPolicies` once more and read its summary. It is the only estate-wide check there is, and it is what tells you whether anything was left half-done.
 

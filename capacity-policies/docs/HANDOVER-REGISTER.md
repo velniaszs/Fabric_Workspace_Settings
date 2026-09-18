@@ -2,7 +2,7 @@
 
 Everything the receiving team inherits that is **not** self-evident from the code: obligations a person must perform, dependencies on other teams, risks accepted deliberately, and gaps that were considered and left unbuilt.
 
-**Nothing here is a defect.** Every entry was decided; the reasoning is in §7 of [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md), referenced by question number.
+**Nothing here is a defect.** Every entry was decided; the reasoning is in [ADR.md](ADR.md), referenced by question number.
 
 > **Read §A first.** Those are the items where *doing nothing* silently produces a wrong estate. The rest describe risk that is already understood.
 
@@ -79,7 +79,7 @@ Specified or considered, and not delivered. Each is a decision that can be revis
 
 | # | Gap | What exists |
 |---|---|---|
-| D1 | **Drift detection.** No flow observes whether Fabric matches Dataverse | Two optional implementations recorded in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7; the full scan spec is preserved in [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md) |
+| D1 | **Drift detection.** No flow observes whether Fabric matches Dataverse | Two optional implementations recorded in [ADR.md](ADR.md); the full scan spec is preserved in [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md) |
 | D2 | **Un-governed capacity sweep.** A capacity whose Node row was written once and never touched is never initialised, and looks identical to one nobody meant to govern | Not specified anywhere |
 | D3 | **Alerting.** `Logging` has no message column and nobody watches a table; there is no mail, no SLA, no escalation path | `ubsppcoe_lasterror` holds the error text; the `Logging` row holds the run URL |
 | D4 | **Emergency unlock at scale.** The documented procedure uses PowerShell from `C:\GIT\ubs-policies`, a repository **not part of this handover** | [Operations runbook](CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) §8. Either hand that repo over or replace the procedure |
@@ -88,6 +88,8 @@ Specified or considered, and not delivered. Each is a decision that can be revis
 ---
 
 ## E. Environment and deployment
+
+Full procedure in [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md).
 
 | # | Item | Note |
 |---|---|---|
@@ -101,7 +103,7 @@ Specified or considered, and not delivered. Each is a decision that can be revis
 
 ## F. Closed — no action
 
-Recorded so nobody reopens them. Full reasoning in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
+Recorded so nobody reopens them. Full reasoning in [ADR.md](ADR.md).
 
 | # | Decision |
 |---|---|

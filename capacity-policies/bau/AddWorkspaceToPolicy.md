@@ -565,7 +565,7 @@ Verified end to end in [SCOPE-SANDBOX.md](../discarded/SCOPE-SANDBOX.md) E9, E10
 >
 > `Capacity Policies` was the interim choice because it is ours, it already carries the column, and the child flow writes it in the same convention ([RebuildCapacityPolicyRules](RebuildCapacityPolicyRules.md) Step 10a). It stays — the reason it was never sufficient is the `policyRowId` guard, which 7d now covers rather than replaces.
 >
-> **`ubsppcoe_Workspace` was ruled out on principle, not convenience.** Q23 in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7 is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them.
+> **`ubsppcoe_Workspace` was ruled out on principle, not convenience.** Q23 in [ADR.md](../docs/ADR.md) is an absolute rule that no flow in this design writes any column on `ubsppcoe_Workspace` or `ubsppcoe_Node`, and it is absolute because those tables are another team's and other systems act on them.
 >
 > There was also a practical objection, and it still holds against any future proposal to move the write there: the error being recorded is about a **capacity's rules**, not about a workspace. A single failed rebuild concerns every workspace on that capacity, so filing it on the one workspace row that happened to trigger the run puts it in the wrong place and makes it look narrower than it is.
 

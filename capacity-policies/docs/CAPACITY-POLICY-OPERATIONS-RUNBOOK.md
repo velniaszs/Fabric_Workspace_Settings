@@ -29,7 +29,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACIT
 >
 > They still do the second job they always did: **telling you whether the change actually did what you meant.** `NotEnabled` and `StillEnabled` are the whole value; a bare rebuild could not report either.
 >
-> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7.
+> **What no flow covers**, and now needs a human running `MIG_RebuildAllCapacityPolicies`: a workspace **moved** between capacities, a `Policy Exceptions` row **hard-deleted** rather than deactivated, a `Policy Item Types` edit (§7), and any rule edited by hand in the portal. See **Q49** in [ADR.md](ADR.md).
 
 ---
 
@@ -269,4 +269,4 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 >
 > The dangerous state is somebody deactivating our policy set, or creating a replacement and activating that. The capacity is then governed by something nobody in this system controls, **and every signal above still reports healthy** — the rebuild writes its rules to the deactivated set and succeeds.
 >
-> **Nothing detects it.** `SyncCapacityPolicySets` would have, and it was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)). **Accepted as a known gap** — see **Q11** in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §7, which records two optional implementations if it ever needs closing. Until one is built, the only way to find this is to open the holder workspace and confirm one active policy set per capacity.
+> **Nothing detects it.** `SyncCapacityPolicySets` would have, and it was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md)). **Accepted as a known gap** — see **Q11** in [ADR.md](ADR.md), which records two optional implementations if it ever needs closing. Until one is built, the only way to find this is to open the holder workspace and confirm one active policy set per capacity.

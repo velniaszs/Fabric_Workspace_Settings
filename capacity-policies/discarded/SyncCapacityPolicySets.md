@@ -4,7 +4,7 @@
 >
 > **The document is kept for the record only.** It is excluded from the handover documentation set, and the `Policy Drift` table it was the sole writer of is not built either.
 >
-> **What is given up.** This was the only thing that would have detected a policy set **deactivated, replaced or deleted** outside the flows — drift a rebuild cannot fix and cannot even see, because a rebuild against a deactivated set writes its rules successfully and reports healthy. That detection now does not exist. Other documents which described it as the safety net behind a caught failure or an orphaned policy set have been corrected to say that nothing catches those cases. See **Q11** in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §7.
+> **What is given up.** This was the only thing that would have detected a policy set **deactivated, replaced or deleted** outside the flows — drift a rebuild cannot fix and cannot even see, because a rebuild against a deactivated set writes its rules successfully and reports healthy. That detection now does not exist. Other documents which described it as the safety net behind a caught failure or an orphaned policy set have been corrected to say that nothing catches those cases. See **Q11** in [ADR.md](../docs/ADR.md).
 
 Scans the holder workspace, reconciles what Fabric actually holds against the `Capacity Policies` table, and records the differences. Detects policy sets created, replaced or deleted outside the flows.
 
