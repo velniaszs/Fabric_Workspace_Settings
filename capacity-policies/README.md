@@ -38,7 +38,10 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 | Responding to a change in the estate | [docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) |
 | Running the one-off cutover | [docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md](docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md) |
 | Building or repairing a table | [docs/CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) |
-| Editing a flow | The flow's own document in [bau/](bau/) or [migration/](migration/) |
+| Editing a flow | The flow's own document in [bau/](bau/) or [migration/](migration/), plus [docs/PLATFORM-FINDINGS.md](docs/PLATFORM-FINDINGS.md) |
+| Taking this over | [docs/HANDOVER-REGISTER.md](docs/HANDOVER-REGISTER.md) — obligations, dependencies, accepted risks |
+| Something is broken | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
+| Granting access, or diagnosing a `401` | [docs/SECURITY-AND-IDENTITY.md](docs/SECURITY-AND-IDENTITY.md) |
 | Asking *why is it like this* | §7 of [docs/CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) — the Q1–Q50 decision log |
 
 ---
@@ -124,4 +127,4 @@ capacity-policies/
 
 Every flow is **built in the customer environment**. The documents here are the specifications they were built from.
 
-Open items, owners and known gaps are in §7 of [docs/CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md).
+**Obligations, dependencies and known gaps are in [docs/HANDOVER-REGISTER.md](docs/HANDOVER-REGISTER.md)** — read §A before operating anything, because those are the items where doing nothing silently produces a wrong estate.

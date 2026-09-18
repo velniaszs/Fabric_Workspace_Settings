@@ -466,6 +466,8 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 
 ## 5. Permissions
 
+> **[SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) is authoritative** and splits the requirements by platform. This section is the reasoning behind it.
+
 **Decision 2026-09-08: every Fabric call uses the *HTTP with Microsoft Entra ID (preauthorized)* connector, not the plain `HTTP` action.** The connector attaches the bearer token itself, so there is no token flow, no client secret, and no `Authorization` header anywhere in this design. `GetPolicyToken` is retired.
 
 > ### What that changes, and it is not only plumbing
@@ -476,18 +478,18 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 > |---|---|---|
 > | Who calls Fabric | The policy SPN, via client credentials | **The connection's identity** |
 > | Where the secret lives | An environment variable we manage | Nowhere. The platform holds it |
-> | *Service principals can use Fabric APIs* tenant setting | Hard prerequisite | **Only if the connection is a service principal.** Irrelevant for a user connection |
+> | *Service principals can call Fabric public APIs* tenant setting | Hard prerequisite | **Only if the connection is a service principal.** Irrelevant for a user connection |
 > | `Item.ReadWrite.All` etc. | Delegated scopes, and therefore **not** the mechanism | **The mechanism, if the connection is delegated** — this inverts |
 > | Breaks when | The secret expires | The secret expires **or the connection owner leaves, loses the role, or has the connection revoked** |
 >
-> **The Fabric-side roles below attach to the connection's identity** — they do not follow the flow. **Settled 2026-09-18 (Q45): that identity is the `workspace provisioning` service account.** Grant against it, not against whoever builds or runs the flows.
+> **The Fabric-side roles below attach to the connection's identity** — they do not follow the flow. **Settled 2026-09-18 (Q45): that identity is the `workspace provisioning` service account — a *user* account, email and password.** So every call is **delegated**: there is no service principal, no app registration and no client secret anywhere in this solution, and the roles are granted to the account directly.
 
 | Need | Where | Notes |
 |---|---|---|
 | **Contributor on the holder workspace** | Fabric workspace role, on **one** workspace | Held by the connection's identity. See below |
 | **Capacity Admin on every managed capacity** | Capacity role | Confirmed requirement for activating a policy set on that capacity |
-| Capacity enumeration | `GET /v1/capacities` | Returns what the **connection's identity** administers. A user connection therefore sees a different list from an SPN one — and flow 1 reads `Skipped` off exactly that list |
-| *Service principals can use Fabric APIs* | Tenant setting | **Only if the connection is a service principal.** Symptom when missing: a bare `401` on every call — same failure mode as PREREQUISITES A3/B1 |
+| Capacity enumeration | `GET /v1/capacities` | Returns what the **connection's identity** administers, so a capacity it does not administer is simply absent — and flow 1 reads `Skipped` off exactly that list |
+| *Service principals can call Fabric public APIs* | Tenant setting | **Not required.** The connection is a user account, not a service principal. That setting, and every Admin API setting, is scoped to SPNs in an allowed security group — see [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.3 |
 | Fabric administrator | only for `/v1/admin/policySets/*` | **Not needed.** Those operations are tenant-scope only; nothing here uses them |
 
 ### Contributor is needed on the holder workspace only
@@ -506,7 +508,7 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 >
 > A service account, not a named individual, which is what Q45 asked for. The subsystem therefore does not depend on anybody's personal account, and a leaver does not stop the estate-wide rebuild.
 >
-> **It is still a single point of failure, and it is silent when it fails.** The rebuild runs against 200–300 capacities and stops the day that account is disabled, loses Capacity Admin, or has its credential expire. Nothing in the run history says *"the connection is the problem"* — it presents as `401` on every capacity at once.
+> **It is a user account, so the connection carries a user account's failure modes.** A password rotation, an MFA enforcement, a Conditional Access rule, a licence removal or a leaver review all break it — and all of them present as `401` on **every** capacity at once, with nothing in the run history naming the connection. See [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.5.
 >
 > So two obligations survive the decision, and both belong to whoever operates this: **name an owner for the account and monitor its credential expiry.**
 
