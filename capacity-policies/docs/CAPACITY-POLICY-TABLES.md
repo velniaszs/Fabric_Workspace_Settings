@@ -576,7 +576,7 @@ Solution toolbar → **Publish all customizations**. Nothing is live to the conn
 
 ### 8.11. The environment variables
 
-The flow docs reference six of these. **They do not exist until you create them**, and a flow referencing a missing one fails at runtime with:
+The flow docs reference seven of these. **They do not exist until you create them**, and a flow referencing a missing one fails at runtime with:
 
 > *Unable to process template language expressions in action `Initialize_nextUri` … The workflow parameter `policyholderworkspaceid ab_policyholderworkspaceid` is not found.*
 
@@ -589,12 +589,21 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 | `PolicyMaxWorkspacesPerRule` | `ubsppcoe_PolicyMaxWorkspacesPerRule` | Text | `49` | Rebuild |
 | `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | Text | `50` | Rebuild |
 | `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | Text | `pol_` | Initialize |
+| `PolicyApiBeta` | `ubsppcoe_PolicyApiBeta` | **Two options** | **No** | Rebuild, Initialize, Delete, and the two `MIG_` flows |
 
 **The schema name comes from your solution's publisher**, so creating these inside the solution from 8.2 produces the `ubsppcoe_` names above automatically. Type only the part after the prefix — the box already shows `ubsppcoe_`.
 
-**Five, not six.** [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
+**Six, not seven.** [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
 
 **Both numeric ones are Text, deliberately.** The flows wrap them in `int(...)` at the point of use. A Dataverse *Number* environment variable returns a value the expression engine handles inconsistently; Text plus an explicit cast is the version that behaves.
+
+> ### `PolicyApiBeta` is a toggle, and it is Two options for a reason
+>
+> The capacity-policy API is re-released as **beta** at public preview, when every call needs `?beta=true` on the end of the URL, and returns to today's form at GA. The variable lets both transitions happen **without opening a flow** — six URLs end with `@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}`.
+>
+> **A Text variable was tried first and does not work.** An empty value cannot be stored — the run fails with *value was not found* and flows referencing it will not publish; clearing a value is silently ignored, so the flow keeps the old one; and a bare `?` is rejected by Fabric with `400`. A Yes/No toggle has none of those states. Full record in [API-BETA-SWITCH.md](API-BETA-SWITCH.md).
+>
+> **Set the Default Value to No as well as the Current Value**, so an import that skips the prompt lands on today's behaviour rather than on no value at all.
 
 **Set a Current Value, not only a Default Value.** A variable with neither resolves to blank, which does not error — it silently builds a URL with a missing segment.
 

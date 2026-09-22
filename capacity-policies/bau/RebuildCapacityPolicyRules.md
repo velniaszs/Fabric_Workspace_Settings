@@ -66,6 +66,7 @@ The workspace whitelist lives in the platform team's existing tables. This flow 
 | `ubsppcoe_PolicySentinelWorkspaceId` | `00000000-0000-0000-0000-000000000000` |
 | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
 | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
+| `ubsppcoe_PolicyApiBeta` | **Two options.** `No` until the API's public-preview release, `Yes` while it is in beta — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md) |
 
 **Create these before building — they do not exist by default**, and a missing one fails at runtime with `The workflow parameter … is not found`. Steps in [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11.
 
@@ -738,7 +739,7 @@ The sentinel here is a **single value inside a literal array**, so `"@{…}"` in
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` |
 | Header `Content-Type` | `application/json` |
 | Body of the request | `@outputs('Compose_body')` |
 

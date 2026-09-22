@@ -34,7 +34,7 @@ Three tables are read and written but **not owned by this project**: `ubsppcoe_W
 | Cloud flows | 11 |
 | Dataverse tables to create | 3 |
 | Dataverse tables that must already exist | 3 |
-| Environment variables | 5 |
+| Environment variables | 6 |
 | Connections | 3 |
 | Fabric workspaces to create | 1 (the holder) |
 | Seed data files | 2 |
@@ -175,7 +175,7 @@ All at **Organization** depth.
 
 ## 6. Environment variables
 
-All **Text**, created inside the solution so they inherit the prefix.
+Six, created inside the solution so they inherit the prefix. **All Text except the last**, which is a Yes/No toggle.
 
 | Display name | Schema name | Value |
 |---|---|---|
@@ -184,10 +184,13 @@ All **Text**, created inside the solution so they inherit the prefix.
 | `PolicyMaxWorkspacesPerRule` | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
 | `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 | `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | `pol_` |
+| `PolicyApiBeta` — **Two options** | `ubsppcoe_PolicyApiBeta` | **No**, until the capacity-policy API enters public preview |
 
 **Set a Current Value, not only a Default Value.** A variable with neither resolves to blank and silently builds a malformed URL.
 
 **Both numeric ones are Text deliberately** — the flows cast with `int(...)`.
+
+> **`PolicyApiBeta` switches the API version without a flow edit.** At public preview the capacity-policy endpoints need `?beta=true` appended; at GA they do not. Six URLs end with `@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}`, so each transition is one toggle rather than six flow edits. **Set its Default Value to No as well**, so an import that skips the prompt behaves as today. See [API-BETA-SWITCH.md](API-BETA-SWITCH.md).
 
 ---
 
@@ -196,7 +199,7 @@ All **Text**, created inside the solution so they inherit the prefix.
 1. **Confirm §4.2** — the platform team's three tables exist, with the exact column names. **Stop here if they do not**
 2. **Confirm the publisher** prefix is `ubsppcoe` (§2.4 P2)
 3. **Create the solution**, then the three tables (§4.1) → **Publish all customizations**
-4. **Create the five environment variables** (§6)
+4. **Create the six environment variables** (§6)
 5. **Create the service account** and grant its Dataverse security role (§2.1, §4.3)
 6. **Create the holder workspace** in Fabric; grant Contributor to the service account (§2.3 F1–F2)
 7. **Grant Capacity Admin** on every capacity to be governed (F3)
@@ -220,7 +223,7 @@ Before handing the environment over:
 
 - [ ] `GET /v1/capacities` returns the expected number of capacities
 - [ ] `Policy Item Types` has 14 active rows
-- [ ] All five environment variables have **current** values
+- [ ] All six environment variables have **current** values, and `PolicyApiBeta` reads **No**
 - [ ] Every Dataverse trigger Scope reads `Organization`
 - [ ] A test rebuild on **one throwaway capacity** publishes rule 1 plus the expected whitelist rules
 - [ ] **The zero-workspace case emits rule 1 alone** — the path that silently unlocks a capacity if it is wrong

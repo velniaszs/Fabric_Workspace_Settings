@@ -36,6 +36,7 @@ Three reasons, and the first is the one that forces the issue.
 - Build this **before** [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md), which calls it.
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
 - The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md).
+- Reads the **`ubsppcoe_PolicyApiBeta`** environment variable in Step 6 — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 
 > **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md).
 >
@@ -227,7 +228,7 @@ Caps at 256 characters, then strips a single trailing dot. **Fabric rejects trai
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` |
 | Header `Content-Type` | `application/json` |
 
 Body:

@@ -32,6 +32,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildC
 - **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header**.
 - Needs a **Dataverse connection**.
 - The SPN needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
+- Needs the **`ubsppcoe_PolicyApiBeta`** environment variable, read by Steps 6 and 8c — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 - Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
 
 > ### The capacity is born locked, on purpose — and now nobody asked for it
@@ -307,7 +308,7 @@ If you prefer readability, use an `Initialize variable` for the capped value and
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` |
 | Header `Content-Type` | `application/json` |
 
 Body:
@@ -420,7 +421,7 @@ With no OAP-enabled workspaces on the capacity's Node yet, and no exception rows
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` |
 | Header `Content-Type` | `application/json` |
 
 Body:

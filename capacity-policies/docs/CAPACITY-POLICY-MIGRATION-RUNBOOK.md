@@ -66,8 +66,11 @@ Power Automate → **Solutions** → your solution.
 | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
 | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 | `ubsppcoe_PolicyNamePrefix` | Whatever the policy sets should be called |
+| `ubsppcoe_PolicyApiBeta` | **No** — set it to `Yes` only once the capacity-policy API is in public-preview beta ([API-BETA-SWITCH.md](API-BETA-SWITCH.md)) |
 
 A missing one fails at runtime with `The workflow parameter … is not found`, per capacity, all the way through a run.
+
+**`ubsppcoe_PolicyApiBeta` pointing the wrong way fails differently** — every Fabric call is rejected by the service rather than by the flow engine, so the run history shows a per-capacity `400`/`404` with nothing naming the variable. Confirm it before a migration run, not during one.
 
 ### 0.4 Confirm permissions on the connection identity
 
@@ -98,7 +101,7 @@ Any policy set in the holder workspace created while building the flows, and any
 
 - [ ] `MIG_RebuildAllCapacityPolicies` off, and the four Dataverse-triggered BAU flows off
 - [ ] `Policy Item Types` seeded and active
-- [ ] All five environment variables set
+- [ ] All six environment variables set, with `ubsppcoe_PolicyApiBeta` pointing the right way for the API's current release stage
 - [ ] Contributor on the holder workspace confirmed
 - [ ] Duplicate display names checked
 - [ ] Test leftovers deleted

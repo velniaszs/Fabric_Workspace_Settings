@@ -36,6 +36,7 @@ Three consequences, all of which shape the design below:
 - Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector.
 - The connection's identity needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
 - No child flow. The activate call is three lines; wrapping it would add a 120-second budget for nothing.
+- Reads the **`ubsppcoe_PolicyApiBeta`** environment variable in §4b — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 
 ---
 
@@ -181,7 +182,7 @@ And nothing else. **No Fabric call, no Dataverse write.**
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_policy')?['ubsppcoe_policysetid']}/activate` |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_policy')?['ubsppcoe_policysetid']}/activate@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` |
 | Header `Content-Type` | `application/json` |
 
 Body:

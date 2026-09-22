@@ -12,7 +12,7 @@ What the solution contains, what travels with an export, and how source control 
 |---|---|---|
 | Cloud flows | 11 | 7 BAU (incl. `ListCapacityPolicySets`), 4 `MIG_` |
 | Dataverse tables | 3 | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` |
-| Environment variables | 5 | §3 |
+| Environment variables | 6 | §3 |
 | Connection references | 3 | Fabric HTTP, Dataverse, Office 365 Outlook |
 
 **Publisher prefix is `ubsppcoe`.** Not `crbab` — that belongs to the workspace-settings canvas app and is a different solution entirely.
@@ -46,7 +46,7 @@ A target environment without the platform team's tables cannot run any of this �
 
 ## 3. Environment variables
 
-All five are **Text**, created inside the solution so they inherit the `ubsppcoe_` prefix.
+Six, created inside the solution so they inherit the `ubsppcoe_` prefix. **All Text except `PolicyApiBeta`**, which is Two options.
 
 | Display name | Schema name | Value |
 |---|---|---|
@@ -55,12 +55,15 @@ All five are **Text**, created inside the solution so they inherit the `ubsppcoe
 | `PolicyMaxWorkspacesPerRule` | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` |
 | `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 | `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | `pol_` |
+| `PolicyApiBeta` | `ubsppcoe_PolicyApiBeta` | **No** — `Yes` only while the capacity-policy API is in public-preview beta |
 
 **Set a Current Value, not only a Default Value.** A variable with neither resolves to blank without erroring.
 
 **Both numeric ones are Text deliberately** — the flows wrap them in `int(...)`. A Dataverse *Number* variable returns a value the expression engine handles inconsistently.
 
-**There is no policy-name variable.** `ItemCreation` is a literal in the rebuild body. Do not create a sixth variable unless you also parameterise that body.
+**There is no policy-name variable.** `ItemCreation` is a literal in the rebuild body. Do not create a seventh variable unless you also parameterise that body.
+
+> **`PolicyApiBeta` is the API-version switch**, read by six Fabric calls across four flows. It is the one variable whose **Default Value matters as much as its current value**: the default travels with the solution, so a fresh environment that imports without a prompt still behaves as it does today instead of failing to publish. Rationale and the full switch procedure are in [API-BETA-SWITCH.md](API-BETA-SWITCH.md).
 
 ---
 

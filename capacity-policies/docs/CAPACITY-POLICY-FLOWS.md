@@ -524,13 +524,14 @@ So the calling identity needs Contributor on **one** workspace, Capacity Admin o
 | `MaxRulesPerPolicy` | Environment variable | `50` |
 | Policy name | **Hard-coded** in the rebuild body | `ItemCreation`. Listed here as an environment variable in an earlier draft, but no flow reads one — see [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11. Parameterise it if the policy type ever needs to vary by environment |
 | Name prefix | Environment variable | `pol_` |
+| API release stage | Environment variable `ubsppcoe_PolicyApiBeta` — **Two options** | **No**. `Yes` appends `?beta=true` to all six Fabric calls while the API is in public-preview beta — [API-BETA-SWITCH.md](API-BETA-SWITCH.md) |
 | Item types | `PolicyItemType` table | |
 | Exceptions — rule 3 | `PolicyException` table | Ours, written by hand or by the app. No flow writes it |
 | Desired state | `ubsppcoe_Workspace` — `Node` lookup + `ubsppcoe_oapenabled` | Existing table, owned elsewhere |
 | Capacity → Node row | `ubsppcoe_Node` — filter `ubsppcoe_nodeuniqueid` to get the key `ubsppcoe_nodeid` | Existing table, owned elsewhere |
 | Policy set map | `CapacityPolicy` table | |
 
-The two limits are environment variables so that a service-side change does not need a flow edit.
+The two limits are environment variables so that a service-side change does not need a flow edit. **`PolicyApiBeta` exists for the same reason** — the API's move to beta at public preview, and back at GA, changes only the URL, so a toggle carries both transitions.
 
 Environment variables travel with a solution export; their **values** may not. Same caveat as OPEN-ISSUES §8.1 in this repo.
 

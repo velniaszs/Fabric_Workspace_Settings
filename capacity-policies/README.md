@@ -43,6 +43,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 | Deploying to another tenant or environment | [docs/DEPLOYMENT-RUNBOOK.md](docs/DEPLOYMENT-RUNBOOK.md), then [docs/DEPLOYMENT-ALM.md](docs/DEPLOYMENT-ALM.md) |
 | Something is broken | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Granting access, or diagnosing a `401` | [docs/SECURITY-AND-IDENTITY.md](docs/SECURITY-AND-IDENTITY.md) |
+| Switching the API to beta at public preview, or back at GA | [docs/API-BETA-SWITCH.md](docs/API-BETA-SWITCH.md) — one toggle, six call sites |
 | Asking *why is it like this* | [docs/ADR.md](docs/ADR.md) — the Q1–Q50 decision log |
 
 ---
@@ -104,6 +105,8 @@ Both hand-maintained tables have CSV import templates in [input/](input/).
 **Workspace GUIDs are never validated.** Fabric accepts any well-formed GUID in `workspace.id`. A typo or a stale entry is stored happily and simply never matches — no error, anywhere, and the owner is left with a policy that looks correct and denies them.
 
 **A policy set that is not in force still reports healthy.** If someone deactivates ours or activates a replacement, the rebuild writes its rules to the dead set and returns `200`. Nothing detects this — see Q11.
+
+**The API's URL changes twice this year, in opposite directions.** It becomes beta at public preview — every call needs `?beta=true` — and reverts at GA. Both are handled by the `ubsppcoe_PolicyApiBeta` toggle rather than by editing flows, and **a toggle pointing the wrong way fails at Fabric, per capacity, naming nothing**. See [docs/API-BETA-SWITCH.md](docs/API-BETA-SWITCH.md).
 
 ---
 

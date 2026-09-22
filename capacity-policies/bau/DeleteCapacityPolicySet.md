@@ -69,6 +69,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 
 - Build [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) first. This flow reverses it, and reuses its connector pattern.
 - Needs a **Dataverse connection**, and — for §3 only — the *HTTP with Microsoft Entra ID (preauthorized)* connector.
+- §3c reads the **`ubsppcoe_PolicyApiBeta`** environment variable — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 - §2 makes **no Fabric calls at all**. That is most of why it is the recommended version.
 
 ---
@@ -179,7 +180,7 @@ The second row is the sanity check above. Both must hold before anything is dele
 | 1 | `Delete_policy_set` — **Invoke an HTTP request** | `DELETE .../policySets/{id}` |
 | 2 | `Update_policy_row` — Dataverse **Update a row** | `status` = `Deleted`. Runs after the delete on **is successful** only |
 
-The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}` as the workspace and `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']` as the set. **Confirm the `DELETE` route against the scripts in `ubs-policies` before building** — they are the authority on these paths, not the published reference, which [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) Step 8c already found incomplete once.
+The URL takes `@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}` as the workspace and `first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']` as the set, and ends with `@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}` — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md). **Confirm the `DELETE` route against the scripts in `ubs-policies` before building** — they are the authority on these paths, not the published reference, which [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) Step 8c already found incomplete once.
 
 > ## No `Deactivate` in this branch — tested 2026-09-13
 >

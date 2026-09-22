@@ -20,6 +20,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACIT
 | **Exception granted or revoked** | Edit `Policy Exceptions`, then rebuild — §6 | You |
 | **Governed item type added or retired** | Edit `Policy Item Types`, then rebuild — §7 | You |
 | **Emergency: unlock a capacity** | §8 | You |
+| **Fabric API moves to beta, or to GA** | Set the `ubsppcoe_PolicyApiBeta` toggle — §9. No flow to run | You |
 
 > ### Nothing is self-healing — changed 2026-09-16
 >
@@ -252,7 +253,42 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 | Whole capacity locked, `rulecount` = 1 | No workspace has `ubsppcoe_oapenabled = true`. §3 |
 | One workspace refused, others fine | That workspace is not whitelisted, or its `Node` points elsewhere |
 | Everything refused across many capacities | An item type was added in §7, or `Policy Item Types` was mis-seeded |
+| Every Fabric call failing `400`/`404`, all capacities, starting at a specific moment | The API changed release stage and the `ubsppcoe_PolicyApiBeta` toggle was not switched — §9 |
 | Was working, now is not | Read `lasterror` and `lastrebuild` on the row, then the flow run history |
+
+---
+
+## 9. The Fabric API changes release stage — beta, or GA
+
+**Run:** nothing. **Change one environment variable.**
+
+The capacity-policy endpoints are re-released as **beta** at public preview, when every call must carry `?beta=true`, and drop it again at **GA**. Six Fabric calls across four flows read the toggle, so the estate moves between routes without a flow being opened.
+
+| Event | `ubsppcoe_PolicyApiBeta` |
+|---|---|
+| Private preview — today | **No** |
+| **API enters public preview** | **Yes** |
+| **API reaches GA** | **No** |
+
+**To change it:** [make.powerapps.com](https://make.powerapps.com) → **Solutions** → the policy solution → **`PolicyApiBeta`** → set **Current Value** → **Save**. In **every** environment, on the same day.
+
+### Do it on the day the service flips, not after
+
+There is **no confirmed grace period**. From the moment the service changes until the toggle is set, every policy call fails — and **nothing retries**. Flows that failed in that window need the §2 and §3 recovery paths, plus `MIG_RebuildAllCapacityPolicies` for rules.
+
+**A capacity created during that window is the one that matters:** its policy set was never created or never activated, so it comes out of the window **ungoverned while looking registered**. Check for a `ubsppcoe_Node` row with no `Capacity Policies` row, or one whose `ubsppcoe_status` is not `Active`.
+
+### Verify it actually took effect
+
+A changed value is not necessarily a value in use — a cleared value was observed to be ignored entirely.
+
+1. Run the two-line Compose check in [API-BETA-SWITCH.md](API-BETA-SWITCH.md) §3.2 — it must return `?beta=true` after the switch, blank after the switch back.
+2. Rebuild one non-production capacity and confirm `200` with the expected rule count.
+3. If the old behaviour persists: confirm **Current Value** rather than Default Value was changed, then turn the affected flow **Off** and **On**.
+
+> **Never clear the value to mean No.** Clearing is silently ignored and the flows keep the previous setting — the estate stays on the beta route while the screen says otherwise. Set **No** explicitly.
+
+**Full procedure, rationale and the six call sites: [API-BETA-SWITCH.md](API-BETA-SWITCH.md).**
 
 ---
 
@@ -264,6 +300,7 @@ Deactivated, the policy set enforces nothing and the capacity behaves as it did 
 | `lasterror` non-empty | `Capacity Policies` | That capacity's last rebuild failed |
 | `lastrebuild` growing stale | `Capacity Policies` | Nothing has rebuilt that capacity. **No longer self-correcting** — an estate-wide rebuild only happens when someone runs it |
 | A `Failed` or `Caught` run on any BAU flow | Flow run history | The change was not published. **Nothing retries it** |
+| `400` or `404` on **every** capacity at once | Flow run history | The `ubsppcoe_PolicyApiBeta` toggle does not match the API's current release stage — §9. The error names the call, never the variable |
 
 > ### The blind spot — a policy set that is not in force
 >

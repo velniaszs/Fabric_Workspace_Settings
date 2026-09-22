@@ -155,6 +155,29 @@ That is the exact expression the six call sites use. Run it with the toggle **No
 
 > **Do this before edit 1, not after edit 6.** It is the same failure in one place instead of six, and it is the failure you have already met once.
 
+### 3.3. How to change the toggle
+
+The whole operation, at every phase. **This is the entire switch** — there is nothing else to do to move the estate between the GA and beta routes.
+
+1. [make.powerapps.com](https://make.powerapps.com) → **Solutions** → the policy solution.
+2. Open **`PolicyApiBeta`**.
+3. Set **Current Value** — **not** Default Value — to **Yes** or **No**.
+4. **Save**.
+5. Repeat in **every** environment.
+6. Verify with §3.2, then §5.4.
+
+| When | Set it to |
+|---|---|
+| Today — private preview | **No** |
+| The day the API enters **public preview** | **Yes** |
+| The day the API reaches **GA** | **No** |
+
+> **Leave the Default Value at No permanently.** It is the fallback a fresh environment inherits when an import skips the prompt, and *No* is the state that matches the API for all but the public-preview window.
+
+> **Never clear the value, in either direction.** A cleared value was observed to be silently ignored — the flow keeps the previous one (§3.1). Setting `No` and clearing look identical on screen and are not.
+
+> **No flow is opened, saved, exported or imported.** If a switch ever seems to need that, the value did not take effect — §5.2.1a, not a flow edit.
+
 ---
 
 ## 4. How a call site changes
@@ -214,12 +237,14 @@ Nothing else about the action changes — **method, headers, body, Asynchronous 
 | 2 | Append the snippet to the **six** actions in §2, building it from the picker — **step by step in §5.1.1** | Four flows, in the customer environment |
 | 3 | Save each flow, then **export the solution and confirm** each has the `PolicyApiBeta (ubsppcoe_PolicyApiBeta)` entry in `definition.parameters` | Six actions, four flows |
 | 4 | Run the §5.4 verification with the toggle at **No** — behaviour must be identical to today | Customer environment |
-| 5 | Update the **flow documents**: the URL row in each of the six action tables | `bau/`, `migration/` — the six files in §2 |
-| 6 | Update **five → six environment variables** everywhere the count appears | See the table below |
-| 7 | Add the variable to the config table | [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 |
-| 8 | Link this document from the docs index | [README.md](../README.md) *Where to start* |
+| 5 | ~~Update the **flow documents**~~ — **done 2026-09-22.** Six URL rows, plus the variable in each flow's prerequisites | `bau/`, `migration/` — the six files in §2 |
+| 6 | ~~Update **five → six environment variables** everywhere the count appears~~ — **done 2026-09-22** | See the table below |
+| 7 | ~~Add the variable to the config table~~ — **done 2026-09-22** | [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 |
+| 8 | ~~Link this document from the docs index~~ — **done 2026-09-22** | [README.md](../README.md) *Where to start* |
 
-**The count of five is asserted in eight places.** All of them become six:
+**Steps 2–4 are the only work left, and all of it is in the customer environment.** Every document in the repository now describes the toggle; no flow has been edited yet.
+
+**The count of five was asserted in eight places.** All are now six:
 
 | File | Where |
 |---|---|
@@ -348,7 +373,7 @@ https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspa
 | # | Change |
 |---|---|
 | 1 | **Get the flip date from the product team** and hold the day. The value change is two minutes; knowing when to make it is the hard part |
-| 2 | Set `ubsppcoe_PolicyApiBeta` to **Yes**, in **every** environment, on that day |
+| 2 | Set `ubsppcoe_PolicyApiBeta` to **Yes**, in **every** environment, on that day — click path in §3.3 |
 | 3 | **Prove the change took effect** — §5.2.1a. Do not skip this one |
 | 4 | Run the §5.4 verification |
 | 5 | **Clean up the window** — §5.2.1 |
@@ -389,7 +414,7 @@ The three event flows trigger on Dataverse row changes, get one attempt, write `
 
 ### 5.3. At GA — the switch back
 
-**Set the toggle back to **No**.** Then run §5.2.1a and §5.4, exactly as at public preview.
+**Set the toggle back to **No**** — §3.3, same three clicks. Then run §5.2.1a and §5.4, exactly as at public preview.
 
 > **A toggle cannot be cleared, which is why it was chosen** — the 2026-09-22 finding that a cleared value is silently ignored (§3.1) would otherwise have applied to this step, and left the estate on the beta route while the screen said otherwise.
 
