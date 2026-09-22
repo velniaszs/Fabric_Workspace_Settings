@@ -211,12 +211,16 @@ Body:
 |---|---|
 | Table name | `Capacity Policies` |
 | Row ID | `items('For_each_policy')?['ubsppcoe_capacitypolicyid']` |
-| `ubsppcoe_status` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Active', 'Inactive')` |
-| `ubsppcoe_lasterror` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
+| `ubsppcoe_status` | `if(or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive')), 'Active', 'Inactive')` |
+| `ubsppcoe_lasterror` | `if(or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive')), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
 
 **Writing on both paths is what makes the run restartable.** A row left `Inactive` with a populated `lasterror` is picked up by the next run and carries the reason it failed last time.
 
-Tolerate `PolicySetIsAlreadyActive` — the end state is what was wanted. If it appears often, something outside this flow is activating too.
+> **`PolicySetAlreadyActive` is a success, and it arrives as a `400`.** Confirmed 2026-09-22: re-activating an already-active set returns **`400 BadRequest`** with `"errorCode": "PolicySetAlreadyActive"`. The end state is what was wanted, so the expressions above record `Active` with an empty `lasterror`.
+>
+> **This matters more here than in the BAU flow.** This one is run in tranches and re-run after a cancellation, so **every capacity activated by an earlier tranche answers `400` on the next pass**. Without the tolerance a second run would mark the whole of the first tranche `Inactive` and fill `failures` with capacities that are working correctly.
+>
+> **The code has no `Is` in it** — earlier revisions said `PolicySetIsAlreadyActive`, which matches nothing. If `errorCode` reads empty, the connector wrapped the payload: use `contains(string(body('Activate')), 'PolicySetAlreadyActive')`.
 
 ### 4d. `Condition_activated_ok` — **Condition**
 
@@ -224,7 +228,9 @@ Tolerate `PolicySetIsAlreadyActive` — the end state is what was wanted. If it 
 
 | Left | Operator | Right |
 |---|---|---|
-| `less(coalesce(outputs('Activate')?['statusCode'], 0), 300)` | is equal to | `true` |
+| `or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive'))` | is equal to | `true` |
+
+**The same test as 4c, for the same reason** — an already-active capacity counts toward `activated`, not toward `failures`.
 
 **Yes** → `Increment_activated` — **Increment variable** `activated` by `1`.
 
@@ -325,6 +331,7 @@ Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate
 | # | Test | Expect |
 |---|---|---|
 | 1 | `Report` against a populated table | The list, a count, and **zero** Fabric calls in the run history. Check the action list, not just the output |
+| 1b | `Activate` twice over the same tranche | The second run reports every capacity as **activated**, not failed — each `Activate` answers `400 PolicySetAlreadyActive` and 4c/4d treat it as success. `failures` stays empty and no row flips to `Inactive` |
 | 2 | `Report` twice | Identical output. It writes nothing, so it cannot converge on anything |
 | 2b | **Mode `Reprot`, and mode left blank** | Terminates at 2b. **Nothing activated.** The fail-closed guard |
 | 3 | `Activate` on one throwaway capacity | Policy set active in the portal, row flips to `Active`, `lasterror` empty |

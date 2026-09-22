@@ -455,10 +455,14 @@ Runs after `Activate` on **is successful** and **has failed**.
 | Column | Value |
 |---|---|
 | Row ID | `body('Add_policy_row')?['ubsppcoe_capacitypolicyid']` |
-| `ubsppcoe_status` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Active', 'Inactive')` |
-| `ubsppcoe_lasterror` | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
+| `ubsppcoe_status` | `if(or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive')), 'Active', 'Inactive')` |
+| `ubsppcoe_lasterror` | `if(or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive')), '', coalesce(body('Activate')?['message'], body('Activate')?['errorCode'], string(body('Activate'))))` |
 
-Tolerate `PolicySetIsAlreadyActive` — it means the end state is already what was wanted. Treat any `2xx`, and that specific error code, as `Active`.
+> **`PolicySetAlreadyActive` is a success, and it arrives as a `400`.** Confirmed 2026-09-22: re-activating an already-active policy set returns **`400 BadRequest`** with `"errorCode": "PolicySetAlreadyActive"` in the body. The end state is exactly what was wanted, so both expressions above treat it as `Active` with an empty `lasterror` — otherwise a re-run marks a perfectly healthy capacity `Inactive` and writes an error nobody needs to act on.
+>
+> **The code has no `Is` in it.** Earlier revisions of this document called it `PolicySetIsAlreadyActive`, which matches nothing and would have left the condition permanently false.
+>
+> If `body('Activate')?['errorCode']` comes back empty on the failure path, the connector has wrapped the payload — use `contains(string(body('Activate')), 'PolicySetAlreadyActive')` instead. Read the action's **Outputs** once to see which shape you get.
 
 ### 8e. `Set_outcome_created` — **Set variable**
 
@@ -467,7 +471,7 @@ Runs after `Update_status` on **is successful** and **has failed**.
 | Field | Value |
 |---|---|
 | Name | `outcome` |
-| Value | `if(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), 'Created', 'Failed')` |
+| Value | `if(or(less(coalesce(outputs('Activate')?['statusCode'], 0), 300), equals(coalesce(body('Activate')?['errorCode'], ''), 'PolicySetAlreadyActive')), 'Created', 'Failed')` |
 
 > **Without this step the flow never reports success.** `outcome` is seeded `Failed` in Step 2 and only reassigned on the two early-exit branches, so the whole happy path — create, register, rebuild, activate — would end at the Respond still saying `Failed`. Easy to miss, because every Fabric side effect works correctly and only the answer is wrong.
 
@@ -576,6 +580,7 @@ Copy that from the code block, not from a table cell — the `|` would have to b
 |---|---|---|
 | 1 | Add a `ubsppcoe_Node` row for a fresh F-SKU capacity | `Created`; one policy set in the portal with **exactly one** rule, active on the capacity |
 | 2 | Edit any column on that Node row | Flow fires again, `AlreadyExists`, **no second policy set** |
+| 2b | Re-run against a capacity whose policy set is **already active** | `Activate` returns **`400 PolicySetAlreadyActive`** and the run still reports `Created`, with `ubsppcoe_status` = `Active` and `lasterror` **empty**. The tolerance in 8d/8e is what this tests |
 | 3 | Add a Node row for a P-SKU capacity | `Skipped`, no Fabric write attempted |
 | 4 | Add a Node row whose `ubsppcoe_nodeuniqueid` is a GUID Fabric does not know | `Skipped` — *not found or not administered*. **Confirm nothing retries** |
 | 5 | Add a Node row with `ubsppcoe_nodeuniqueid` **blank**, then fill it in | No run on the first save; a run on the second. This is the whole reason for *Added or Modified* |
