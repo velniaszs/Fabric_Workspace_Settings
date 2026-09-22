@@ -1,6 +1,6 @@
 # The `?beta=true` switch — surviving PuPr and GA without editing flows
 
-**Status: planning only. Nothing in this repo has been changed. No flow has been edited, no environment variable exists yet.**
+**Status: planning only. Nothing in this repo has been changed. No flow has been edited, no environment variable exists yet.** The six questions this plan depended on were **answered 2026-09-22** — see §6. All six confirm the plan: **the route is the only thing that changes.**
 
 The capacity-policy endpoints are in **private preview** today. At **public preview** they are re-released as **beta**, and every call needs a query parameter:
 
@@ -30,7 +30,7 @@ At **GA** the parameter is removed again and the URL returns to what it is today
 >
 > **Which also means it can be done and tested this week, before public preview is turned on.** Doing it afterwards means doing it under a broken estate, because the moment the service flips, every call in §2 starts failing at once (§5).
 
-**Two values, ever.** `?beta=true` and empty. Anyone tempted to add a third — a per-environment variant, a `preview=true` — should read §6 first.
+**Two values, ever — confirmed 2026-09-22.** `?beta=true` and empty; there is no third form of the parameter (§6 Q3). Anyone tempted to add a per-environment variant should read §6 first.
 
 ---
 
@@ -53,8 +53,8 @@ Six actions across four flow documents. Each needs the suffix appended to the **
 
 | Call | Where | Why |
 |---|---|---|
-| `GET /v1/capacities` | [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 4, [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) §3a, [MIG_RegisterAllCapacityPolicySets](../migration/MIG_RegisterAllCapacityPolicySets.md) §3a | GA endpoint, unrelated to policy sets. **Confirm, do not assume** — §6 Q1 |
-| `GET /v1/operations/{id}` and `/result` | [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 7, [MIG_InitializeCapacityPolicySet](../migration/MIG_InitializeCapacityPolicySet.md) Step 7 | The generic long-running-operation endpoint. **The operation is created by a beta call**, so whether it inherits the beta route is the open question in §6 Q2 |
+| `GET /v1/capacities` | [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 4, [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) §3a, [MIG_RegisterAllCapacityPolicySets](../migration/MIG_RegisterAllCapacityPolicySets.md) §3a | Unrelated to policy sets. **Confirmed unaffected 2026-09-22** — §6 Q1 |
+| `GET /v1/operations/{id}` and `/result` | [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 7, [MIG_InitializeCapacityPolicySet](../migration/MIG_InitializeCapacityPolicySet.md) Step 7 | The generic long-running-operation endpoint. The operation is *created* by a beta call but does not inherit the beta route — **confirmed unaffected 2026-09-22**, §6 Q2 |
 | Everything in [SyncCapacityPolicySets](../discarded/SyncCapacityPolicySets.md) | `discarded/` | Discarded 2026-09-18. **Not built, not to be changed.** It is the only design that put its own query string on a policy URL (`?recursive=true`) — see §4 |
 
 ### Flows with nothing to change
@@ -90,13 +90,13 @@ Listed so nobody goes looking for a call that is not there.
 
 Not `beta=true`, and not a `Yes/No`. The reason is arithmetic in the expression language:
 
-| Design | What a call site looks like | Empty-value behaviour |
+| Design | What a call site looks like | Why not |
 |---|---|---|
-| **Full suffix, chosen** | `…/policySets@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}` | URL is unchanged. Nothing to strip |
-| Parameter only (`beta=true`) | `…/policySets@{if(empty(parameters(…)), '', concat('?', parameters(…)))}` | Same result, six times the expression |
-| Two-option choice / boolean | `…/policySets@{if(equals(parameters(…), 'Yes'), '?beta=true', '')}` | Encodes *today's* parameter name in six flows. A rename at PuPr and the whole exercise was pointless |
+| **Full suffix, chosen** | `…/policySets@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}` | — Empty resolves to nothing and the URL is unchanged. No conditional at any call site |
+| Parameter only (`beta=true`) | `…/policySets@{if(empty(parameters(…)), '', concat('?', parameters(…)))}` | Identical result, six times the expression, six chances to mistype it |
+| Two-option choice / boolean | `…/policySets@{if(equals(parameters(…), 'Yes'), '?beta=true', '')}` | **Puts the literal `?beta=true` back into six flows** — the exact thing this exercise removes — in exchange for nothing |
 
-**A Text variable holding the literal suffix is the only version where the next change is a value, not an edit.** If the product team ships `?beta=1`, or `?api-version=beta`, or two parameters, the value absorbs it and no flow is touched.
+**The chosen form is the only one where a call site contains no logic at all.** `@{parameters(…)}` appended to a URL is the smallest change that can be made to six actions, and the smallest thing to get wrong. Q3 confirms the value will only ever be `?beta=true` or empty, so the conditional forms buy no flexibility that is ever used.
 
 **Text, and Text only** — consistent with the two numeric variables, which are Text deliberately ([CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11).
 
@@ -168,15 +168,34 @@ Nothing else about the action changes — **method, headers, body, Asynchronous 
 
 ### 5.2. At public preview — the switch
 
+**Assume the old route dies the moment the new one goes live** (§6 Q5). Between the service flipping and somebody setting the value, every call in §2 fails.
+
 | # | Change |
 |---|---|
-| 1 | Set `ubsppcoe_PolicyApiSuffix` **Current Value** to `?beta=true`, in **every** environment |
-| 2 | Run the §5.4 verification |
-| 3 | Set it back to empty and re-run one call if you want proof the old route is really gone — optional, and only worth it on a non-production environment |
+| 1 | **Get the flip date from the product team** and hold the day. The value change is two minutes; knowing when to make it is the hard part |
+| 2 | Set `ubsppcoe_PolicyApiSuffix` **Current Value** to `?beta=true`, in **every** environment, on that day |
+| 3 | Run the §5.4 verification |
+| 4 | **Clean up the window** — §5.2.1 |
 
 **No flow is opened. No solution is exported or imported.** That is the whole return on this exercise.
 
-> **Do it in every environment on the same day.** A dev environment left empty fails silently until the next person tests there and concludes their change broke it.
+> **Do it in every environment at once.** A dev environment left empty fails silently until the next person tests there and concludes their own change broke it.
+
+#### 5.2.1. Nothing that failed in the window fixes itself
+
+The three event flows trigger on Dataverse row changes, get one attempt, write `ubsppcoe_lasterror` and stop. **There is no scheduled rebuild and no drift scan** ([README](../README.md)), so a failure during the window persists until a human acts. Check all three, in this order:
+
+| What may have been missed | How to find it | How to fix it |
+|---|---|---|
+| A **rules** change — a workspace enabled or disabled, an exception granted or revoked | Run history of [AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy](../bau/RemoveWorkspaceFromPolicy.md), [RebuildOnExceptionChange](../bau/RebuildOnExceptionChange.md); `ubsppcoe_lasterror` on `Capacity Policies` | [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) over the estate |
+| A **new capacity** — [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) failed at create or activate | A `ubsppcoe_Node` row with no `Capacity Policies` row, or one whose `ubsppcoe_status` is not `Active` | Re-run `InitializeCapacityPolicySet` for that capacity |
+| A **retired capacity** — [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md) failed | A soft-deleted Node row whose policy row is still `Active` | Re-run that flow, or delete the set by hand |
+
+> ### The estate-wide rebuild is not enough on its own
+>
+> It republishes **rules**. It does not create a policy set that was never created, and it does not activate one that was never activated — so a capacity provisioned during the window comes out of it **ungoverned while looking registered**, which is the same failure mode the handover register already names for a reversed soft-delete.
+>
+> **A capacity created in that window is open, not closed.** It is the one outcome of this transition that fails in the unsafe direction, and it is invisible unless somebody looks at the two columns above.
 
 ### 5.3. At GA — the switch back
 
@@ -188,7 +207,7 @@ Same sequence each time. It exercises four of the six call sites.
 
 1. **`GET /v1/capacities`** from a throwaway manual flow — confirms the connection and identity before anything writes. [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 step 3 describes it.
 2. **`RebuildCapacityPolicyRules` against one non-production capacity** — call 1. A `200` and the expected rule count.
-3. **`InitializeCapacityPolicySet` against a test capacity** — calls 2 and 3, plus the operations polling that §6 Q2 asks about.
+3. **`InitializeCapacityPolicySet` against a test capacity** — calls 2 and 3, plus the `202` polling path, which §6 Q2 confirms is unaffected.
 4. **Read the rules back in the portal.** A rebuild that returns `200` having written nothing is the failure mode this subsystem cannot otherwise see.
 5. **`DeleteCapacityPolicySet`** on that test capacity — call 4, and it cleans up after step 3.
 
@@ -196,20 +215,28 @@ Same sequence each time. It exercises four of the six call sites.
 
 ---
 
-## 6. Open questions — confirm before public preview, not after
+## 6. Questions — all answered 2026-09-22
 
-| # | Question | Why it matters | Who |
-|---|---|---|---|
-| **Q1** | Does `?beta=true` apply to **`GET /v1/capacities`**? | Three flows read it. If it does, this document's inventory is wrong by three actions | Product team |
-| **Q2** | Does a long-running operation started by a beta call need the suffix on **`/v1/operations/{id}`** and **`/result`**? | `Create_policy_set` returns `202` on the slow path. If polling needs it and does not have it, capacity creation hangs and times out — **while the create itself succeeded** | Product team |
-| **Q3** | Is the parameter exactly **`beta=true`**, lower case, and is `true` the only accepted value? | The variable absorbs any answer, but the value has to be right once | Product team |
-| **Q4** | Does the **request body or response shape** change at beta, or only the route? | A changed body is not a variable, it is a flow edit — and this document would be the wrong plan | Product team |
-| **Q5** | Is there a **grace period** where both routes answer? | Decides whether §5.2 can be done calmly or has to be same-hour | Product team |
-| **Q6** | Does `?beta=true` apply to the **PowerShell scripts** in `C:\GIT\ubs-policies` — `activate_policy_set.ps1` and the rest? | Those scripts are the documented authority for these payloads. They need the same switch, via `$env:` or a parameter | This team |
+**Every open question is closed, and none of the answers changes the plan.** Recorded rather than deleted, because *"we checked, and it is only the route"* is the assumption the whole design rests on, and the next person will want to know it was asked rather than assumed.
 
-> **Q4 is the one that invalidates the plan.** Everything here assumes *the route changes and nothing else does*. If the beta release also renames a body property, the six actions need opening anyway and the variable only saves the second transition.
+| # | Question | Answer |
+|---|---|---|
+| **Q1** | Does `?beta=true` apply to **`GET /v1/capacities`**? | **No.** The capacity list is untouched. The inventory in §2 stands at six actions |
+| **Q2** | Does a long-running operation started by a beta call need the suffix on **`/v1/operations/{id}`** and **`/result`**? | **No.** The `202` path in [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 7 keeps working unchanged |
+| **Q3** | Is the parameter exactly **`beta=true`**? | **Yes — it is either nothing or `beta=true`.** Two values, exactly as §1 assumes |
+| **Q4** | Does the **request body or response shape** change at beta? | **No. The API is static; the route is the only difference.** This is what makes a variable sufficient |
+| **Q5** | Is there a **grace period** where both routes answer? | **Not confirmed, and probably not.** Plan for none — see below |
+| **Q6** | Do the **PowerShell scripts** in `C:\GIT\ubs-policies` need the same switch? | **No — out of scope for this change** |
 
-> **Q2 is the one that will be found in production if it is not asked.** The `202` path only runs when Fabric is slow, so it passes every test on a quiet environment and fails on the provisioning burst.
+> ### Q4 is the answer that makes this worth doing
+>
+> A static API where only the route moves is the one case a query-suffix variable fully solves. Both transitions become a value change, and **no flow is ever reopened for public preview or GA**. Had the body changed, the six actions would need editing anyway and the variable would have saved only half the work.
+
+> ### Q5 is the answer that shapes the day
+>
+> **Assume the old route stops answering the moment the new one starts.** There is then a window — from the service flipping to somebody setting the value — in which every call in §2 fails. §5.2 is written for that.
+
+> **Q6 noted, with one consequence.** The scripts call the same routes, so one run by hand during public preview will fail the same way. If anyone does run `activate_policy_set.ps1` or its siblings in that period, the parameter goes on by hand. They remain the authority for **payloads**, which Q4 confirms are not changing.
 
 ---
 
