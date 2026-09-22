@@ -1,6 +1,6 @@
 # The `?beta=true` switch — surviving PuPr and GA without editing flows
 
-**Status: planning only. Nothing in this repo has been changed. No flow has been edited, no environment variable exists yet.** The six questions this plan depended on were **answered 2026-09-22** — see §6. All six confirm the plan: **the route is the only thing that changes.**
+**Status: the environment variable exists** — `PolicyApiSuffix` / `ubsppcoe_PolicyApiSuffix`, created 2026-09-22 with an **empty** value. **No flow has been edited yet**; §5.1.1 is the work. The six questions this plan depended on were **answered 2026-09-22** — see §6. All six confirm the plan: **the route is the only thing that changes.**
 
 The capacity-policy endpoints are in **private preview** today. At **public preview** they are re-released as **beta**, and every call needs a query parameter:
 
@@ -143,8 +143,8 @@ Nothing else about the action changes — **method, headers, body, Asynchronous 
 
 | # | Change | Where |
 |---|---|---|
-| 1 | **Create** `ubsppcoe_PolicyApiSuffix`, Text, **Current Value empty** | The policy solution |
-| 2 | Append the suffix to the **six** actions in §2, from the picker | Four flows, in the customer environment |
+| 1 | ~~**Create** `ubsppcoe_PolicyApiSuffix`, Text, **Current Value empty**~~ — **done 2026-09-22** | The policy solution |
+| 2 | Append the suffix to the **six** actions in §2, from the picker — **step by step in §5.1.1** | Four flows, in the customer environment |
 | 3 | Save each flow, then **export the solution and confirm** each has the `PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)` entry in `definition.parameters` | Six actions, four flows |
 | 4 | Run the §5.4 verification with the value **empty** — behaviour must be identical to today | Customer environment |
 | 5 | Update the **flow documents**: the URL row in each of the six action tables | `bau/`, `migration/` — the six files in §2 |
@@ -165,6 +165,112 @@ Nothing else about the action changes — **method, headers, body, Asynchronous 
 | [ADR.md](ADR.md) | A new row recording this decision and its date |
 
 > **Step 6 is not tidying.** A deployment runbook that says *five* is a runbook that ships an environment with the sixth variable blank — which, during public preview, is an estate where nothing can be published and the runbook says the deployment succeeded.
+
+#### 5.1.1. The six edits, one by one
+
+**The variable is empty, so every edit below is inert.** Nothing changes behaviour today — which is exactly why this can be done in working hours, in one sitting, and verified before public preview forces the issue.
+
+**Do edit 1 first and verify it (§5.4 step 2) before doing the other five.** It is the same edit six times; proving it once on the flow that matters most is cheaper than discovering the picker problem on the sixth.
+
+##### The procedure — identical for all six
+
+1. **Solutions** → the policy solution → the flow → **Edit**. **Never from *My flows*** — a flow opened there cannot see the solution's environment variables, and the picker in step 4 will not offer one.
+2. Expand the action named below, and click into **URL of the request**.
+3. Put the cursor at the **very end** of the existing URL. No space, no slash, nothing after it.
+4. **Dynamic content** → scroll to the **Environment variable** section → click **PolicyApiSuffix**.
+5. Check the token reads exactly `parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')`, and that it is the last thing in the box.
+6. **Save.** Then reopen the flow and look at the URL again — if the suffix is not there, the save did not take.
+7. **Touch nothing else.** Method, headers, body, **Asynchronous Pattern**, **Retry Policy** and **Configure run after** all stay exactly as they are.
+
+> **Step 4 is the whole procedure.** Typing `@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}` by hand produces an expression that looks right, saves without complaint, and fails at runtime with *The workflow parameter … is not found* — because the designer only writes the declaration into `definition.parameters` when it resolves the reference **from the picker, against a variable that existed when the flow was opened**. See [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11.
+>
+> **The variable was created today, so every flow open before that is stale.** Close any flow you already had open and reopen it, or the picker will not list `PolicyApiSuffix` at all.
+
+##### Edit 1 — [RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md), Step 9, action `Replace_rules`
+
+**Before:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy
+```
+**After:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/policyRules/replaceByPolicy@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}
+```
+
+**This is the one that matters.** It is the only writer of rules, and [AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md), [RemoveWorkspaceFromPolicy](../bau/RemoveWorkspaceFromPolicy.md), [RebuildOnExceptionChange](../bau/RebuildOnExceptionChange.md), [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) 8b and [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) all reach Fabric through it. **Five callers, one edit** — and none of the five needs touching.
+
+##### Edit 2 — [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md), Step 6, action `Create_policy_set`
+
+**Before:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets
+```
+**After:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}
+```
+
+**Leave Asynchronous Pattern *Off*.** It is off deliberately — Step 6's note explains why turning it on loses the policy set ID. It is in the same ⋯ → **Settings** panel people open while poking at an action they are editing.
+
+##### Edit 3 — [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md), Step 8c, action `Activate`
+
+**Before:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate
+```
+**After:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{variables('policySetId')}/activate@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}
+```
+
+**Two edits in this one flow — do not stop at the first.** `Activate` is nested inside Step 8, below `Run_rebuild`, so it is easy to miss when the branch is collapsed.
+
+**Leave `Configure run after` on `Run_rebuild` → *is successful* only**, and leave the body's three properties alone — `capacityId` is undocumented and required (Step 8c).
+
+##### Edit 4 — [DeleteCapacityPolicySet](../bau/DeleteCapacityPolicySet.md), §3c, action `Delete_policy_set`
+
+**Before:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']}
+```
+**After:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{first(body('Get_policy_row')?['value'])?['ubsppcoe_policysetid']}@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}
+```
+
+**Read the URL off the flow before changing it.** This is the one action whose URL is described in prose rather than given as a table in its own document, so the form above is reconstructed from §3c — confirm it matches what is actually in the designer, and correct the document if not.
+
+**Do not test this one by running it.** It deletes a policy set. It is exercised in §5.4 step 5, against the test capacity created in step 3, and nowhere else.
+
+##### Edit 5 — [MIG_InitializeCapacityPolicySet](../migration/MIG_InitializeCapacityPolicySet.md), Step 6, action `Create_policy_set`
+
+Identical string to **edit 2**.
+
+##### Edit 6 — [MIG_ActivateAllCapacityPolicySets](../migration/MIG_ActivateAllCapacityPolicySets.md), §4b, action `Activate`
+
+**Before:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_policy')?['ubsppcoe_policysetid']}/activate
+```
+**After:**
+```
+https://api.fabric.microsoft.com/v1/workspaces/@{parameters('PolicyHolderWorkspaceId (ubsppcoe_PolicyHolderWorkspaceId)')}/policySets/@{items('For_each_policy')?['ubsppcoe_policysetid']}/activate@{parameters('PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)')}
+```
+
+> ### Edits 5 and 6 may not exist any more, and that is fine
+>
+> Both flows are **deleted after cutover** by their own documents, along with `MIG_RegisterAllCapacityPolicySets`. If they are already gone, there are **four** edits, not six, and nothing is missed: [MIG_RebuildAllCapacityPolicies](../migration/MIG_RebuildAllCapacityPolicies.md) is the one `MIG_` flow that is kept, and it reaches Fabric only through edit 1.
+>
+> **If they still exist, edit them.** A migration flow that is still in the solution will be run by somebody eventually — that is the reason its own document gives for deleting it — and one that silently calls a dead route during public preview fails halfway through an estate-wide activation.
+
+##### When all of them are done
+
+| Check | How |
+|---|---|
+| Every edit saved | Reopen each flow and read the URL. Six URLs, six suffixes |
+| The declaration is real, not just the expression | Export the solution, open each flow's JSON, confirm a `"PolicyApiSuffix (ubsppcoe_PolicyApiSuffix)"` key in `definition.parameters` — **this is the check that catches a typed expression**, and it is §5.1 step 3 |
+| Behaviour is unchanged | §5.4, with the value still empty |
+| The flow documents match the flows | §5.1 step 5 — the URL row in each of the six action tables |
 
 ### 5.2. At public preview — the switch
 
