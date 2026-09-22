@@ -136,13 +136,15 @@ Three things that cannot be fixed later, or are painful to:
 
 | Table | Columns this project depends on |
 |---|---|
-| `ubsppcoe_Workspace` | `ubsppcoe_workspaceuniqueid` (row key), `ubsppcoe_workspaceid` (**Fabric GUID**), `ubsppcoe_oapenabled`, `ubsppcoe_statecode`, `ubsppcoe_nodeid` (lookup) |
+| `ubsppcoe_Workspace` | `ubsppcoe_workspaceuniqueid` (row key), `ubsppcoe_workspaceid` (**Fabric GUID — Unique identifier**), `ubsppcoe_oapenabled`, `ubsppcoe_statecode`, `ubsppcoe_nodeid` (lookup) |
 | `ubsppcoe_Node` | `ubsppcoe_nodeid` (row key), `ubsppcoe_nodeuniqueid` (**Fabric capacity GUID**), `ubsppcoe_statecode` |
 | `Logging` | *Log Category*, *Log Source Name*, *Log Source URL* |
 
 > **Verify every one of these names in the target tenant before building anything.** A renamed column does not error — the filter returns nothing, the rebuild emits the deny-all rule alone, and **the capacity silently locks down**.
 >
 > Note the two traps: the Fabric workspace GUID is `ubsppcoe_workspaceid`, **not** the row key; and `ubsppcoe_statecode` is a **custom Choice column**, unrelated to Dataverse's system `statecode` — `1` = Active on Workspace, `2` = Deleted on both.
+>
+> **`ubsppcoe_workspaceid` is a Unique identifier column** (corrected 2026-09-22, ADR **Q52**). Filters are unaffected — the quoted form works — but the column is **read-only in the maker portal**, so a wrong or missing Fabric GUID on a workspace row is a platform-team request rather than a local fix.
 
 ### 4.3 Dataverse privileges
 

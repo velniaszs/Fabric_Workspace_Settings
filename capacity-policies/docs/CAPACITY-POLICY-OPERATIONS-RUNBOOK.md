@@ -17,7 +17,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACIT
 | **Workspace added and to be whitelisted** | `AddWorkspaceToPolicy` | App |
 | **Workspace deleted** | `RemoveWorkspaceFromPolicy` | App |
 | **Workspace moved between capacities** | `RemoveWorkspaceFromPolicy` on the **old**, then `AddWorkspaceToPolicy` on the **new** | App |
-| **Exception granted or revoked** | Edit `Policy Exceptions`, then rebuild — §6 | You |
+| **Exception granted or revoked** | Edit `Policy Exceptions`, then rebuild — §6. **The holder workspace's own row is in there and must never be revoked** | You |
 | **Governed item type added or retired** | Edit `Policy Item Types`, then rebuild — §7 | You |
 | **Emergency: unlock a capacity** | §8 | You |
 | **Fabric API moves to beta, or to GA** | Set the `ubsppcoe_PolicyApiBeta` toggle — §9. No flow to run | You |
@@ -211,6 +211,22 @@ The workspace must also have a `ubsppcoe_Workspace` row under the target capacit
 
 `ubsppcoe_oapenabled` is not consulted for rule 3 at all — an exception grants a workspace the platform team has not enabled. That is deliberate, and it is why this table is the only thing in the design that can widen access without them.
 
+### The holder workspace's own exception — never revoke it
+
+One row in this table is infrastructure rather than a grant: **the workspace named by `ubsppcoe_PolicyHolderWorkspaceId`**, which holds every policy set item.
+
+If that workspace sits on a governed capacity, rule 1's deny-all applies to it as to any other — and what it blocks is **creating policy set items**. [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) then cannot create a set for the next capacity provisioned, so **the policy system locks itself out of its own store**.
+
+| | |
+|---|---|
+| **Symptom** | `InitializeCapacityPolicySet` fails at Step 6 `Create_policy_set` for a brand-new capacity, while everything else in the estate is healthy |
+| **Check** | A `Policy Exceptions` row for the holder workspace GUID with `ubsppcoe_active` = **Yes**, and a `ubsppcoe_Workspace` row for it under the Node of the capacity it sits on |
+| **Fix** | Reinstate the row, then rebuild that capacity |
+
+> **Label the row so nobody revokes it during a review.** It looks like an over-broad exception — a whole workspace with unrestricted creation and no business owner — which is exactly the kind of row an access review removes. `ubsppcoe_reason` is the only thing that will stop that.
+
+> **It is only needed while the holder workspace sits on a governed capacity.** Moving the holder to an ungoverned one removes the dependency altogether, and is the better answer where it is possible. Seeded during cutover — [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](CAPACITY-POLICY-MIGRATION-RUNBOOK.md) Phase 2.
+
 ---
 
 ## 7. A governed item type is added or retired
@@ -301,6 +317,7 @@ A changed value is not necessarily a value in use — a cleared value was observ
 | `lastrebuild` growing stale | `Capacity Policies` | Nothing has rebuilt that capacity. **No longer self-correcting** — an estate-wide rebuild only happens when someone runs it |
 | A `Failed` or `Caught` run on any BAU flow | Flow run history | The change was not published. **Nothing retries it** |
 | `400` or `404` on **every** capacity at once | Flow run history | The `ubsppcoe_PolicyApiBeta` toggle does not match the API's current release stage — §9. The error names the call, never the variable |
+| `InitializeCapacityPolicySet` failing at `Create_policy_set` while the rest of the estate is fine | Flow run history | The holder workspace's own `Policy Exceptions` row is missing or revoked — §6 |
 
 > ### The blind spot — a policy set that is not in force
 >

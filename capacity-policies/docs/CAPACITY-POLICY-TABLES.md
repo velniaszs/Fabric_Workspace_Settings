@@ -81,11 +81,19 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-
 | `ubsppcoe_Node` | *Node Unique Id* | `ubsppcoe_nodeuniqueid` | Unique identifier | **Corrected 2026-09-09. This is the Fabric capacity GUID, and it is an ordinary column, not the row key** |
 | `ubsppcoe_Workspace` | Primary name — *Workspace Name* | `ubsppcoe_workspacename` | Text | **Confirmed 2026-09-07.** Display only |
 | `ubsppcoe_Workspace` | Row key — *Workspace Unique Id* | `ubsppcoe_workspaceuniqueid` | Unique identifier | **Confirmed 2026-09-07.** Dataverse only — never sent to Fabric |
-| `ubsppcoe_Workspace` | **Fabric workspace GUID** | `ubsppcoe_workspaceid` | Text | **Confirmed 2026-09-07.** This is the Fabric id, not the row key |
+| `ubsppcoe_Workspace` | **Fabric workspace GUID** | `ubsppcoe_workspaceid` | **Unique identifier** | **Type corrected 2026-09-22** — Text in earlier revisions. This is the Fabric id, not the row key. Filters are unaffected; see below |
 | `ubsppcoe_Workspace` | `Node` lookup | `ubsppcoe_nodeid` — read as `_ubsppcoe_nodeid_value` | Lookup → `ubsppcoe_Node` | **Corrected 2026-09-09.** Its *value* is the **Node row GUID**, not the capacity id |
 | `ubsppcoe_Workspace` | The whitelist flag | `ubsppcoe_oapenabled` | Boolean | **Confirmed 2026-09-07** |
 | `ubsppcoe_Workspace` | **Soft-delete state** | `ubsppcoe_statecode` | **Choice** | **Confirmed 2026-09-15.** `1` = Active, `2` = Deleted |
 | `ubsppcoe_Node` | **Soft-delete state** | `ubsppcoe_statecode` | **Choice** | **Confirmed 2026-09-15.** `2` = Deleted; **11 options in total**, every other value is live |
+
+> ### `ubsppcoe_workspaceid` is a Unique identifier, and the quoted filters still work — 2026-09-22
+>
+> On **`ubsppcoe_Workspace`** the column is a **Unique identifier**, not Text as earlier revisions of this document said. **No filter changed**: Dataverse accepts a quoted GUID literal against a `Uniqueidentifier` column, and `ubsppcoe_workspaceid eq '6f9a…'` was verified working on 2026-09-22. The same form is used on our own `ubsppcoe_PolicyException` (§4), where the column really is Text — so the two read identically and both are correct.
+>
+> **What the type does change is editing.** A Unique identifier column is **read-only in the maker portal** — there is no editable control for it, on any form. A wrong or missing Fabric GUID on a workspace row therefore cannot be fixed by hand here; it is a request to the platform team (§0, ADR Q18), and so is a missing row.
+>
+> **Creating a row by hand is not a local workaround either.** That table carries **Business Required columns this project never reads** — `ubsppcoe_adminsjson` among them — so a hand-made row is not equivalent to a synced one, and values invented for their columns may be read by their systems.
 
 > ## ⚠ `ubsppcoe_statecode` is a custom Choice column, not the system `statecode` — 2026-09-15
 >
@@ -149,7 +157,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-
 
 ### The four rules for reading them
 
-**`ubsppcoe_workspaceid` is the Fabric workspace id.** Every whitelist and exception GUID published to Fabric comes from this column and no other. The row key `ubsppcoe_workspaceuniqueid` never leaves Dataverse.
+**`ubsppcoe_workspaceid` is the Fabric workspace id.** Every whitelist and exception GUID published to Fabric comes from this column and no other. The row key `ubsppcoe_workspaceuniqueid` never leaves Dataverse. It is a **Unique identifier** column, which changes nothing about the filters — they stay quoted — but does mean it cannot be edited in the maker portal.
 
 **`ubsppcoe_oapenabled eq true` is the whole whitelist test.** The column is nullable, so `false` and null both compare unequal to `true` and both fall out of the filter. That is the intended behaviour: **neither is added to any rule explicitly**, and rule 1's deny-all is what applies to them. Do not add `and ubsppcoe_oapenabled ne null`, and do not use `ne true` anywhere.
 

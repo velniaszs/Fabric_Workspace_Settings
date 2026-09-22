@@ -103,6 +103,7 @@ Any policy set in the holder workspace created while building the flows, and any
 - [ ] `Policy Item Types` seeded and active
 - [ ] All six environment variables set, with `ubsppcoe_PolicyApiBeta` pointing the right way for the API's current release stage
 - [ ] Contributor on the holder workspace confirmed
+- [ ] Decided whether the **holder workspace sits on a governed capacity** — if it does, its `Policy Exceptions` row is mandatory in Phase 2
 - [ ] Duplicate display names checked
 - [ ] Test leftovers deleted
 
@@ -180,6 +181,27 @@ Fill it from the estate's existing exceptions — `fabric_workspaces_exceptions.
 | `ubsppcoe_reason`, `ubsppcoe_approvedby` | Whatever the CSV carries |
 
 **Take the `workspace_id` column only.** The CSV's `capacity_id` has no counterpart in the table — the capacity is derived from the workspace's `Node` at rebuild time. But **check the two agree before discarding it**: a CSV row whose workspace now sits under a different Node is an exception that is about to move capacity, quietly, on the first rebuild.
+
+### The holder workspace goes in first
+
+**The workspace named by `ubsppcoe_PolicyHolderWorkspaceId` needs its own exception row**, and it is the one row that does not come from the estate's CSV.
+
+That workspace holds every policy set item. If it sits on a capacity this system governs, rule 1's deny-all applies to it like any other — and the thing it blocks is **creating policy set items**, which is what [InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md) Step 6 does for every capacity provisioned from here on. **The subsystem locks itself out of its own store.**
+
+| Column | Value |
+|---|---|
+| `ubsppcoe_workspacename` | The holder workspace's name — label it clearly, this row must never be revoked by mistake |
+| `ubsppcoe_workspaceid` | The GUID in `ubsppcoe_PolicyHolderWorkspaceId` |
+| `ubsppcoe_active` | **Yes** |
+| `ubsppcoe_reason` | *Holds the policy set items. Excepting it prevents the policy system locking itself out* |
+| `ubsppcoe_approvedby` | Whoever owns this subsystem |
+
+**Two things have to be true for the row to do anything**, and both are easy to miss:
+
+1. The holder workspace needs a **`ubsppcoe_Workspace` row under the Node of the capacity it sits on**. The rebuild joins exceptions to that table, so with no row there is no rule 3 entry — and no error either. Ask the platform team if it is absent.
+2. Its capacity must be one this system governs. **If the holder workspace sits on a capacity with no `ubsppcoe_Node` row, nothing governs it and the exception is harmless but unnecessary** — confirm which case you are in rather than assuming.
+
+> **Put the holder workspace on an ungoverned capacity if you have the choice.** The exception is the fix for a self-inflicted dependency; not creating the dependency is better. This row exists because the holder often has nowhere else to live.
 
 `ubsppcoe_active` defaults to **No**. A row imported with the flag untouched is `null`, and the rebuild's `ubsppcoe_active eq true` filter excludes it — so an exception that appears to do nothing is almost always an unset flag.
 
@@ -281,6 +303,7 @@ Then, on one of them:
 - [ ] Its `Capacity Policies` row shows `Status = Active`, `lasterror` empty
 - [ ] **Create a governed item in a whitelisted workspace — it works**
 - [ ] **Create a governed item in a non-whitelisted workspace — it is refused**
+- [ ] **If the holder workspace sits on this capacity: create an item in it — it works.** That is the Phase 2 exception doing its job, and the failure mode it prevents is the policy system being unable to create policy sets for the next capacity
 
 Those last two are the acceptance test for the entire project. Everything else proves the machinery ran; only these prove it did the right thing.
 
