@@ -308,11 +308,33 @@ A changed value is not necessarily a value in use — a cleared value was observ
 
 ---
 
+## 10. The report recipients change — a joiner, a leaver, a reorg
+
+**Run:** nothing. **Change one environment variable**, or better, change nothing at all.
+
+All four report emails across the three `MIG_` flows take their `To` from `ubsppcoe_PolicyMailRecipients`, a **semicolon-separated** address list. Recipients change without a flow being opened.
+
+**To change it:** [make.powerapps.com](https://make.powerapps.com) → **Solutions** → the policy solution → **`PolicyMailRecipients`** → set **Current Value** → **Save**. Semicolons, no spaces, no trailing separator.
+
+> **If the value is a distribution group, this section does not apply** — membership is managed in Exchange by whoever owns the group, and nothing in Power Platform needs touching. That is the reason to prefer a group, and the reason a joiner or leaver should not normally reach this runbook at all.
+
+### Two things that will bite
+
+**Never clear it to stop the mail.** Clearing a Text environment variable is silently ignored — the flows keep sending to the previous list while the screen shows empty. And a genuinely blank value cannot be stored at all: the three `MIG_` flows then **fail to publish**. A recipient list has no way to say "nobody"; switching the mail off means adding a Two options variable round the Condition, the same shape as `PolicyApiBeta`.
+
+**A leaver's address is not a harmless leftover.** The reports name capacities, workspaces and failure reasons. Remove departed people the same day, and check the list before any migration run — see [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §4.
+
+### Verify it took effect
+
+Same caution as §9: turn the affected flow **Off** and **On** after changing the value, then run `MIG_RebuildAllCapacityPolicies` against an estate with at least one known failure and confirm the mail arrives at the new address. **A clean run sends nothing**, so a silent run is not evidence either way.
+
+---
+
 ## What to watch, ongoing
 
 | Signal | Where | Means |
 |---|---|---|
-| `MIG_RebuildAllCapacityPolicies` failure summary | Mail, after each manual run | Capacities whose rules are stale |
+| `MIG_RebuildAllCapacityPolicies` failure summary | Mail, to `ubsppcoe_PolicyMailRecipients`, after each manual run | Capacities whose rules are stale |
 | `lasterror` non-empty | `Capacity Policies` | That capacity's last rebuild failed |
 | `lastrebuild` growing stale | `Capacity Policies` | Nothing has rebuilt that capacity. **No longer self-correcting** — an estate-wide rebuild only happens when someone runs it |
 | A `Failed` or `Caught` run on any BAU flow | Flow run history | The change was not published. **Nothing retries it** |

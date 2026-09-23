@@ -155,6 +155,8 @@ Every change that matters here is made by the platform team or by an import. **S
 
 Owned by the same account. It leaves the solution when the three disposable `MIG_` flows are deleted after cutover — `MIG_RebuildAllCapacityPolicies` keeps it for its failure summary.
 
+**Who the reports go to is not in the flows.** All four send actions read `ubsppcoe_PolicyMailRecipients`, a semicolon-separated address list, so recipients change without opening a flow and differ per environment ([CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11). **The reports name capacities, workspaces and failure reasons**, so the list is the only control over who sees the estate's shape — a distribution group with managed membership is preferred to addresses typed into a variable, and nothing here restricts where a forwarded mail goes next.
+
 ---
 
 ## 5. What the solution writes

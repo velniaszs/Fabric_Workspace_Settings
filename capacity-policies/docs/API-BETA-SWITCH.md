@@ -87,7 +87,7 @@ Listed so nobody goes looking for a call that is not there.
 
 **Set the Default Value as well as the Current Value.** A variable with neither is the state that blocked flow publishing on 2026-09-22 (§3.1), and the default is also the one that **travels with a solution export**.
 
-**Created inside the policy solution**, so it inherits the `ubsppcoe_` prefix like the other five — see [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11 for the creation steps, the prefix decision, and the *"the variable exists but the flow cannot see it"* trap, which is the failure everyone hits once.
+**Created inside the policy solution**, so it inherits the `ubsppcoe_` prefix like the other six — see [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11 for the creation steps, the prefix decision, and the *"the variable exists but the flow cannot see it"* trap, which is the failure everyone hits once.
 
 > **`ubsppcoe_PolicyApiSuffix` is superseded.** The Text variable created earlier on 2026-09-22 was never referenced by a flow. **Delete it** — leaving both invites somebody to set the wrong one.
 
@@ -248,7 +248,7 @@ Nothing else about the action changes — **method, headers, body, Asynchronous 
 
 | File | Where |
 |---|---|
-| [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) | §8.11 variable table, and the *"Five, not six"* note — which is about the discarded policy-name variable and must not be deleted, only corrected to *"Six, not seven"* |
+| [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) | §8.11 variable table, and the *"Five, not six"* note — which is about the discarded policy-name variable and must not be deleted, only corrected to *"Six, not seven"*. **Raised again to *"Seven, not eight"* on 2026-09-23**, when `ubsppcoe_PolicyMailRecipients` was added (ADR Q53) |
 | [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) | §6 configuration table |
 | [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) | §1 component count, §3 table and *"All five are Text"* |
 | [DEPLOYMENT-RUNBOOK.md](DEPLOYMENT-RUNBOOK.md) | §1 component count, §6 table, §7 step 4, and the §8 checklist line |
@@ -461,7 +461,7 @@ Same sequence each time. It exercises four of the six call sites.
 
 ## 7. What this does not solve
 
-**Current values do not travel reliably with a solution export — default values do.** Same caveat as the other five ([DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) §2, [HANDOVER-REGISTER.md](HANDOVER-REGISTER.md) E1), mitigated here by the **Default Value of No**: an environment that imports without a prompt lands on today's behaviour rather than on no value at all — which, per §3.1, is the state that will not publish.
+**Current values do not travel reliably with a solution export — default values do.** Same caveat as the other six ([DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) §2, [HANDOVER-REGISTER.md](HANDOVER-REGISTER.md) E1), mitigated here by the **Default Value of No**: an environment that imports without a prompt lands on today's behaviour rather than on no value at all — which, per §3.1, is the state that will not publish.
 
 **The import that still bites** is one arriving **during public preview**: the default says No, nobody sets the toggle, and every policy call quietly goes to the dead GA route while the import reports success.
 

@@ -37,6 +37,7 @@ Three consequences, all of which shape the design below:
 - The connection's identity needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
 - No child flow. The activate call is three lines; wrapping it would add a 120-second budget for nothing.
 - Reads the **`ubsppcoe_PolicyApiBeta`** environment variable in §4b — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
+- Step 5 adds an **Office 365 Outlook** connection, and both its send actions read the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable first**, or this flow will not publish.
 
 ---
 
@@ -268,6 +269,16 @@ After the loop, **at the top level**.
 
 Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate actions, because a dry run and a live run should not look alike in an inbox.
 
+**Both take the same `To`** — the environment variable, inserted from the **dynamic-content picker** rather than typed:
+
+```
+@{parameters('PolicyMailRecipients (ubsppcoe_PolicyMailRecipients)')}
+```
+
+Two actions, one recipient list, and the same list the other two `MIG_` flows use. Semicolons separate multiple addresses; the connector splits the string. [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11 covers the value rules and the *typed `parameters('…')` fails at runtime* trap.
+
+> **This is the flow whose mail matters most.** Activation is the only migration step that changes anyone's access, and the live-run mail is the record of when the estate went under enforcement. **Confirm the variable points where you think it does before running with `mode = Activate`** — a report nobody receives is indistinguishable from a run that never happened.
+
 ### Yes — the dry run
 
 **Subject:**
@@ -339,6 +350,7 @@ Both branches send **Office 365 Outlook** → *Send an email (V2)*. Two separate
 | 5 | A row whose `ubsppcoe_rulecount` is empty | Absent from the candidate list. **The unrebuilt-capacity guard** |
 | 5b | A row whose `ubsppcoe_rulecount` is **1** | **Present** in the candidate list and activated. Deny-all in force, nothing whitelisted — the 2026-09-17 change |
 | 6 | Revoke Capacity Admin on one capacity, run `Activate` | That capacity in `failures` with a permission message, row still `Inactive` with `lasterror` set, **and the others still activated** |
+| 7 | Read the `To` on the mail from test 1 | **Every** address in `ubsppcoe_PolicyMailRecipients`, and the dry-run body — proving the recipient list resolves **before** a live run is attempted |
 | 7 | Time a run of 20 | Roughly two minutes. Materially faster means the Delay is missing or outside the loop |
 | 8 | After activating one capacity, try creating a governed item in a **non-whitelisted** workspace on it | **Refused.** This is the only test that proves the whole chain works |
 | 9 | The same in a **whitelisted** workspace | **Allowed** |

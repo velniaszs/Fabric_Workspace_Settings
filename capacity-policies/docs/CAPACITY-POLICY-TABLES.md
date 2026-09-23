@@ -598,10 +598,11 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 | `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | Text | `50` | Rebuild |
 | `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | Text | `pol_` | Initialize |
 | `PolicyApiBeta` | `ubsppcoe_PolicyApiBeta` | **Two options** | **No** | Rebuild, Initialize, Delete, and the two `MIG_` flows |
+| `PolicyMailRecipients` | `ubsppcoe_PolicyMailRecipients` | Text | A **semicolon-separated** list of addresses | The `To` field of all four report emails in the three `MIG_` flows |
 
 **The schema name comes from your solution's publisher**, so creating these inside the solution from 8.2 produces the `ubsppcoe_` names above automatically. Type only the part after the prefix — the box already shows `ubsppcoe_`.
 
-**Six, not seven.** [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
+**Seven, not eight.** [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6 also lists a *Policy name* variable holding `ItemCreation`, but no flow reads it — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) Step 8 writes `"policy": "ItemCreation"` as a literal. Do not create it unless you also parameterise that body.
 
 **Both numeric ones are Text, deliberately.** The flows wrap them in `int(...)` at the point of use. A Dataverse *Number* environment variable returns a value the expression engine handles inconsistently; Text plus an explicit cast is the version that behaves.
 
@@ -613,7 +614,27 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 >
 > **Set the Default Value to No as well as the Current Value**, so an import that skips the prompt lands on today's behaviour rather than on no value at all.
 
-**Set a Current Value, not only a Default Value.** A variable with neither resolves to blank, which does not error — it silently builds a URL with a missing segment.
+> ### `PolicyMailRecipients` carries a list, in one string
+>
+> **Added 2026-09-23 (Q53).** The three `MIG_` flows previously had addresses typed into the `To` box of each *Send an email (V2)* action — four actions, edited in the designer, different in every environment and invisible from outside the flow. The variable replaces all four.
+>
+> **Semicolons, no spaces, no trailing separator.** The Office 365 Outlook connector splits the string itself, so nothing in the flow needs `split()`, an array, or an `Apply to each`:
+>
+> ```
+> platform.ops@contoso.com;fabric.admins@contoso.com
+> ```
+>
+> **It is Text, so every Text failure mode from `PolicyApiBeta` applies.** A blank value cannot be stored, the run fails with *value was not found*, and **the three `MIG_` flows will not publish at all**. Clearing the value to stop the mail is silently ignored — the flows keep sending to the previous list while the screen shows empty. **Never leave it blank and never clear it.**
+>
+> **So there is no "send to nobody".** A recipient list cannot express absence. If a mail ever needs switching off, that is a second **Two options** variable wrapped round the Condition, exactly as `PolicyApiBeta` was built — not an empty string here.
+>
+> **Prefer one distribution group per environment over a list of individuals.** Membership is then managed in Exchange by the people who care about it, needs no Power Platform admin and no re-publish, and leaves no personal data in the solution. The multi-address form is the escape hatch, not the norm — a semicolon list has no audit trail, so nobody can say when an address was added or by whom.
+>
+> **Keep named individuals out of the Default Value.** The default travels with a solution export and is committed to source control; the current value is per environment and is not. Put a generic mailbox in the default, people in the current value.
+>
+> **Point dev and test at a test mailbox.** The variable's real second benefit is that a non-production run stops mailing the production distribution list.
+
+**Set a Current Value, not only a Default Value.** A variable left with neither is the worst case, and it presents in two different ways depending on the variable: `PolicyHolderWorkspaceId` and `PolicySentinelWorkspaceId` are pasted into URLs, so a missing value silently builds a malformed one; `PolicyApiBeta` and `PolicyMailRecipients` fail loudly instead, with *value was not found* and a flow that will not publish (§3.1 of [API-BETA-SWITCH.md](API-BETA-SWITCH.md)). **Neither is a state to deploy into.** Check all seven have current values before building any flow.
 
 > ### The prefix is `ubsppcoe_`, matching the tables
 >

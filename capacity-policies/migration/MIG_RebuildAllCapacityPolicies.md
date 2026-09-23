@@ -38,6 +38,7 @@ The last three were what `SyncCapacityPolicySets` would have detected. **That fl
 
 - Build [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) first. This flow is a loop around it.
 - Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. No direct Fabric calls — the child flow makes them all.
+- Step 4 adds an **Office 365 Outlook** connection, and reads the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable before building Step 4**: a Text variable that does not exist, or exists with a blank value, stops this flow publishing at all.
 
 ---
 
@@ -132,9 +133,19 @@ The child flow already stamps `last_rebuild` and `last_error` on each row, so pe
 
 After the loop, a **Condition** on `@greater(length(variables('failures')), 0)`.
 
-**Yes** → `Send_failure_report` — Office 365 Outlook **Send an email (V2)**. **To** is your operational mailbox, not a named person.
+**Yes** → `Send_failure_report` — Office 365 Outlook **Send an email (V2)**.
 
 > **This adds an Office 365 Outlook connection to the flow**, which is otherwise Dataverse-only.
+
+**To** — insert the environment variable from the **dynamic-content picker**, not typed:
+
+```
+@{parameters('PolicyMailRecipients (ubsppcoe_PolicyMailRecipients)')}
+```
+
+**An operational mailbox, not a named person**, and the variable is what makes that enforceable — the address lives in one place, differs per environment, and changes without this flow being reopened. Several recipients go in the one variable separated by semicolons; the connector splits the string itself, so nothing here needs `split()` or a loop. [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11 has the value rules — the important one being that it must never be blank and never be cleared.
+
+> **Click into `To`, switch it away from the people-picker, and insert the variable from the *Environment variable* section of dynamic content.** A hand-typed `parameters('…')` saves without complaint and fails at runtime with *The workflow parameter … is not found*, because the designer only writes the declaration into `definition.parameters` when it resolves the reference from the picker.
 
 **Subject:**
 
@@ -258,6 +269,7 @@ Recommended: leave it off, let the scan report it, and have a human decide per c
 | 4 | Delete a policy set in the portal, then run | That capacity reports a failure, the others still complete |
 | 5 | A row with a blank `policy_set_id` | Skipped silently, not reported as a failure |
 | 6 | Clean run | **No notification sent** |
+| 6b | Force one capacity to fail, then run | The summary arrives at **every** address in `ubsppcoe_PolicyMailRecipients`. Check the recipient line on the mail that arrives, not merely that one arrived — a `To` that silently resolved to one old hard-coded address looks identical from the sender's side |
 | 7 | Time a full run at production scale, and check the history for `429` retries | Confirms the run fits its window and shows how hard the retry policy is working. This is the measurement that decides whether §5's delay or cap is ever needed |
 
 Test 4 is what proves the loop is resilient. A single failing capacity aborting the rest turns one small problem into an estate-wide one, and it will not be noticed until the morning.

@@ -35,6 +35,7 @@ Related: [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md
 - Needs the *HTTP with Microsoft Entra ID (preauthorized)* connector for one `GET`. **No Dataverse connection** — every table read and write happens inside the child.
 - **Check for duplicate capacity display names before the first run.** Two capacities with the same name produce one policy set name and the second create fails. See [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md) Step 5.
 - Easiest build path: **copy `MIG_RebuildAllCapacityPolicies`** and make two substitutions.
+- Step 5b adds an **Office 365 Outlook** connection, and reads the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable first**, or this flow will not publish.
 
 | | `MIG_RebuildAllCapacityPolicies` | This flow |
 |---|---|---|
@@ -214,6 +215,14 @@ Redundant once 5b's email is built, since the body computes the same numbers inl
 
 > **This adds an Office 365 Outlook connection to the flow**, which is otherwise Fabric-only. Expect the "you may break your Power Apps triggered flow" warning; it is benign here because nothing calls this flow.
 
+**To** — the environment variable, inserted from the **dynamic-content picker** rather than typed:
+
+```
+@{parameters('PolicyMailRecipients (ubsppcoe_PolicyMailRecipients)')}
+```
+
+Same value in all four report emails across the three `MIG_` flows, so the migration has one recipient list rather than four that drift apart. Semicolons separate multiple addresses and the connector splits them. See [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11 — and note that a typed `parameters('…')` fails at runtime with *The workflow parameter … is not found* while looking perfectly correct on screen.
+
 **Subject:**
 
 ```
@@ -284,6 +293,7 @@ There is no batching control in the flow, so the tranche is you: run it, and **c
 | 5 | A paused capacity, and a P-SKU capacity | Absent from `Filter_eligible`. Not counted anywhere, not reported |
 | 6 | Inspect any policy set created | **No rules and not activated.** If it has rules, the child still has its Step 8b; if it is active, it still has 8c |
 | 7 | Full run, then `ListCapacityPolicySets` | Every capacity present, all `Inactive`, all counts empty |
+| 8 | A run with at least one `noNode` or failure | The report arrives at **every** address in `ubsppcoe_PolicyMailRecipients`, checked on the recipient line of the received mail |
 
 Test 6 is the one to do by eye in the portal on the first tranche. An activated deny-all policy set is the only outcome here that takes access away from someone, and it is a copy-paste error away.
 

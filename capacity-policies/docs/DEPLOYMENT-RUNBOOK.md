@@ -34,7 +34,7 @@ Three tables are read and written but **not owned by this project**: `ubsppcoe_W
 | Cloud flows | 11 |
 | Dataverse tables to create | 3 |
 | Dataverse tables that must already exist | 3 |
-| Environment variables | 6 |
+| Environment variables | 7 |
 | Connections | 3 |
 | Fabric workspaces to create | 1 (the holder) |
 | Seed data files | 2 |
@@ -177,7 +177,7 @@ All at **Organization** depth.
 
 ## 6. Environment variables
 
-Six, created inside the solution so they inherit the prefix. **All Text except the last**, which is a Yes/No toggle.
+Seven, created inside the solution so they inherit the prefix. **All Text except `PolicyApiBeta`**, which is a Yes/No toggle.
 
 | Display name | Schema name | Value |
 |---|---|---|
@@ -187,12 +187,17 @@ Six, created inside the solution so they inherit the prefix. **All Text except t
 | `PolicyMaxRulesPerPolicy` | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 | `PolicyNamePrefix` | `ubsppcoe_PolicyNamePrefix` | `pol_` |
 | `PolicyApiBeta` — **Two options** | `ubsppcoe_PolicyApiBeta` | **No**, until the capacity-policy API enters public preview |
+| `PolicyMailRecipients` | `ubsppcoe_PolicyMailRecipients` | **Per tenant** — semicolon-separated addresses for the `MIG_` reports (§9) |
 
 **Set a Current Value, not only a Default Value.** A variable with neither resolves to blank and silently builds a malformed URL.
 
 **Both numeric ones are Text deliberately** — the flows cast with `int(...)`.
 
 > **`PolicyApiBeta` switches the API version without a flow edit.** At public preview the capacity-policy endpoints need `?beta=true` appended; at GA they do not. Six URLs end with `@{if(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)'), '?beta=true', '')}`, so each transition is one toggle rather than six flow edits. **Set its Default Value to No as well**, so an import that skips the prompt behaves as today. See [API-BETA-SWITCH.md](API-BETA-SWITCH.md).
+
+> **`PolicyMailRecipients` is the `To` on all four `MIG_` report emails.** One semicolon-separated string; the Outlook connector splits it. A **distribution group is preferred to a list of people** — it needs no Power Platform admin to change and leaves no personal data in the solution.
+>
+> **Never blank, never cleared.** A blank Text variable stops the three `MIG_` flows publishing; clearing a value is silently ignored and the old list keeps receiving mail. In a non-production environment, point it at a test mailbox **before** running anything, or the first migration run mails production. See [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8.11.
 
 ---
 
@@ -201,7 +206,7 @@ Six, created inside the solution so they inherit the prefix. **All Text except t
 1. **Confirm §4.2** — the platform team's three tables exist, with the exact column names. **Stop here if they do not**
 2. **Confirm the publisher** prefix is `ubsppcoe` (§2.4 P2)
 3. **Create the solution**, then the three tables (§4.1) → **Publish all customizations**
-4. **Create the six environment variables** (§6)
+4. **Create the seven environment variables** (§6)
 5. **Create the service account** and grant its Dataverse security role (§2.1, §4.3)
 6. **Create the holder workspace** in Fabric; grant Contributor to the service account (§2.3 F1–F2)
 7. **Grant Capacity Admin** on every capacity to be governed (F3)
@@ -225,7 +230,8 @@ Before handing the environment over:
 
 - [ ] `GET /v1/capacities` returns the expected number of capacities
 - [ ] `Policy Item Types` has 14 active rows
-- [ ] All six environment variables have **current** values, and `PolicyApiBeta` reads **No**
+- [ ] All seven environment variables have **current** values, and `PolicyApiBeta` reads **No**
+- [ ] `PolicyMailRecipients` points at a mailbox somebody actually reads — and, outside production, **not** at the production distribution group
 - [ ] Every Dataverse trigger Scope reads `Organization`
 - [ ] A test rebuild on **one throwaway capacity** publishes rule 1 plus the expected whitelist rules
 - [ ] **The zero-workspace case emits rule 1 alone** — the path that silently unlocks a capacity if it is wrong
@@ -248,6 +254,7 @@ Collect these before starting.
 | Service account UPN | |
 | Holder workspace name | |
 | Holder workspace GUID | |
+| Migration report recipients | |
 | Capacities to govern (count) | |
 | Dataverse security role | |
 | Platform team contact | |

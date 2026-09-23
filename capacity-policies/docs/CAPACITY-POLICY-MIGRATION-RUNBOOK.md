@@ -67,8 +67,11 @@ Power Automate → **Solutions** → your solution.
 | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` |
 | `ubsppcoe_PolicyNamePrefix` | Whatever the policy sets should be called |
 | `ubsppcoe_PolicyApiBeta` | **No** — set it to `Yes` only once the capacity-policy API is in public-preview beta ([API-BETA-SWITCH.md](API-BETA-SWITCH.md)) |
+| `ubsppcoe_PolicyMailRecipients` | Semicolon-separated addresses receiving the three `MIG_` flows' reports |
 
 A missing one fails at runtime with `The workflow parameter … is not found`, per capacity, all the way through a run.
+
+**`ubsppcoe_PolicyMailRecipients` fails earlier and harder if it is blank.** It is a Text variable, so an empty value cannot be stored at all — the three `MIG_` flows **will not publish**, which you discover while trying to save them rather than during a run. Set it before building the flows, and **confirm it is not still pointing at a test mailbox from a rehearsal**: a migration whose reports go to a mailbox nobody reads is a migration with no record of which capacities failed. Read it off the variable, do not assume.
 
 **`ubsppcoe_PolicyApiBeta` pointing the wrong way fails differently** — every Fabric call is rejected by the service rather than by the flow engine, so the run history shows a per-capacity `400`/`404` with nothing naming the variable. Confirm it before a migration run, not during one.
 
@@ -101,7 +104,7 @@ Any policy set in the holder workspace created while building the flows, and any
 
 - [ ] `MIG_RebuildAllCapacityPolicies` off, and the four Dataverse-triggered BAU flows off
 - [ ] `Policy Item Types` seeded and active
-- [ ] All six environment variables set, with `ubsppcoe_PolicyApiBeta` pointing the right way for the API's current release stage
+- [ ] All seven environment variables set, with `ubsppcoe_PolicyApiBeta` pointing the right way for the API's current release stage, and `ubsppcoe_PolicyMailRecipients` pointing at a mailbox that will be read **during** the migration window
 - [ ] Contributor on the holder workspace confirmed
 - [ ] Decided whether the **holder workspace sits on a governed capacity** — if it does, its `Policy Exceptions` row is mandatory in Phase 2
 - [ ] Duplicate display names checked
@@ -149,7 +152,7 @@ Suggested: ~40 next, check the `noNode` list is plausible rather than "everythin
 
 ### 1.4 Read the report
 
-The email carries three numbers and two lists.
+The email carries three numbers and two lists. **It goes to whatever `ubsppcoe_PolicyMailRecipients` holds** — check that before the first tranche, not after it.
 
 | Bucket | Meaning | Action |
 |---|---|---|

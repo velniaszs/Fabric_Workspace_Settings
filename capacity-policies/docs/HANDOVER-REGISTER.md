@@ -93,7 +93,7 @@ Full procedure in [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md).
 
 | # | Item | Note |
 |---|---|---|
-| E1 | **Six environment variables** must be set per environment | Values do **not** travel reliably with a solution export. `ubsppcoe_PolicyApiBeta` also needs a **Default Value**, so an import without a prompt still behaves as today ([API-BETA-SWITCH.md](API-BETA-SWITCH.md)) |
+| E1 | **Seven environment variables** must be set per environment | Values do **not** travel reliably with a solution export. `ubsppcoe_PolicyApiBeta` also needs a **Default Value**, so an import without a prompt still behaves as today ([API-BETA-SWITCH.md](API-BETA-SWITCH.md)). `ubsppcoe_PolicyMailRecipients` is the one that should **differ** per environment — if it is copied from production, a dev run mails the platform team |
 | E2 | **Three Dataverse tables** are created by hand in the maker portal | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` — build sheet in [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) §8 |
 | E3 | **Three `MIG_` flows are deleted after cutover** | `MIG_RebuildAllCapacityPolicies` is **kept, switched off** — it is A1 |
 | E4 | `Logging` column logical names are unrecorded | Acceptable only while the table is insert-only. Never filter or read it back (Q48) |
