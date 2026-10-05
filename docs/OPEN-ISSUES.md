@@ -2,6 +2,14 @@
 
 Living list of project items. Companion to [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/FLOWS.md](FLOWS.md) and [docs/PREREQUISITES.md](PREREQUISITES.md).
 
+> ### ⚠️ The identity model changed after much of this log was written
+>
+> The broker was a **service principal** (`sp_fabric_powerapp`) reached through a `GetFabricToken` child flow running a client-credentials grant. It is now a **service account** signed in on the *HTTP with Microsoft Entra ID (preauthorized)* connector, which attaches the token itself.
+>
+> **Entries below that describe token flows, client secrets, the `fabric_power_app_grp` security group or the *Service principals can call Fabric public APIs* tenant setting are historical.** They record what was done and why, and are kept for that reason — but **none of them is a current instruction.** Where an entry tells you to do something in a new environment, check it against [PREREQUISITES.md](PREREQUISITES.md) first; that file is authoritative.
+>
+> Specifically superseded: **F1.1**, **FN.1**, **§1.6**, **§2** (secrets), **§3.1** (the group and tenant setting), and the token-related half of **§8.3**.
+
 Two tables, split by whether anything still has to be done. **Open** is the work list. **Closed** is everything settled — kept because the reasoning is worth not relitigating.
 
 Flow work is `F<flow>.<n>`, where the flow number matches the Status table in [docs/FLOWS.md](FLOWS.md) — `FN` = the pre-existing networking flows, `FA` = applies to every flow. Everything else keeps its section number. The § at the end of each row is where the detail lives.
@@ -60,9 +68,9 @@ Last reviewed: 2026-08-11
 | **1.11** | Canvas app | State the folder rules on the wizard's folder field | `connect` fails with `GitProviderResourceNotFound` if the folder is absent; names are case-sensitive | ➖ By design · §1.11 |
 | **1.13** | Platform | `updateFromGit` blocked by an item's OneLake dependency | Git stores metadata, not data — a fresh workspace cannot be rebuilt from Git alone | ➖ Root-caused · §1.13 |
 | **2** | Security | Secrets in the repo — working tree and full history verified clean | Rotation is the customer's; Key Vault migration deferred | ➖ Closed on our side · §2 |
-| **3.1** | Prerequisite | Broker SPN not enabled for Fabric APIs | Entra group + tenant setting; a bare 401 on every call without it | ✅ Done · §3.1 |
-| **3.2** | Prerequisite | Broker SPN workspace Admin across ~4000 workspaces | Group membership plus automated workspace provisioning | ✅ Done · §3.2 |
-| **3.3** | Reference | Broker SPN object ID `6f70a764-…` | `AddConnectionRoleAssignment` must pass the **object** ID, not the client ID | ℹ Reference · §3.3 |
+| **3.1** | Prerequisite | broker account not enabled for Fabric APIs | Entra group + tenant setting; a bare 401 on every call without it | ✅ Done · §3.1 |
+| **3.2** | Prerequisite | broker account workspace Admin across ~4000 workspaces | Group membership plus automated workspace provisioning | ✅ Done · §3.2 |
+| **3.3** | Reference | broker account object ID `6f70a764-…` | `AddConnectionRoleAssignment` must pass the **object** ID, not the client ID | ℹ Reference · §3.3 |
 | **4.1** | Platform | Dec 1 2026 Git restriction | Contributor covers the role half; sensitivity labels may still block items | ➖ Accepted risk · §4.1 |
 | **5.1** | Design | Is SPN-B needed? | Owners have ADO access and create their own connections | ➖ Dropped · §5.1 |
 | **6.1** | Reliability | 429 / throttling | Defaults verified in place; covered by the HTTP retry policy | ➖ Decided · §6.1 |
@@ -295,9 +303,9 @@ Accepted as a deliberate bound. Residual, unaddressed: when the cap is what stop
 
 ### 1.6 Two different broker service principals (FN.1) — DONE
 
-`GetFabricToken` requested its token as `sp_fabric_powerapp` (`a385fde9-…`) while all eight networking flows used `sp_fabric_monit` (`b5c04c9c-…`).
+`GetFabricToken` requested its token as the broker service account (`a385fde9-…`) while all eight networking flows used `sp_fabric_monit` (`b5c04c9c-…`).
 
-**Decision 2026-08-06: standardise on `sp_fabric_powerapp`.** `sp_fabric_monit` holds `Tenant.Read.All` / `Tenant.ReadWrite.All`; an application surfaced to 4000 workspace owners must not execute on a tenant-wide identity.
+**Decision 2026-08-06: standardise on the broker service account.** `sp_fabric_monit` holds `Tenant.Read.All` / `Tenant.ReadWrite.All`; an application surfaced to 4000 workspace owners must not execute on a tenant-wide identity.
 
 **Fixed 2026-08-07, verified in the export** (solution `1.0.0.8`). Each networking flow had its inline `Initialize_variable clientSecret` → token `HTTP` → `Parse_JSON` block deleted and replaced with a `GetFabricToken` child-flow call, with downstream calls rewired from `body('Parse_JSON')?['access_token']` to `variables('accessToken')`.
 
@@ -315,7 +323,7 @@ Side benefit: one secret instead of nine, so PREREQUISITES E4 shrinks to a singl
 
 Remaining, carried forward:
 
-1. **Confirm `sp_fabric_powerapp` can actually reach the networking endpoints.** This is the first time those flows run as that identity, so this is the likely next failure. Grant only what they need — the point of the switch is lost if it ends up as broad as `sp_fabric_monit`.
+1. **Confirm the broker service account can actually reach the networking endpoints.** This is the first time those flows run as that identity, so this is the likely next failure. Grant only what they need — the point of the switch is lost if it ends up as broad as `sp_fabric_monit`.
 2. Retest `Workflows/list gateways spn.ps1` under the new identity; its Unauthorized result was against the retired SPN.
 3. `sp_fabric_monit` now has **no role in this solution**. Remove it from the docs and stop maintaining its secret here.
 
@@ -347,28 +355,30 @@ The canvas app filtering the workspace list is **not** authorization — it is a
 
 - `.gitignore` **is present** and excludes `*.ps1`, `.vscode/`, `tests/`.
 - No `.ps1` or `.txt` file is tracked. `internal_power_app.txt` lives outside the repo.
-- Since 1.6, only **`GetFabricToken`** carries a `clientSecret`, and the export scrubs it to `"value": " "`. No live secret in the working tree.
+- Since 1.6, only **`GetFabricToken`** carried a `clientSecret`, and the export scrubbed it to `"value": " "`. No live secret in the working tree. **Superseded: that flow is deleted and no flow holds a secret at all.**
 - `git log -S` across all branches finds **no commit** containing any of the three secrets. History is clean.
 
 Remaining:
 
-- **Secret rotation is the customer's responsibility** — out of scope for this work. Decision 2026-08-07.
-- Flows carry the secret via an `Initialize_variable clientSecret` in `GetFabricToken`. **Decision 2026-08-06: leave as is for now**; migrate to a Key Vault-backed secret environment variable in a later pass. Deferred, not resolved — the secret still sits in the flow definition and therefore in any export taken from a working environment.
-- The scrubbed `" "` value means `GetFabricToken` needs its secret re-entered before anything runs in a freshly imported environment. Belongs in the post-import checklist (8.4).
+- **Credential rotation is the customer's responsibility** — out of scope for this work. Decision 2026-08-07. **What rotates has changed:** there is no broker client secret any more, but the broker **account password** does rotate — and rotation requires the Fabric connection to be re-authorised by hand in every environment, or every call returns `401`.
+- ~~Flows carry the secret via an `Initialize_variable clientSecret` in `GetFabricToken`.~~ **Superseded — no flow contains a credential**, and no export taken from a working environment can carry one. The solution's only remaining secret is the delegated app's, on the custom connector's Security tab; vaulting that is still open.
+- ~~The scrubbed `" "` value means `GetFabricToken` needs its secret re-entered before anything runs in a freshly imported environment.~~ **Superseded** — the equivalent post-import step is authorising the three connections by signing in as the service account (PREREQUISITES E4).
 - `*.ps1` being ignored means the helper scripts referenced in ARCHITECTURE §9, including `get-operation.ps1`, are **not in the repo**. Either force-add the ones that contain no credentials (`git add -f`) or accept that they are local-only and note it.
 
 ---
 
 ## 3. Blocking prerequisites
 
-### 3.1 Broker SPN not enabled for Fabric APIs — DONE
+### 3.1 broker account not enabled for Fabric APIs — DONE
 
 **Done 2026-08-06.** `ConnectWorkspaceToGit` now runs past `Check_existing`; the 401 is gone.
 
 What fixed it:
 
-1. Entra security group **`fabric_power_app_grp`** created, with the **`sp_fabric_powerapp` service principal** added as a member.
+1. Entra security group **`fabric_power_app_grp`** created, with the broker **service principal** added as a member.
 2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group.
+
+> **Both steps are now obsolete and must not be repeated in a new environment.** They applied to a service-principal broker. The broker is a **user account**, which neither the group nor the tenant setting governs — see [PREREQUISITES.md](PREREQUISITES.md) A3 and B1. A `401` today means the connection has lapsed, not that a tenant setting is missing.
 
 Diagnosis that led there, kept because the same symptom will recur in every new environment:
 
@@ -376,7 +386,7 @@ Diagnosis that led there, kept because the same symptom will recur in every new 
 |---|---|
 | Token request | succeeded |
 | `aud` | `https://api.fabric.microsoft.com` |
-| `appid` | `a385fde9-…` (`sp_fabric_powerapp`) |
+| `appid` | `a385fde9-…` (the broker service account) |
 | `idtyp` | `app` |
 | `roles` | *(none)* — **normal, not the fault** |
 | Fabric call | `401 Unauthorized` |
@@ -385,17 +395,17 @@ The empty `roles` claim is expected: Fabric does not grant API access through En
 
 Reproduce with `Workflows/diag-401.ps1`. **This configuration is per-tenant and must be repeated in every environment** — see 8.4.
 
-### 3.2 Broker SPN workspace Admin coverage — DONE
+### 3.2 broker account workspace Admin coverage — DONE
 
-`sp_fabric_powerapp` must hold **Admin** on every managed workspace — connect, disconnect and sync all require it.
+the broker service account must hold **Admin** on every managed workspace — connect, disconnect and sync all require it.
 
 **Done 2026-08-07.** The broker SP is a member of a security group, and workspace provisioning is automated to grant that group the Admin role on every new workspace. No per-workspace manual step, and new workspaces are covered as they are created.
 
 Carried into PREREQUISITES §C as an environment-level dependency rather than a task: a new tenant needs the equivalent provisioning automation before the app works there.
 
-### 3.3 Broker SPN object ID
+### 3.3 broker account object ID
 
-`sp_fabric_powerapp` object ID: **`6f70a764-908f-435b-a930-ffcb375577f3`** (from the `oid` claim).
+the broker service account object ID: **`6f70a764-908f-435b-a930-ffcb375577f3`** (from the `oid` claim).
 
 This is the value `AddConnectionRoleAssignment` must pass as `principal.id` when granting the broker the `User` role on an owner's connection — **not** the client/application ID `a385fde9-…`. Confusing the two produces a role assignment that silently grants nothing, and connect then fails as if the connection were unshared.
 
@@ -437,13 +447,13 @@ One consequence worth naming: because the app does not create the connection, it
 
 When credentials expire the workspace stays connected but syncs fail.
 
-**Decision 2026-08-11: accepted, no monitoring.** This follows directly from 5.2. The owner created the connection and owns its credentials, so the owner is the party who can fix it, and a failed sync surfaces to them in the Fabric UI. Building a periodic SPN-A sweep to watch ~4000 connections would be a large amount of machinery to tell people something they can already see.
+**Decision 2026-08-11: accepted, no monitoring.** This follows directly from 5.2. The owner created the connection and owns its credentials, so the owner is the party who can fix it, and a failed sync surfaces to them in the Fabric UI. Building a periodic the broker account sweep to watch ~4000 connections would be a large amount of machinery to tell people something they can already see.
 
 The residual, stated plainly: **a workspace can sit in a connected-but-silently-failing state indefinitely** if nobody attempts a sync. Re-open if that turns out to happen at scale.
 
 ### 5.4 `PATCH myGitCredentials` — KEPT BY DECISION
 
-`ConnectWorkspaceToGit` calls `PATCH .../git/myGitCredentials` after `connect`, but `connect` already carries `myGitCredentials: { source: "ConfiguredConnection", connectionId }` in its body, and the setting is per-identity (SPN-A's own). It is very likely redundant.
+`ConnectWorkspaceToGit` calls `PATCH .../git/myGitCredentials` after `connect`, but `connect` already carries `myGitCredentials: { source: "ConfiguredConnection", connectionId }` in its body, and the setting is per-identity (the broker account's own). It is very likely redundant.
 
 **Decision 2026-08-11: keep it, untested.** It costs one call, it has run in every one of the five passing stage-1 tests without ever failing, and removing it would mean re-verifying all five to prove nothing regressed. Redundancy that is known-good is cheaper than a deletion that has to be re-earned.
 
@@ -503,7 +513,7 @@ Workspace `e9de0b2d-0cc1-42ed-9395-28da86acfd97`, one **Notebook** named `TestSy
 1. As the owner (Contributor) in the Fabric UI, confirm **connect is unavailable** — proves the app is necessary.
 2. Confirm the owner *can* see Git status and commit/update controls once connected — proves the scope reduction is right.
 3. Owner creates the ADO connection; confirm they are **Owner** on it. Record the ID and check `GET /v1/connections/{id}` → `connectionDetails.path` to settle the URL format. ✅ **Done.**
-4. Delegated call adds SPN-A as `User`; verify via `GET .../roleAssignments`. ✅ **Done 2026-08-10** — flow 7, both branches.
+4. Delegated call adds the broker account as `User`; verify via `GET .../roleAssignments`. ✅ **Done 2026-08-10** — flow 7, both branches.
 5. Run `ConnectWorkspaceToGit`, then `SyncWorkspaceWithGit`. ✅ **Done 2026-08-11**, every path.
 6. Verify in ADO:
    ```
@@ -530,7 +540,7 @@ For each flow called by the canvas app, every connection is either *Use this con
 
 After every import someone must open each flow → **Run only users** → set them again. Otherwise app users hit permission errors.
 
-For this solution: the delegated custom connector must be *Provided by run-only user*; SPN-A HTTP actions use the embedded connection.
+For this solution: the delegated custom connector must be *Provided by run-only user*; the broker account HTTP actions use the embedded connection.
 
 ### 8.3 Hardcoded per-environment values (F1.1)
 
@@ -558,9 +568,9 @@ Must cover, at minimum:
 
 - map every connection reference to a connection in the target environment (8.1)
 - re-apply **Run only users** on every app-facing flow (8.2)
-- supply environment variable values for tenant, client ID and secret (8.3)
-- create the Entra group (`fabric_power_app_grp` equivalent) with the broker SPN as a member, and enable **"Service principals can call Fabric public APIs"** scoped to it — see 3.1. Nothing works without this and the failure is a bare 401
-- confirm workspace provisioning in that environment grants the broker SPN's security group workspace **Admin** (3.2)
+- supply the `crbab_BrokerObjectId` environment variable value for the target tenant (8.3)
+- **authorise all three connections by signing in as the broker service account** — the Fabric one especially. A connection created by whoever imported the solution authenticates as *them*, and every workspace they do not administer silently behaves as though it does not exist (PREREQUISITES A1, E4)
+- confirm workspace provisioning in that environment grants the broker account's security group workspace **Admin** (3.2)
 - share the connector, app and security role with the target environment's group team (ARCHITECTURE §6)
 
 ---
@@ -784,4 +794,4 @@ All three handoffs to stage 2 were then driven from these results: `UpdateFromGi
 
 **Also descoped:** `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping` tables — Fabric owns that state and the GET APIs return it live.
 
-**Done 2026-08-07.** The old flow 3 ran as the broker SPN and returned the SPN's connections rather than the caller's. It was renamed in place to `ListMyConnections` and its HTTP action swapped for the delegated connector, keeping its GUID and its pagination logic. See FLOWS §3.
+**Done 2026-08-07.** The old flow 3 ran as the broker account and returned the SPN's connections rather than the caller's. It was renamed in place to `ListMyConnections` and its HTTP action swapped for the delegated connector, keeping its GUID and its pagination logic. See FLOWS §3.

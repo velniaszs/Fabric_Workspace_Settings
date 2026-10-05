@@ -232,7 +232,7 @@ Do not add a `Do until` that waits for `Succeeded`. It would burn the app's 120-
 | ~~2~~ | ~~Same resource ID **and** sub-resource, different name~~ | ✅ **Done 2026-09-02.** `400 DuplicateTargetPrivateLinkResourceId` — the uniqueness key is the pair |
 | 3 | Create `blob` **and** `dfs` endpoints against a **real storage account**, and let both provision | That the pair-key genuinely supports the documented storage case end to end — not just that the `POST` is accepted |
 | 4 | Create **without** `targetSubresourceType` on a 1:1 type such as `Microsoft.Sql/servers` | Whether Fabric infers it. Decides whether the app can ever omit the field — see [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §5.6 |
-| 5 | Create as SPN-A against a resource in a subscription where SPN-A has **no Azure role at all** | Confirms §0 — that no Azure RBAC is needed to request |
+| 5 | Create as the broker account against a resource in a subscription where the broker account has **no Azure role at all** | Confirms §0 — that no Azure RBAC is needed to request |
 | 6 | Create with `requestMessage` longer than 140 characters | That `take` truncates rather than the API rejecting |
 | 7 | Create on a **sub-F64** workspace | That the capacity failure reaches the app as a readable message |
 | 8 | Create with a resource ID for a supported type in a subscription with `Microsoft.Network` **unregistered** | Whether this fails at create time or silently sits in `Provisioning` — it changes what the app should tell the owner |

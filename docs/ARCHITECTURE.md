@@ -12,7 +12,7 @@ Roughly 4000 Fabric workspaces. Workspace **owners** need to configure Git integ
 - Owners are Contributors, so they can commit and update once connected — but cannot connect, disconnect, or change connection settings
 - Owners must not be able to touch workspaces they don't own
 
-Solution: a Power Platform app that brokers the calls through a privileged service principal, with **Dataverse as the authorization boundary**.
+Solution: a Power Platform app that brokers the calls through a privileged service account, with **Dataverse as the authorization boundary**.
 
 ### What the app does and does not do
 
@@ -25,7 +25,7 @@ The app therefore brokers connect and disconnect only. Everything else stays in 
 1. Pick a workspace from `ubsppcoe_Workspace` (only rows where the caller is primary or secondary owner).
 2. Pick a connection — **delegated** call, so only the caller's own connections appear. Filtered client-side to `AzureDevOpsSourceControl`. Shows name, URL and ID.
 3. Confirm org / project / repo **derived** from `connectionDetails.path` — no URL pasting. Branch defaults to `main`; directory defaults to `/` and is editable, with a hint for shared repos. Choose the initialization strategy, with a warning and wiki links.
-4. On the final step only: grant SPN-A on the connection (delegated), then connect (SPN-A).
+4. On the final step only: grant the broker account on the connection (delegated), then connect (brokered).
 
 Granting on the last step means an abandoned wizard leaves no stray role assignments.
 
@@ -35,26 +35,40 @@ Granting on the last step means an abandoned wizard leaves no stray role assignm
 
 Two identities, deliberately separated.
 
-### SPN-A — `sp_fabric_powerapp` (`a385fde9-1d6a-4e7f-8336-dc7feba5a4bc`)
+### The broker — a service account
 
-The Fabric broker. App-only client credentials. Workspace Admin on all managed workspaces. **No Azure DevOps rights at all.** Executes every app-only Fabric REST call.
+The Fabric broker is a **user account**, not a service principal: email and password, signed in on the *HTTP with Microsoft Entra ID (preauthorized)* connection. The connector attaches the bearer token to every call, so **no flow acquires a token and no flow holds a secret**. Workspace Admin on all managed workspaces. **No Azure DevOps rights at all.** Executes every brokered Fabric REST call.
 
-> **Decision 2026-08-06, implemented 2026-08-07.** `sp_fabric_monit` (`b5c04c9c-0588-418f-8f60-2d83d38cb635`) holds `Tenant.Read.All` / `Tenant.ReadWrite.All` and is deliberately **not** used as the broker — an app exposed to 4000 workspace owners must not run on a tenant-wide identity.
+It is a **service account rather than a named person** deliberately — an app serving ~4000 workspaces cannot depend on an individual's account surviving a leaver process.
+
+> **Decision 2026-08-06.** `sp_fabric_monit` (`b5c04c9c-0588-418f-8f60-2d83d38cb635`) holds `Tenant.Read.All` / `Tenant.ReadWrite.All` and was deliberately **not** used as the broker — an app exposed to 4000 workspace owners must not run on a tenant-wide identity. **That reasoning still holds**, and is why the broker is scoped to a workspace role rather than given anything tenant-wide. `b5c04c9c` appears nowhere in the solution.
 >
-> All flows now acquire their token from `GetFabricToken`, which uses `sp_fabric_powerapp`. `b5c04c9c` appears nowhere in `Workflows/`; `sp_fabric_monit` has no role in this solution. See OPEN-ISSUES §1.6.
+> **Superseded in part:** the original broker was the service principal `sp_fabric_powerapp`, reached through a `GetFabricToken` child flow running a client-credentials grant. Both are retired — see below.
 
-Keep SPN-A's grants to the minimum the flows actually need: workspace Admin on managed workspaces, plus whatever the networking endpoints require. Do not add tenant-scoped application permissions.
+Keep the account's grants to the minimum the flows actually need: workspace Admin on managed workspaces, plus whatever the networking endpoints require. Do not add Entra directory roles or tenant-scoped permissions.
 
-Fabric REST access for an SPN is *not* granted by Entra application permissions. **Confirmed by testing on 2026-08-06** — a token with an empty `roles` claim is normal and works fine, while adding application permissions in the app registration does nothing. Access requires both of:
+### What the preauthorized connector removed
 
-1. **Entra security group** `fabric_power_app_grp`, with the `sp_fabric_powerapp` **service principal** as a member
-2. Fabric Admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → Enabled, scoped to that group
+The broker used to be a service principal, and that carried a prerequisite chain that no longer exists:
 
-plus a Fabric-side role on the target object (workspace role, gateway role, connection role).
+| Retired | Why it is gone |
+|---|---|
+| `GetFabricToken` child flow | Nothing left for it to do. The connector attaches the token |
+| The broker client secret | No token request to present it |
+| `crbab_TenantId`, `crbab_BrokerClientId` | Existed only to build that request |
+| Entra group `fabric_power_app_grp` | Scoped to service principals |
+| Tenant setting **"Service principals can call Fabric public APIs"** | Same — it does not govern a user account. **Do not enable it "to be safe"** |
 
-This is a **hard prerequisite for every app-only flow**, and it is environment-specific — the group and the tenant setting must be recreated in every tenant the solution is deployed to. Symptom when missing: `401 Unauthorized`, *"The caller is not authenticated to access this resource"*, on every Fabric call. A `403` means this part is satisfied and only the object-level role is missing.
+**Fabric access now requires exactly one thing: a Fabric-side role on the target object** — workspace, gateway or connection — granted directly to the account.
 
-`Workflows/diag-401.ps1` reproduces the check outside Power Automate and is the fastest way to tell the two apart.
+> ### The `401` / `403` split changed meaning
+>
+> | Symptom | Was | Now |
+> |---|---|---|
+> | `401` on **every** call at once | Group membership or tenant setting missing | **The connection has lapsed** — password rotated or expired, MFA or Conditional Access blocked it, or the account was disabled or unlicensed. Re-authenticate it |
+> | `403` on one object | Object-level role missing | **Unchanged** — the account holds no role on that object |
+>
+> The giveaway is **breadth**: everything failing at once is the connection; one thing failing is a role. `Workflows/diag-401.ps1` tested the service-principal path and no longer reproduces anything useful.
 
 ### Git identity
 
@@ -72,7 +86,7 @@ Delegated app behind the custom connector `FabricSetting`. Runs as the signed-in
 
 **Client ID, object ID and tenant are per-tenant values and are not recorded here** — read them from the app registration. They are collected per deployment in [workspace-settings/MIGRATION.md](../workspace-settings/MIGRATION.md).
 
-> Secrets are in the user's OneDrive `internal_power_app.txt`, outside the repo. Rotation is the customer's responsibility. Inside the solution only `GetFabricToken` holds a secret; moving it to a Key Vault-backed environment variable is deferred. See OPEN-ISSUES §2.
+> Secrets are in the user's OneDrive `internal_power_app.txt`, outside the repo. Rotation is the customer's responsibility. Inside the solution the **only** secret is the delegated app's, on the custom connector's Security tab; moving it to a Key Vault-backed environment variable is deferred. See OPEN-ISSUES §2.
 ---
 
 ## 3. Authorization boundary
@@ -188,7 +202,7 @@ Required, in order:
 2. Entra group → Dataverse **group team** → assign the role to the team
 3. Share the **connector** with the group
 4. Share the **canvas app** with the group
-5. Flows called by the app: Run-only users → connections set to **Provided by run-only user** for the delegated connector, **Use this connection** for SPN-A HTTP actions
+5. Flows called by the app: Run-only users → connections set to **Provided by run-only user** for the delegated connector, **Use this connection** for the brokered Fabric actions
 
 Run-only connection settings do **not** survive solution import. Re-apply after every deployment.
 
@@ -200,7 +214,7 @@ Run-only connection settings do **not** survive solution import. Re-apply after 
 |---|---|
 | `GET /v1/workspaces/{id}/git/connection` | 200 + `NotConnected` when disconnected, not 404 |
 | `POST .../git/connect` | Synchronous |
-| `PATCH .../git/myGitCredentials` | Per-identity; SPN-A must set `ConfiguredConnection` |
+| `PATCH .../git/myGitCredentials` | Per-identity; the broker account must set `ConfiguredConnection` |
 | `POST .../git/initializeConnection` | Returns `requiredAction`, `workspaceHead`, `remoteCommitHash` |
 | `GET .../git/status` | May return 202 on a cold workspace |
 | `POST .../git/commitToGit` | 202 + `x-ms-operation-id` |
@@ -247,7 +261,9 @@ This table is why the scope was cut to connect and disconnect.
 
 ### Connection APIs
 
-`POST /v1/connections/{connectionId}/roleAssignments` — the caller must hold **UserWithReshare or higher on the connection, or Admin on the bound gateway**. Scope `Connection.ReadWrite.All`. Supports principal type `ServicePrincipal`. **An SPN cannot self-grant**, which is why `AddConnectionRoleAssignment` runs delegated as the connection's owner.
+`POST /v1/connections/{connectionId}/roleAssignments` — the caller must hold **UserWithReshare or higher on the connection, or Admin on the bound gateway**. Scope `Connection.ReadWrite.All`. Supports principal types `User` and `ServicePrincipal`. **No identity can self-grant**, which is why `AddConnectionRoleAssignment` runs delegated as the connection's owner.
+
+> **Send `principal.type: User`.** The broker is a service account, so the grant names a user, not a service principal. A wrong type is accepted, grants nothing, and the subsequent connect fails as though the connection had never been shared — see [flows/AddConnectionRoleAssignment.md](flows/AddConnectionRoleAssignment.md).
 
 **A duplicate grant returns `409 ConnectionRoleAssignmentAlreadyExists`**, `isRetriable: false` — observed 2026-08-11, undocumented in the API reference. Treat it as success: the end state is identical to a fresh grant.
 
@@ -305,7 +321,7 @@ The trailing slash on the repo URL matters.
 |---|---|---|
 | `check role.ps1` | Lists gateway role assignments; decodes `oid` from the JWT to avoid a Graph dependency | Working |
 | `list gateways delegated authcode.ps1` | Authorization-code flow via `HttpListener` on `http://localhost:8400/`; prints `upn`/`oid`/`scp` then pages `/v1/gateways` | Working — requires `http://localhost:8400/` registered as a **Web** redirect URI on `SVC_PROD_AT43156_FABRIC_POLICY` |
-| `list gateways spn.ps1` | App-only client credentials | Token succeeds, gateway call returns **Unauthorized** — needs the tenant setting plus a gateway role |
+| `list gateways spn.ps1` | App-only client credentials | **Historical.** Token succeeds, gateway call returns **Unauthorized**. This was the dead end that led away from a service-principal broker; the tenant setting it needed is no longer enabled or required |
 | `list gateways delegated.ps1` | Device code flow | **Dead end.** Device code is public-client only; a confidential client always gets `AADSTS7000218`, and passing `client_secret` does not help |
 | `test rest.ps1` | Ad-hoc | Contains a plaintext secret |
 | `get-operation.ps1` | `GET /v1/operations/{id}` for a Fabric LRO; expands `error.moreDetails`, which names the item behind a wrapper code such as `GitSyncFailed`. Reads the secret from a local notes file by label and never prints it | Working |

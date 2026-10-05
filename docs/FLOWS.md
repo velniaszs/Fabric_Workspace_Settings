@@ -14,7 +14,7 @@ Scope was cut on 2026-08-06 after the Fabric Git permissions table was confirmed
 
 | # | Flow | Built | State |
 |---|---|---|---|
-| 1 | GetFabricToken | Yes | Complete — tenant and client ID are environment variables. Verified in export 2026-08-07 (F1.1 closed) |
+| 1 | ~~GetFabricToken~~ | **Retired** | **Deleted.** The preauthorized connector attaches the token, so there is nothing left for it to do — see §1 |
 | 2 | GetGitOperationStatus | Yes | Complete — verified in export 2026-08-07 (F2.2, F2.4 closed) |
 | 3 | ListMyConnections | Yes | **Built and tested 2026-08-07**, delegated. Verified in export (F3.1 closed) |
 | 4 | GetWorkspaceGitState | Yes | Complete — app-facing. Decision 2026-08-07: keep as is (F4.1 closed) |
@@ -31,18 +31,20 @@ The `commitToGit` and `updateFromGit` **calls** survive as flow 8. Descoping rem
 
 ## Git integration flows
 
-### 1. GetFabricToken
+### 1. GetFabricToken — **retired, do not rebuild**
 
-Child flow. Central place to acquire an SPN-A token so the client-credentials block is not copy-pasted into every flow.
+**This flow no longer exists.** Every Fabric call now goes through the *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the broker **service account**, which attaches the bearer token itself.
 
-| | |
+> **The section number is kept so the §N references in the flow documents still resolve.** Nothing here is to be built.
+
+| Was | Now |
 |---|---|
-| Trigger | PowerApp V2, no inputs |
-| Calls | `POST https://login.microsoftonline.com/{tenantId}/oauth2/v2.0/token` |
-| Scope | `https://api.fabric.microsoft.com/.default` |
-| Returns | `access_token` |
+| `Run a Child Flow` → `GetFabricToken`, then an `accessToken` variable | **Nothing.** Each flow starts at its first real action |
+| `HTTP` action with an `Authorization: Bearer …` header | **Invoke an HTTP request** on the connector, no auth header |
+| A client secret in an `Initialize variable`, scrubbed to `" "` on export | **No secret anywhere in the solution** |
+| `crbab_TenantId`, `crbab_BrokerClientId` | Deleted — they existed only to build the token request |
 
-Tenant ID and client ID come from the `crbab_TenantId` and `crbab_BrokerClientId` environment variables, both present in the solution — no hand-editing after import. The **secret** is still an `Initialize_variable` inside the flow; exports scrub it to `" "`, so it must be re-entered per environment (PREREQUISITES E4). Migrate to a Key Vault-backed secret variable before production (OPEN-ISSUES §2).
+**What it cost:** the identity stopped being a service principal we configure and became a **user account whose connection must be kept authorised**. A lapse presents as `401` on every call at once. See [ARCHITECTURE.md](ARCHITECTURE.md) §2.
 
 ### 2. GetGitOperationStatus
 
@@ -52,7 +54,7 @@ A read. The app asks what state an operation is in; this answers and changes not
 |---|---|
 | Trigger | **Power Apps (V2)**, one input — titled `operationId`, underlying key `text` |
 | Called by | the canvas app's Refresh button |
-| Calls | `GetFabricToken` (child), `GET /v1/operations/{id}`, `GET /v1/operations/{id}/result` |
+| Calls | `GET /v1/operations/{id}`, `GET /v1/operations/{id}/result` |
 | Returns | `status`, `percentcomplete`, `errorcode`, `errormessage`, `errordetails`, `requiredaction`, `remotecommithash` |
 
 Rewritten in place from `PollFabricOperation` on 2026-08-07 — renamed rather than rebuilt, so the flow GUID and connection references survive.
@@ -63,7 +65,7 @@ Rewritten in place from `PollFabricOperation` on 2026-08-07 — renamed rather t
 
 **One pass, no loop.**
 
-1. `GetFabricToken` — it fetches its own token. `accessToken` is deliberately *not* a trigger input: passing one would put an SPN credential with tenant-wide Fabric rights inside the canvas app, recoverable by anyone who can open it.
+1. **No token step.** The connector holds the credential, so nothing is passed in or out — a token could never reach the canvas app, where anyone who can open it could recover it.
 2. `GET /v1/operations/{operationId}`, with an explicit exponential retry policy — this is the one call the UI hits repeatedly.
 3. `Succeeded` → `GET /v1/operations/{id}/result` as well, tolerating a 404. Not every Fabric operation has a result.
 4. Return state, error detail and, when present, `requiredAction` / `remoteCommitHash`.
@@ -130,7 +132,7 @@ Restructured and tested 2026-08-11. Connects the workspace and **probes** for wh
 
 **As built:**
 
-1. **Token** — child call to `GetFabricToken`, then variables `accessToken`, `outcome` (seeded `Failed`), `message`, `operationId`, `requiredAction` (seeded `None`).
+1. **Variables** — `outcome` (seeded `Failed`), `message`, `operationId`, `requiredAction` (seeded `None`). **No token step and no `accessToken`.**
 2. **`Check_existing`** — `GET .../git/connection`. The `Is_not_connected` condition tests `gitConnectionState` against `NotConnected`; the else branch answers `AlreadyConnected` and does nothing, rather than silently re-pointing an existing connection.
 3. **`Connect`** — `POST .../git/connect` with `gitProviderDetails` (`gitProviderType: AzureDevOps`) and `myGitCredentials: { source: "ConfiguredConnection", connectionId }`.
 4. **`Set_credentials`** — `PATCH .../git/myGitCredentials` with the same connection. Probably redundant, since step 3 already carries the same payload, but **kept by decision 2026-08-11** — it has never failed in testing and removing it would mean re-running every stage-1 test to prove nothing regressed. See OPEN-ISSUES §5.4 for the one residual it carries.
@@ -191,7 +193,7 @@ Built and tested 2026-08-10, both branches. Runs as the broker.
 
 As built:
 
-1. `Run_a_Child_Flow` → `GetFabricToken`, then `Initialize_variable` holding `accessToken` = `@body('Run_a_Child_Flow')?['access_token']`.
+1. **No token step.** The flow opens at `Check_existing`.
 2. `Check_existing` — GET the Git connection.
 3. `Condition` — `@equals(coalesce(body('Check_existing')?['gitConnectionState'],''), 'NotConnected')`.
 4. Yes → respond `NotConnected`, nothing to do.
@@ -211,7 +213,7 @@ Also the only route to a **branch or directory change**, since no update API exi
 
 ### 7. AddConnectionRoleAssignment — delegated
 
-Built and tested 2026-08-10; paging and 409 handling added 2026-08-11. Grants SPN-A the `User` role on the owner's connection so the broker can reference it by ID.
+Built and tested 2026-08-10; paging and 409 handling added 2026-08-11. Grants the broker account the `User` role on the owner's connection so the broker can reference it by ID.
 
 | | |
 |---|---|
@@ -272,7 +274,7 @@ The object ID comes from the `crbab_BrokerObjectId` environment variable (PREREQ
 
 **No polling.** The API documents only `201`, `429` and error codes — there is no `202`, no `x-ms-operation-id` and no long-running operation. When the call returns, the grant is in effect.
 
-**This must be delegated.** The API requires the caller to hold `UserWithReshare` or higher on the connection, or Admin on the bound gateway — an SPN cannot self-grant. The owner is Owner on the connection they created, so the delegated call succeeds.
+**This must be delegated.** The API requires the caller to hold `UserWithReshare` or higher on the connection, or Admin on the bound gateway — No identity can self-grant. The owner is Owner on the connection they created, so the delegated call succeeds.
 
 Self-authorizing by construction: the caller can only grant on connections they already control, so no `ubsppcoe_Workspace` check is needed and a PowerApp V2 trigger is acceptable.
 
@@ -287,12 +289,12 @@ Built and tested 2026-08-11. Stage 2 — moves content once the workspace is alr
 | | |
 |---|---|
 | Trigger | **Power Apps (V2)** — `text` = `workspaceId`, `text_1` = `requiredAction`, `text_2` = `initializationStrategy` (**required** since 2026-08-12) |
-| Calls | `GetFabricToken` (child), `initializeConnection` (conditional), `git/status`, then `commitToGit` or `updateFromGit` |
+| Calls | `initializeConnection` (conditional), `git/status`, then `commitToGit` or `updateFromGit` |
 | Returns | `outcome`, `operationid`, `requiredaction`, `message` |
 
 As built:
 
-1. `Run_a_Child_Flow` → `GetFabricToken`, then six `Initialize variable` actions: `accessToken`, `action`, `operationId`, `outcome` (seeded `Failed`), `message`, and `allowOverride` — a **boolean**, `@equals(triggerBody()?['text_2'],'PreferRemote')`.
+1. Five `Initialize variable` actions — `action`, `operationId`, `outcome` (seeded `Failed`), `message`, and `allowOverride`. **No token step and no `accessToken`** — a **boolean**, `@equals(triggerBody()?['text_2'],'PreferRemote')`.
 2. `Condition_needs_strategy` — `@not(empty(coalesce(triggerBody()?['text_2'],'')))`. Yes branch calls `initializeConnection` with the chosen strategy. No branch is empty.
 3. `Get_git_status` — runs after the Condition on **Succeeded or Failed**, because a `409` from initialize is expected and must not stop the flow.
 4. `Set_action_final` — derives the action to take. See the table below.
@@ -384,7 +386,7 @@ Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](OP
 | Calls | `GET /v1/gateways` via **custom connector** `FabricSetting` |
 | Returns | `GatewaysJson` |
 
-The only flow running in **delegated** (per-user) context. Everything else uses the broker SPN.
+The only flow running in **delegated** (per-user) context. Everything else uses the broker account.
 
 The backtick `cont` initialisation and the stale `shared_webcontents` connection reference were both fixed and verified on 2026-08-06. The 5-page cap remains by design — see OPEN-ISSUES §1.4.
 
@@ -392,7 +394,7 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 
 ## Managed private endpoints
 
-Three networking flows for the app's Private endpoints tab. **Built and tested 2026-09-02.** All app-only via `GetFabricToken`, all `connectionReferences: {}` — **no custom connector, no delegated call, no new permissions**. Design rationale in [docs/APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md); the tab that calls them in [docs/APP-PRIVATE-ENDPOINTS-TAB.md](APP-PRIVATE-ENDPOINTS-TAB.md).
+Three networking flows for the app's Private endpoints tab. **Built and tested 2026-09-02.** All brokered through the preauthorized connector, all `connectionReferences: {}` — **no custom connector, no delegated call, no new permissions**. Design rationale in [docs/APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md); the tab that calls them in [docs/APP-PRIVATE-ENDPOINTS-TAB.md](APP-PRIVATE-ENDPOINTS-TAB.md).
 
 | Flow | Inputs | Endpoint (under `/v1/workspaces/{id}/managedPrivateEndpoints`) | Returns | Build instructions |
 |---|---|---|---|---|
@@ -467,5 +469,5 @@ The same message appears for a genuine fault when a flow exceeds the **120-secon
 
 **Two IDs for one service principal.** `crbab_BrokerClientId` is the application ID and goes to the Entra token endpoint; `crbab_BrokerObjectId` is the directory object ID and goes to the Fabric roleAssignments API. Swapping them fails at runtime, not at import.
 
-**One broker identity.** All app-only calls run as `sp_fabric_powerapp`. `sp_fabric_monit` is a monitoring identity with tenant-wide read/write and must not be used by these flows.
+**One broker identity.** All brokered calls run as the broker service account. `sp_fabric_monit` is a monitoring identity with tenant-wide read/write and must not be used by these flows.
 **There is no update API for a Git connection.** Changing branch or directory means `git/disconnect` then `git/connect` and a fresh `initializeConnection`.

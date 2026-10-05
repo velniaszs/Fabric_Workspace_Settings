@@ -16,16 +16,16 @@ Status: **investigation only — nothing built.** Verified against the Microsoft
 |---|---|
 | Which flows? | Three new ones: `ListPrivateEndpoints`, `CreatePrivateEndpoint`, `DeletePrivateEndpoint`. A fourth, `GetPrivateEndpoint`, is optional and probably unnecessary — see §4.4 |
 | Which APIs? | `GET`, `POST`, `DELETE` on `/v1/workspaces/{workspaceId}/managedPrivateEndpoints` — nothing else |
-| Delegated calls needed? | **No.** All three run app-only as SPN-A, exactly like the existing networking flows |
+| Delegated calls needed? | **No.** All three run brokered as the broker account, exactly like the existing networking flows |
 | Custom connector changes needed? | **No.** No new operations, no new scopes, no re-consent, no new connection reference |
-| New Fabric permissions needed? | **None.** SPN-A already holds workspace Admin, which is the highest role any of these APIs require |
-| **Azure permissions needed?** | **None, for us.** Neither SPN-A nor the owner needs any Azure RBAC on the target resource. The Azure-side rights sit entirely with the *approver* — see §3.2 |
+| New Fabric permissions needed? | **None.** the broker account already holds workspace Admin, which is the highest role any of these APIs require |
+| **Azure permissions needed?** | **None, for us.** Neither the broker account nor the owner needs any Azure RBAC on the target resource. The Azure-side rights sit entirely with the *approver* — see §3.2 |
 | New tenant setting? | **No.** There is no tenant switch for managed private endpoints — verified against the tenant settings index, §6.1 |
 | Polling / operation IDs? | **No.** These are not long-running operations in the Fabric sense. There is no `x-ms-operation-id` and `GetGitOperationStatus` is not involved |
 | Duplicate handling? | **Both rules are server-enforced**, confirmed 2026-09-02: `DuplicatePrivateEndpointName` for the name, `DuplicateTargetPrivateLinkResourceId` for the (resource ID + sub-resource) pair. Both `400`. The flow carries no duplicate logic; the app checks inline purely for the field-level error. See §5.5 |
 | Can `targetSubresourceType` be derived? | **Mostly, but the field stays.** 1:1 for ~15 types, 1:many for storage, Cosmos, Synapse, Purview and Databricks — where the resource ID cannot distinguish them. See §5.6 |
 
-The short version: this is the **easiest** feature added to the app so far. It is three HTTP calls on one resource, all app-only, all covered by a role the broker already has.
+The short version: this is the **easiest** feature added to the app so far. It is three HTTP calls on one resource, all brokered, all covered by a role the broker already has.
 
 ---
 
@@ -90,12 +90,12 @@ The app has needed delegated calls twice, and both times for the same structural
 
 | Existing delegated use | Why delegation was unavoidable |
 |---|---|
-| `ListMyConnections` | A connection list is per-user data. SPN-A's list is not the caller's list |
-| `AddConnectionRoleAssignment` | An SPN cannot grant itself a role on someone else's connection. Only the connection Owner can |
+| `ListMyConnections` | A connection list is per-user data. the broker account's list is not the caller's list |
+| `AddConnectionRoleAssignment` | No identity can grant itself a role on someone else's connection. Only the connection Owner can |
 
 **Managed private endpoints are neither.** They are workspace-scoped objects, there is no per-user view of them, and the write requires workspace **Admin** — which the owners explicitly do not have and will not be granted (ARCHITECTURE §1). A delegated create would fail with `403` for every single user of this app.
 
-So delegation is not merely unnecessary here, it is **impossible for the write path** and pointless for the read path. Brokering through SPN-A is the only design that works, and it is the same shape as `GetOutboundRules` / `SetOutboundRules`.
+So delegation is not merely unnecessary here, it is **impossible for the write path** and pointless for the read path. Brokering through the broker account is the only design that works, and it is the same shape as `GetOutboundRules` / `SetOutboundRules`.
 
 Concretely, this means **no** change to `FabricSetting`:
 
@@ -108,21 +108,21 @@ Each new flow's `connectionReferences` will be `{}`, matching `GetOAPSetting`, `
 
 ### 3.1 Permissions — plane 1, Fabric
 
-What SPN-A needs to make the three calls at all.
+What the broker account needs to make the three calls at all.
 
 | Requirement | Where | Already satisfied? |
 |---|---|---|
-| SPN in `fabric_power_app_grp` + tenant setting *"Service principals can call Fabric public APIs"* | Fabric admin portal | ✅ PREREQUISITES A3 / B1 |
-| SPN-A workspace **Admin** on the target workspace | Fabric workspace role | ✅ Already granted across the managed estate (OPEN-ISSUES §3.2) |
-| Entra **application** permissions on `sp_fabric_powerapp` | App registration | ➖ None needed. Fabric access is not granted by app roles — ARCHITECTURE §2 |
+| A live *HTTP with Microsoft Entra ID (preauthorized)* connection, signed in as the broker account | Power Platform | ✅ PREREQUISITES A1 / E4 |
+| the broker account workspace **Admin** on the target workspace | Fabric workspace role | ✅ Already granted across the managed estate (OPEN-ISSUES §3.2) |
+| Entra **application** permissions | App registration | ➖ **Not applicable.** The broker is a user account, not a service principal — ARCHITECTURE §2 |
 | Delegated scopes | Custom connector | ➖ Not applicable, no delegated call |
 | Tenant setting for managed private endpoints | Fabric admin portal | ➖ **There isn't one** — §6.1 |
 
-Nothing to request, nothing to consent to. `403` on any of these three calls means SPN-A lost its Admin role on that workspace; `401` means A3/B1 broke.
+Nothing to request, nothing to consent to. `403` on any of these three calls means the broker account lost its Admin role on that workspace; **`401` means the connection has lapsed**, and it then fails on every workspace at once rather than just this one.
 
 ### 3.2 Permissions — plane 2, Azure
 
-**We need nothing in Azure. Not SPN-A, not the workspace owner, not the app.**
+**We need nothing in Azure. Not the broker account, not the workspace owner, not the app.**
 
 This is the part that looks like it should require an Azure grant and doesn't. The private endpoint is **not** created in the customer's subscription — Fabric provisions it inside a Microsoft-managed virtual network that Fabric owns. What lands on the customer's resource is a *private endpoint connection request*, in state `Pending`. Issuing that request is not a privileged operation on the target resource, which is exactly why the approval step exists: the request is inert until the resource owner accepts it.
 
@@ -155,7 +155,7 @@ What a workspace owner needs to press the button. Nothing new in kind — the sa
 
 ## 4. Flows to build
 
-Same skeleton as every existing networking flow: `Run_a_Child_Flow` → `GetFabricToken` → `Initialize_variable` (`accessToken`) → `HTTP` → `Respond to a Power App or flow`. No connector, no inline token block.
+Same skeleton as every existing networking flow: **Invoke an HTTP request** on the *HTTP with Microsoft Entra ID (preauthorized)* connector → `Respond to a Power App or flow`. No custom connector, no token step, no `Authorization` header.
 
 Full build instructions live in one file per flow:
 
@@ -366,7 +366,7 @@ This is why Fabric's supported-sources table lists *Azure Blob Storage*, *Azure 
 | Fabric REST | **Nothing.** No endpoint lists supported types or their sub-resources. The supported-source table is documentation only |
 | Azure ARM — `GET .../{resourceId}/privateLinkResources?api-version=...` | **Exists and is authoritative**, returning the exact `groupId` values for a *specific* resource. **Rejected:** it requires Azure RBAC (Reader) on the target resource |
 
-The second one is worth being explicit about, because it looks attractive. Calling it would mean SPN-A holding a role in every subscription any owner might ever target — which destroys the single best property of this feature: that it needs **no Azure permissions at all** and therefore no Azure onboarding across 4000 workspaces (§3.2). Trading that away to save a maintained list would be a bad bargain.
+The second one is worth being explicit about, because it looks attractive. Calling it would mean the broker account holding a role in every subscription any owner might ever target — which destroys the single best property of this feature: that it needs **no Azure permissions at all** and therefore no Azure onboarding across 4000 workspaces (§3.2). Trading that away to save a maintained list would be a bad bargain.
 
 So the list is **maintained by us, and lives in the app** — which also means the picker keeps working for owners who cannot see the target subscription at all.
 
@@ -540,7 +540,7 @@ Things that must be established by running them, not by reading docs:
 
 | # | Test | Establishes |
 |---|---|---|
-| T1 | Create an endpoint as SPN-A against a resource in a subscription where **SPN-A has no Azure role at all** | §3.2 — that no Azure RBAC is needed to request |
+| T1 | Create an endpoint as the broker account against a resource in a subscription where **the broker account has no Azure role at all** | §3.2 — that no Azure RBAC is needed to request |
 | ~~T2~~ | ~~Create the same name twice~~ | ✅ **Done 2026-09-02.** `400 DuplicatePrivateEndpointName` · §5.5 |
 | ~~T2b~~ | ~~Same resource ID and sub-resource under a different name~~ | ✅ **Done 2026-09-02.** Permitted — no server-side rule. App blocks it · §5.5 |
 | T3 | Create `blob` and `dfs` endpoints against **one** storage account | §5.6 — that both are accepted, i.e. the case the app's duplicate check must *not* block |

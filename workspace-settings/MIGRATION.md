@@ -46,21 +46,21 @@ Verified against the solution export on 2026-09-25.
 | Dataverse tables | 0 | **None.** The `ubsppcoe_` tables belong to the platform team's shared solution and must already exist |
 | Canvas app | 1 | `crbab_app5` |
 | Custom connector | 1 | `crbab_FabricSetting` — **including a hardcoded tenant ID** |
-| Connection references | 5 | 4 × custom connector, 1 × Office 365 Users — **arrive unbound** |
-| Environment variables | 3 | `crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId` — **values are defaults, not bindings** |
+| Connection references | 6 | 4 × custom connector, 1 × Office 365 Users, 1 × HTTP with Entra ID (preauthorized) — **arrive unbound** |
+| Environment variables | 1 | `crbab_BrokerObjectId` — **values are defaults, not bindings** |
 
 ### ❌ Not carried — must be created or configured
 
 | Item | Phase |
 |---|---|
-| Both Entra app registrations and their secrets | 1 |
-| The `fabric_power_app_grp` security group | 1 |
+| The broker **service account** — created, licensed, MFA/expiry-exempt | 1 |
+| The delegated app registration and its secret | 1 |
 | The Entra group backing the Dataverse group team | 1 |
-| Fabric tenant settings | 2 |
+| Fabric tenant setting — Git integration | 2 |
 | Workspace Admin grants and capacity assignment | 2 |
-| Binding of the 5 connection references to real connections | 4 |
-| Environment variable **values** for the target tenant | 4 |
-| The broker client secret inside `GetFabricToken` | 4 |
+| Binding of the 6 connection references to real connections | 4 |
+| The environment variable **value** for the target tenant | 4 |
+| **Authorisation of all three connections as the service account** | 4 |
 | The connector's tenant ID and delegated app secret | 4 |
 | The 28 seed rows for `ubsppcoe_PrivateLinkTarget` | 4 |
 | The `ubsppcoe_GitAuditLog` table | 4 |
@@ -99,20 +99,30 @@ flowchart TB
 
 ## Phase 1 — Entra ID (per tenant)
 
-### Step 1 — Register the broker application
+### Step 1 — Create the broker service account
 
-**Role:** Application Administrator
+**Role:** Identity administrator
 
-Register `sp_fabric_powerapp` as an app-only client-credentials application and create a client secret.
+The broker is a **user account**, not an application. **Do not register an app for it** — there is no client ID and no client secret.
 
-**Record both identifiers.** They are different values for the same principal, they are **not interchangeable**, and getting them the wrong way round fails at *runtime*, not at import:
+Create (or identify) a service account, then make four things true of it:
+
+| | Requirement | Why |
+|---|---|---|
+| 1 | **Licensed** for Power Automate and Dataverse | A connector connection needs the account to stay licensed |
+| 2 | **Exempt from password expiry and interactive MFA** | The connection cannot answer a prompt, and does not follow a password change |
+| 3 | Not blocked by **Conditional Access** | Location/device rules will stop the sign-in |
+| 4 | **Excluded from joiner-mover-leaver automation** | Lifecycle reviews do disable service accounts |
+
+**Record one identifier:**
 
 | Identifier | Used as |
 |---|---|
-| Client (application) ID | `crbab_BrokerClientId` — token acquisition |
-| Service principal **object** ID | `crbab_BrokerObjectId` — `principal.id` on connection role grants |
+| The account's directory **object** ID | `crbab_BrokerObjectId` — `principal.id` on connection role grants, with `principal.type` = **`User`** |
 
-> **Add no Fabric application permissions.** Fabric does not grant REST access through them. A broker token legitimately shows `roles: (none)` and works correctly. See [SECURITY.md](./SECURITY.md).
+> **It must be a service account, not a named person.** The app serves ~4000 workspaces; tying that to an individual makes it one leaver away from stopping.
+>
+> **Items 2–4 are a security decision, not just configuration.** Get them signed off by whoever owns the account — see [SECURITY.md](./SECURITY.md) §11 A5.
 
 ### Step 2 — Register the delegated application
 
@@ -136,13 +146,11 @@ Create a client secret.
 
 Do **not** add `Connection.Read.All` — `Connection.ReadWrite.All` already covers every connection operation.
 
-### Step 3 — Create the broker security group
+### Step 3 — ~~Create the broker security group~~ — **not required**
 
-**Role:** Groups Administrator
+`fabric_power_app_grp` existed to satisfy Step 5, and both were scoped to **service principals**. The broker is a user account, so neither applies.
 
-Create `fabric_power_app_grp` and add the broker's **service principal object** to it — the service principal, not the app registration.
-
-Paired with Step 5. Neither works alone.
+**Skip this step.** Nothing replaces it: the account's Fabric access comes from a workspace role granted directly to it in Step 7.
 
 ### Step 4 — Create the user group
 
@@ -154,15 +162,13 @@ Create (or identify) the Entra security group that will contain the workspace ow
 
 ## Phase 2 — Fabric tenant (per tenant)
 
-### Step 5 — Enable service principal API access
+### Step 5 — ~~Enable service principal API access~~ — **not required**
 
-**Role:** Fabric Administrator
+*"Service principals can call Fabric public APIs"* is scoped to service principals in an allowed security group. **The broker is a user account, so this setting does not govern it** — and neither does any Admin API setting beside it.
 
-Fabric admin portal → Tenant settings → Developer settings → **"Service principals can call Fabric public APIs"** → **Enabled**, scoped to `fabric_power_app_grp`.
+> **Do not enable it "to be safe".** It grants nothing this solution uses, and it widens the tenant for every service principal in whatever group it is scoped to.
 
-**If skipped:** every app-only Fabric call returns a bare `401 Unauthorized` with nothing indicating a tenant setting is responsible. This is the hardest failure in the system to diagnose.
-
-Scope it to the group — do not enable it tenant-wide.
+**Skip this step.** If a `401` appears later, it means the connection has lapsed, not that a tenant setting is missing — see Step 9.
 
 ### Step 6 — Enable the Git integration tenant switch
 
@@ -190,42 +196,32 @@ Connect, disconnect and sync all require Admin. **The application is inert witho
 
 ## Phase 3 — Verify the broker before going further
 
-### Step 9 — Prove the broker can reach Fabric
+### Step 9 — Prove the broker account can reach Fabric
 
 **This is a gate. Everything downstream assumes the broker can already call Fabric.**
 
-Acquire a token and make one call, outside Power Automate:
+There is no token to acquire — the connection holds the credential. So the check is made **through the connection**, not outside Power Automate:
 
-```powershell
-$tenantId = '<target tenant id>'
-$clientId = '<broker client id>'
-$secret   = '<broker client secret>'
-
-$token = (Invoke-RestMethod -Method POST `
-    -Uri "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token" `
-    -Body @{
-        grant_type    = 'client_credentials'
-        client_id     = $clientId
-        client_secret = $secret
-        scope         = 'https://api.fabric.microsoft.com/.default'
-    }).access_token
-
-Invoke-RestMethod -Uri 'https://api.fabric.microsoft.com/v1/workspaces' `
-    -Headers @{ Authorization = "Bearer $token" }
-```
+1. In the target environment, create a throwaway flow with a manual trigger.
+2. Add one **HTTP with Microsoft Entra ID (preauthorized)** -> *Invoke an HTTP request* action.
+3. Sign the connection in **as the broker service account** (Step 1). Base Resource URL and Entra ID Resource URI are both `https://api.fabric.microsoft.com`.
+4. Set Method `GET`, URL `https://api.fabric.microsoft.com/v1/workspaces`. **No `Authorization` header.**
+5. Run it, read the count, then delete the flow.
 
 Interpret the result:
 
 | Result | Meaning | Fix |
 |---|---|---|
-| A workspace list | ✅ Steps 1, 3, 5 are correct | Proceed |
-| `401 Unauthorized` | The SPN cannot call Fabric **at all** | Step 3 or Step 5 is missing |
-| `403 Forbidden` on a specific workspace | The SPN can call Fabric but holds no role on that object | Step 7 |
-| Token request fails | Wrong client ID, wrong secret or wrong tenant | Step 1 |
+| A workspace list of the expected size | OK — Steps 1 and 7 are correct | Proceed |
+| **A short list, or an empty one** | **The connection was authorised as the wrong account.** It returns only what *that* identity administers | Recreate the connection, signing in as the service account (Step 1) |
+| `401 Unauthorized` | The connection has lapsed — password, MFA, Conditional Access, licence, or a disabled account | Step 1, items 1-4. Re-authenticate the connection |
+| `403 Forbidden` on a specific workspace | The account can call Fabric but holds no role on that object | Step 7 |
 
-> A token with an empty `roles` claim is **expected and correct**. Do not treat it as a fault.
+> ### The short-list case is the dangerous one
+>
+> A `401` is loud. **A short list is silent** — the flows run, and every workspace the connection's identity does not administer simply behaves as though it does not exist. **Compare the count against the size of the managed estate**, not merely against zero.
 
-**Do not proceed to Phase 4 until this returns a workspace list.**
+**Do not proceed to Phase 4 until this returns a workspace list of the expected size.**
 
 ---
 
@@ -261,21 +257,21 @@ Five references arrive **unbound**. A reference is only a pointer; the connectio
 
 > Create the custom connector connections **after** Step 13, or they will be created against the source tenant.
 
-### Step 12 — Supply the environment variable values
+### Step 12 — Supply the environment variable value
 
 **Role:** System Administrator
 
-Supply all three at import time:
+One variable, supplied at import time:
 
-| Variable | Source-tenant default | Set to |
-|---|---|---|
-| `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | The target tenant ID |
-| `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | The target broker **client** ID |
-| `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | The target broker **object** ID |
+| Variable | Set to |
+|---|---|
+| `crbab_BrokerObjectId` | The broker service account's directory **object** ID, in the target tenant |
 
-> **The export carries this tenant's values as _defaults_, not as bindings.** An import that skips the prompt silently keeps pointing at the source tenant — the import succeeds and the flows fail later, against the wrong directory. **Set all three explicitly, even if the prompt appears pre-filled.**
+> **The export carries the source tenant's value as a _default_, not as a binding.** An import that skips the prompt silently keeps pointing at the source directory — the import succeeds and the grant fails later. **Set it explicitly, even if the prompt appears pre-filled.**
 
-Double-check that `crbab_BrokerObjectId` holds the **object** ID and not the client ID. A wrong value here produces a connection role grant that grants nothing, and connect then fails as though the connection had never been shared.
+**"Broker" in the name is a leftover from the service-principal design** — the value is a *user account's* object ID. It is sent as `principal.id` with `principal.type` = **`User`**, and the same flow filters existing assignments on it, so a wrong value both fails to grant and re-POSTs a duplicate.
+
+> **`crbab_TenantId` and `crbab_BrokerClientId` no longer exist.** Both existed solely to build the client-credentials token request. If an older export still carries them, they have no consumer.
 
 ### Step 13 — Correct the connector and recreate its connections
 
@@ -295,17 +291,25 @@ In order:
 
 **If skipped:** every connection attempt fails at sign-in against the wrong tenant.
 
-### Step 14 — Re-enter the broker client secret
+### Step 14 — Authorise the three connections as the service account
 
 **Role:** Flow owner
 
-Open `GetFabricToken` → the `Initialize_variable` action named `clientSecret` → enter the target tenant's broker secret.
+**There is no secret to re-enter.** No flow contains a credential, so nothing is scrubbed from the export.
 
-**Exports scrub this value to a blank (`" "`). Nothing runs until it is replaced.**
+Instead, create each connection by **signing in as the broker service account** (Step 1):
 
-This is the **only** flow holding a secret; every other flow calls it as a child. Keep it that way.
+| Connection | Connector |
+|---|---|
+| Fabric | **HTTP with Microsoft Entra ID (preauthorized)** — Base Resource URL and Entra ID Resource URI both `https://api.fabric.microsoft.com` |
+| Dataverse | Microsoft Dataverse |
+| Mail / profile | Office 365 Users |
 
-> Hardening item: this should become a Key Vault-backed secret environment variable. See [SECURITY.md](./SECURITY.md) §10.2.
+> **This fails quietly if done as the wrong person.** A connection created by whoever happened to import the solution authenticates as *them* — the flows run, and every workspace they do not administer silently behaves as though it does not exist. Step 9 is what catches it; re-run it after this step if you did not create the connection yourself.
+
+> **If user consent to applications is disabled in the tenant**, a tenant administrator must consent to the *HTTP with Microsoft Entra ID (preauthorized)* connector once before the connection can be created.
+
+> The solution's one remaining secret is the delegated app's, on the custom connector's Security tab (Step 13). Hardening item: it should become a Key Vault-backed secret environment variable. See [SECURITY.md](./SECURITY.md) §10.2.
 
 ### Step 15 — Create the `ubsppcoe_PrivateLinkTarget` table
 
@@ -365,7 +369,7 @@ Share `crbab_app5` with the same group.
 
 **Role:** Flow owner
 
-For each of the 16 app-facing flows (all except `GetFabricToken`):
+For each of the 19 app-facing flows:
 
 | Connection | Setting |
 |---|---|
@@ -419,8 +423,8 @@ Everything above is a one-time cost except these. **All five fail quietly** — 
 |---|---|---|---|
 | 1 | **Run-only users** (21) | Permission errors for app users on a cleanly imported solution | The setting is invisible unless you open each flow |
 | 2 | **Connector tenant ID** (13) | Every sign-in fails, against the *source* tenant | It *is* carried by the export, so it looks configured |
-| 3 | **Environment variable values** (12) | Flows authenticate against the source tenant | The prompt is pre-filled with source values that look right |
-| 4 | **Broker client secret** (14) | Every app-only flow fails at token acquisition | The scrubbed value `" "` is not visibly empty |
+| 3 | **Environment variable value** (12) | Flows authenticate against the source tenant | The prompt is pre-filled with source values that look right |
+| 4 | **Connections authorised as the wrong identity** (14) | Flows run, but Fabric returns only what that person administers — no error anywhere | A connection that works for the person who made it looks correct, and the short list is not visibly empty |
 | 5 | **`ubsppcoe_PrivateLinkTarget` mapping** (15) | 28 rows of blanks; empty dropdown, no error | Auto-match appears to succeed |
 
 **Check these five first** whenever a freshly deployed environment misbehaves.
@@ -433,8 +437,8 @@ Work through in order. Each step isolates one layer.
 
 ### Broker path
 
-- [ ] Step 9's token script returns a workspace list
-- [ ] `GetFabricToken` runs successfully and returns an `access_token`
+- [ ] Step 9's throwaway flow returns a workspace list **of the expected size**
+- [ ] The Fabric connection's owner is the broker service account, not a person
 - [ ] `GetWorkspaceGitState` returns state for a known workspace
 - [ ] `GetOAPSetting` returns the OAP state
 
@@ -475,7 +479,7 @@ Work through in order. Each step isolates one layer.
 | Import fails partway | Delete the solution in the target environment and re-import. Unmanaged imports layer rather than replace — confirm no orphaned components remain |
 | Flows misbehave after an update | Re-check the five in [§The five that bite](#the-five-that-bite-on-every-deployment) before rolling back. Four of the five look identical to a broken import |
 | Connector change breaks existing connections | Restore the previous tenant ID and scope string, update the connector, and have users recreate connections. **A scope change additionally requires revoking each user's `oauth2PermissionGrant`** |
-| The broker must be stopped immediately | Disable the Fabric tenant setting from Step 5. This is a **single, immediate, tenant-wide kill switch** for every app-only operation and requires no solution change |
+| The broker must be stopped immediately | **Disable the service account, or delete the Fabric connection.** The Step 5 tenant setting is no longer the kill switch — it does not govern a user account. This is still a **single, immediate, tenant-wide kill switch** for every app-only operation and requires no solution change |
 
 ---
 
@@ -493,7 +497,7 @@ Carried forward from the engineering issue log, with their current state.
 | M6 | `ubsppcoe_GitAuditLog` is not in the shared solution | Manual creation per environment; drift between environments | 🟡 Open — Step 16 |
 | M7 | The solution is exported unmanaged | Production environment remains customizable | 🟡 Open — produce a managed export for production |
 
-> **Resolved since the issue log was written:** the tenant ID and broker client ID are no longer hardcoded in `GetFabricToken`. Both are now read from the `crbab_TenantId` and `crbab_BrokerClientId` environment variables, verified in the current export. Earlier notes describing them as hardcoded are superseded by this document.
+> **Resolved since the issue log was written:** the tenant ID and broker client ID are gone entirely, along with `GetFabricToken` and the client-credentials grant they served. Earlier notes describing them as hardcoded, or as environment variables, are superseded by this document.
 
 ### The two structural improvements worth making
 

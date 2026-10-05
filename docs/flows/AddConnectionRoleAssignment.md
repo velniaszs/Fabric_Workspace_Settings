@@ -1,6 +1,6 @@
 # Flow — `AddConnectionRoleAssignment`
 
-Build instructions for the delegated flow that grants SPN-A the `User` role on an owner's Fabric connection, so the broker can later reference that connection by ID.
+Build instructions for the delegated flow that grants the broker account the `User` role on an owner's Fabric connection, so the broker can later reference that connection by ID.
 
 Verified against `Workflows/AddConnectionRoleAssignment-5C9CFCBF-A294-F111-8075-000D3ABA40DB.json` on 2026-08-17.
 
