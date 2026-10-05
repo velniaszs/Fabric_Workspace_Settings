@@ -123,7 +123,7 @@ With S4 not yet implemented, the only thing constraining a write is **Boundary 4
 
 ### Two identities, deliberately separated
 
-| | Broker — the service account | Delegated — `gateway_lister_app` |
+| | Broker — the service account | Delegated — `SVC_PROD_AT43156_FABRIC_POLICY` |
 |---|---|---|
 | Type | **A user account**, signed in on the preauthorized connection | Entra app registration |
 | Flow | **No token request.** The connector attaches the token | Authorization code, runs as the user |

@@ -39,7 +39,7 @@ Four parties hold rights in this system, and keeping them separate is the whole 
 flowchart TB
     OWNER["<b>Workspace owner</b><br/>Fabric Contributor<br/>Dataverse read<br/>ADO access to own repo"]
     BROKER["<b>Service account</b><br/>user account · Fabric Workspace Admin<br/><i>no ADO · no Azure · no tenant scope</i>"]
-    DELEG["<b>Delegated app</b><br/>gateway_lister_app<br/>3 user-consentable scopes<br/><i>never exceeds the caller</i>"]
+    DELEG["<b>Delegated app</b><br/>SVC_PROD_AT43156_FABRIC_POLICY<br/>3 user-consentable scopes<br/><i>never exceeds the caller</i>"]
     APPROVER["<b>Data source admin</b><br/>Azure RBAC on the target<br/><i>outside our control</i>"]
 
     OWNER -->|"grants at runtime"| BROKER
@@ -143,7 +143,7 @@ This list is as important as the one above, and should be treated as a standing 
 
 ## 4. The delegated application
 
-`gateway_lister_app` — backs the custom connector `FabricSetting` and runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration; [MIGRATION.md](./MIGRATION.md) collects it per deployment.
+`SVC_PROD_AT43156_FABRIC_POLICY` — backs the custom connector `FabricSetting` and runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration; [MIGRATION.md](./MIGRATION.md) collects it per deployment.
 
 ### Required delegated scopes
 
@@ -181,7 +181,7 @@ The two are edited separately and **neither validates the other**. If the connec
 
 Two further traps:
 
-- Editing the OAuth section of the connector's Security tab **blanks the client secret** and will not save without it. Have the `gateway_lister_app` secret to hand.
+- Editing the OAuth section of the connector's Security tab **blanks the client secret** and will not save without it. Have the `SVC_PROD_AT43156_FABRIC_POLICY` secret to hand.
 - The single space-delimited scope key is the connector UI's own encoding, not a malformed value. Under the *Azure Active Directory* security type the connector prepends the Resource URL, so short scope names are correct. Under *Generic OAuth 2* they must be fully qualified or consent closes silently with no error.
 
 ---
@@ -202,7 +202,7 @@ One-time per tenant unless noted. None of this is carried by the solution export
 
 | Task | Role required | Frequency |
 |---|---|---|
-| The `gateway_lister_app` registration and its client secret | **Application Administrator** | Per tenant |
+| The `SVC_PROD_AT43156_FABRIC_POLICY` registration and its client secret | **Application Administrator** | Per tenant |
 | **The service account** — creation, licensing, and exemption from MFA/password-expiry/JML | **Identity administrator** | Per tenant |
 | The Entra group backing the Dataverse group team | **Groups Administrator** | Per tenant |
 | Fabric tenant setting — Git integration | **Fabric Administrator** | Per tenant |

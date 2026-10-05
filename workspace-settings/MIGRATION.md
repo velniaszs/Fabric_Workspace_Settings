@@ -118,7 +118,7 @@ Register `sp_fabric_powerapp` as an app-only client-credentials application and 
 
 **Role:** Application Administrator
 
-Register `gateway_lister_app` and add three delegated scopes from the **Power BI Service** API (`00000009-0000-0000-c000-000000000000`) — **not** from a Fabric API:
+Register `SVC_PROD_AT43156_FABRIC_POLICY` and add three delegated scopes from the **Power BI Service** API (`00000009-0000-0000-c000-000000000000`) — **not** from a Fabric API:
 
 ```
 Gateway.Read.All
@@ -285,10 +285,10 @@ In order:
 
 1. Open the custom connector → **Security** tab.
 2. Change **Tenant ID** to the target tenant.
-3. Re-enter the `gateway_lister_app` **client secret** — editing the OAuth section blanks it and it will not save without it.
+3. Re-enter the `SVC_PROD_AT43156_FABRIC_POLICY` **client secret** — editing the OAuth section blanks it and it will not save without it.
 4. Confirm the scope string reads exactly `Gateway.Read.All Connection.ReadWrite.All offline_access`.
 5. **Update connector.**
-6. Copy the redirect URL the portal issues, and paste it into the `gateway_lister_app` registration.
+6. Copy the redirect URL the portal issues, and paste it into the `SVC_PROD_AT43156_FABRIC_POLICY` registration.
 7. **Delete and recreate** every connection created against the old settings.
 
 > **Unlike Step 12, the connector's tenant ID is hardcoded in its connection parameters and _is_ carried by the export.** Imported into another tenant it still points at the source tenant, and every sign-in fails there.

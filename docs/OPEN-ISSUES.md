@@ -571,7 +571,7 @@ Scope, consent and operations are all done as of 2026-08-07. The one-pass rule b
 
 ### 9.1 Scope — done
 
-- ✅ Delegated `Connection.ReadWrite.All` added to `gateway_lister_app` alongside `Gateway.Read.All` and consented. Verified in the Entra grant, not just the portal.
+- ✅ Delegated `Connection.ReadWrite.All` added to `SVC_PROD_AT43156_FABRIC_POLICY` alongside `Gateway.Read.All` and consented. Verified in the Entra grant, not just the portal.
 - Scope field on the connector's Security tab becomes: `Gateway.Read.All Connection.ReadWrite.All offline_access`.
 - **One scope covers everything.** Per the API reference, `GET /connections` accepts `Connection.Read.All` *or* `Connection.ReadWrite.All`, and `POST .../roleAssignments` requires `ReadWrite`. Do not add both.
 - Front-load any other scope this connector will ever need.

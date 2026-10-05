@@ -13,7 +13,7 @@ Related: [../FLOWS.md](../FLOWS.md) §3 (design rationale), [../CUSTOM-CONNECTOR
 - Create the flow **inside the solution**, so it binds to a connection reference rather than a raw connection.
 - The custom connector `FabricSetting` (schema name `crbab_FabricSetting`) must already exist with the operation `ListConnections`. See `CUSTOM-CONNECTOR.md` §2.2.
 - The connector connection is **delegated** — `runtimeSource` is `"invoker"`. That is the whole point of the flow: without it, it silently returns the flow owner's connections and reintroduces the exact bug F3.1 described. Sharing must be *Provided by run-only user* (PREREQUISITES E5).
-- The delegated app registration `gateway_lister_app` must publish `Connection.ReadWrite.All` (and `offline_access`), and the connector's Security tab must ask for the same space-delimited string. Adding a scope later is expensive — the Entra consent grant outlives the connection and must be revoked per user before anyone can reconsent (OPEN-ISSUES §9.3).
+- The delegated app registration `SVC_PROD_AT43156_FABRIC_POLICY` must publish `Connection.ReadWrite.All` (and `offline_access`), and the connector's Security tab must ask for the same space-delimited string. Adding a scope later is expensive — the Entra consent grant outlives the connection and must be revoked per user before anyone can reconsent (OPEN-ISSUES §9.3).
 - **No environment variables are referenced by this flow.** All three describe the broker service principal, which this flow never uses.
 
   | Variable | Default in the solution | Used by this flow |

@@ -9,8 +9,6 @@
 
 This document describes the architecture of the **Fabric Workspace Settings** solution — a Power Platform application that lets Fabric workspace owners configure **Git integration**, **outbound access**, and **managed private endpoints** for the workspaces they own, without holding the Fabric *Workspace Admin* role.
 
-**Out of scope.** The capacity-scoped `ItemCreation` policy solution is a separate system governing capacities rather than workspace settings. It shares no components, no identities and no data with this solution, and is documented independently. Nothing in this document applies to it.
-
 **Companion documents**
 
 | Document | Answers |
@@ -73,7 +71,7 @@ flowchart TB
 
     subgraph entra["Microsoft Entra ID"]
         ACCT["<b>Service account</b><br/>user account · Workspace Admin<br/><i>signed in on the connection</i>"]
-        DELEG["<b>Delegated app</b><br/>gateway_lister_app<br/>runs as the signed-in user"]
+        DELEG["<b>Delegated app</b><br/>SVC_PROD_AT43156_FABRIC_POLICY<br/>runs as the signed-in user"]
     end
 
     FABRIC["<b>Microsoft Fabric REST API</b><br/>api.fabric.microsoft.com/v1"]
@@ -107,8 +105,6 @@ The separation matters: the presentation tier holds nothing an attacker would wa
 
 ## 3. Component inventory
 
-Verified against the solution export on 2026-09-25.
-
 ### Solution manifest
 
 | Property | Value |
@@ -122,49 +118,17 @@ Verified against the solution export on 2026-09-25.
 
 > ### Two prefixes, two solutions, and the tables are not ours
 >
-> **Every component this solution owns carries `crbab_`.** The flows, the canvas app, the `crbab_FabricSetting` connector, the three environment variables and all five connection references.
+> **Every component this solution owns carries `crbab_`.** The flows, the canvas app, the `crbab_FabricSetting` connector, its environment variable and all six connection references.
 >
 > **The Dataverse tables carry `ubsppcoe_` and live in a separate, shared solution** owned by the platform team. This solution reads and writes them; it does not define them, and they do not travel with its export. A target environment without that shared solution cannot run any of this.
->
-> **An `ab_`-prefixed element does not exist** in either solution. If you meet one in an older note, draft, or in the checked-in export artifacts, it is stale — `ab_oapenabled` in `customizations.xml` is the clearest example, and it is `ubsppcoe_oapenabled` today.
-
-> **Note for production.** The solution is currently exported unmanaged. Production deployment should use a **managed** export so that the target environment cannot be customized out from under the solution. See [MIGRATION.md](./MIGRATION.md).
-
-### Components carried by the export
-
-| Component | Count | Detail |
-|---|---|---|
-| Cloud flows | 19 | See §7 |
-| Canvas app | 1 | `crbab_app5` |
-| Custom connector | 1 | `crbab_FabricSetting` |
-| Connection references | 6 | 4 × `crbab_FabricSetting`, 1 × Office 365 Users, 1 × **HTTP with Microsoft Entra ID (preauthorized)** |
-| Environment variables | 1 | `crbab_BrokerObjectId` — the service account's object ID (§4) |
-
-**No Dataverse table travels with this export.** The tables are `ubsppcoe_`-prefixed and belong to the platform team's shared solution — see below.
-
-> **`crbab_TenantId` and `crbab_BrokerClientId` are gone.** Both existed only to build the client-credentials token request. With no token flow there is nothing to parameterise, and a variable that no longer has a consumer is one somebody will later wire into something.
-
-### Components *not* carried by the export
-
-These are required for full function and must exist in the target environment:
-
-| Component | Why it is absent |
-|---|---|
-| **The `ubsppcoe_` tables** — the workspace inventory, the allowed-connection-type list and `ubsppcoe_PrivateLinkTarget` | **Owned by the platform team, in a separate shared solution.** This solution reads and writes them but does not define them. A target environment without that solution cannot run any of this. `ubsppcoe_PrivateLinkTarget` is seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) |
-| `GitAuditLog` table | Designed, not yet built — see §5 and [SECURITY.md](./SECURITY.md) |
-| Security role `Fabric Workspace Owner` | Not yet added to the solution |
-
-> **The dependency on the shared solution is the one that breaks a fresh deployment silently.** Importing `WorkspaceSol` into an environment without the `ubsppcoe_` tables succeeds — the flows import, the app imports, and every table reference fails at runtime instead. Confirm the shared solution is present *before* importing, not after.
-
----
 
 ## 4. Identity model
 
 Two identities, deliberately separated, because they answer two different questions.
 
-| | **Broker** — the service account | **Delegated app** — `gateway_lister_app` |
+| | **Broker** — the service account | **Delegated app** — `SVC_PROD_AT43156_FABRIC_POLICY` |
 |---|---|---|
-| Type | **A user account** — email and password | Entra app registration |
+| Type | **A user account** — email and password | **A service principal** — Entra app registration with a client secret |
 | Client ID | — none. There is no app registration | *Per-tenant — read from the app registration* |
 | Object ID | *Per-tenant — the account's directory object ID* | — |
 | OAuth flow | **Signed in on the connection.** The connector attaches the token | Authorization code, runs as the signed-in user |
@@ -172,30 +136,15 @@ Two identities, deliberately separated, because they answer two different questi
 | Used for | Every privileged write, and most reads | Calls whose *answer depends on who is asking* |
 | Reached via | **HTTP with Microsoft Entra ID (preauthorized)** | The custom connector `FabricSetting`, `runtimeSource: invoker` |
 
-> ### There is no service principal in this solution
+> ### The one service principal in the solution, and what it is *not*
 >
-> The broker is a **service account, not an application identity**. That one fact removes a whole prerequisite chain:
+> **`SVC_PROD_AT43156_FABRIC_POLICY` backs the custom connector `FabricSetting`, and nothing else.** It is the registration whose client ID, client secret and scope list sit on the connector's Security tab.
 >
-> - **No app registration, no client ID, no client secret** to create, store or rotate
-> - **No Entra application permissions** and no admin consent
-> - **No `fabric_power_app_grp` security group**, and **no *Service principals can call Fabric public APIs* tenant setting** — both are scoped to service principals, and nothing here is one
-> - Workspace Admin is granted **directly to the account**
+> **It never acts on its own behalf.** The connector runs with `runtimeSource: invoker`, so every call made through it carries the **signed-in user's** rights, acquired by authorization code at connection time. The service principal is the *vehicle* for that delegation, not an identity with privileges of its own — which is why it holds **no application permissions and no Fabric role**.
 >
-> It is a **service account rather than a named person** deliberately: the app serves ~4000 workspaces, and tying that to an individual makes the solution one leaver away from stopping.
-
-> ### The object ID still matters, and its purpose has changed
+> **Do not confuse it with the broker.** The broker is a user account reached through the preauthorized connector; this is a service principal reached through the custom connector. They are different identities, on different connectors, used for different reasons — and granting this one a Fabric role would quietly turn a delegated call into a privileged one.
 >
-> `AddConnectionRoleAssignment` grants a role on the owner's Azure DevOps connection to **whichever identity will later use that connection**. That identity is now the service account, so the call posts:
->
-> | Field | Value |
-> |---|---|
-> | `principal/id` | **The service account's object ID** |
-> | `principal/type` | **`User`** — *not* `ServicePrincipal` |
-> | `role` | `User` |
->
-> **Both of those changed with the identity model, and getting either wrong fails the same quiet way:** the role assignment is accepted, grants nothing, and the connect then fails as though the connection had never been shared. The flow also *filters* existing assignments on the same object ID, so a stale value makes it re-POST a duplicate instead of recognising its own grant.
->
-> The value is published as an environment variable so it is never retyped from memory. **That variable is still named `crbab_BrokerObjectId`, and "Broker" is now a misnomer** — confirm the name in the environment before building against it.
+> Its three delegated scopes and the consent behaviour are in [PERMISSIONS.md](./PERMISSIONS.md) §4.
 
 ### When delegation is used — and why it is unavoidable
 
@@ -418,14 +367,14 @@ All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They a
 
 ## 8. Data model
 
-| Table | Role | In the export? |
+| Table | Role | Status |
 |---|---|---|
-| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally | ✅ Yes |
-| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab | ✅ Yes |
-| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) | ❌ Must be created |
+| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally | ✅ Exists — shared solution |
+| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab | ✅ Exists — shared solution |
+| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) | ✅ Exists — shared solution. **Seed rows are per environment** |
 | `ubsppcoe_GitAuditLog` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow | ❌ Must be created |
 
-`ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
+**None of these tables is in `WorkspaceSol`.** They carry the `ubsppcoe_` prefix and belong to the platform team's shared solution, so none travels with this solution's export — see §3. `ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
 
 ### Two rules that hold across all tables
 

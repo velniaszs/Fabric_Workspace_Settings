@@ -66,7 +66,7 @@ A dedicated Git service principal ("SPN-B") was considered and **dropped** — i
 
 Consequence either way: ADO shows the commit as pushed by the connection's identity, not the requester.
 
-### `gateway_lister_app`
+### `SVC_PROD_AT43156_FABRIC_POLICY`
 
 Delegated app behind the custom connector `FabricSetting`. Runs as the signed-in user so gateway listings reflect what that user can actually see.
 
@@ -304,7 +304,7 @@ The trailing slash on the repo URL matters.
 | Script | Purpose | State |
 |---|---|---|
 | `check role.ps1` | Lists gateway role assignments; decodes `oid` from the JWT to avoid a Graph dependency | Working |
-| `list gateways delegated authcode.ps1` | Authorization-code flow via `HttpListener` on `http://localhost:8400/`; prints `upn`/`oid`/`scp` then pages `/v1/gateways` | Working — requires `http://localhost:8400/` registered as a **Web** redirect URI on `gateway_lister_app` |
+| `list gateways delegated authcode.ps1` | Authorization-code flow via `HttpListener` on `http://localhost:8400/`; prints `upn`/`oid`/`scp` then pages `/v1/gateways` | Working — requires `http://localhost:8400/` registered as a **Web** redirect URI on `SVC_PROD_AT43156_FABRIC_POLICY` |
 | `list gateways spn.ps1` | App-only client credentials | Token succeeds, gateway call returns **Unauthorized** — needs the tenant setting plus a gateway role |
 | `list gateways delegated.ps1` | Device code flow | **Dead end.** Device code is public-client only; a confidential client always gets `AADSTS7000218`, and passing `client_secret` does not help |
 | `test rest.ps1` | Ad-hoc | Contains a plaintext secret |

@@ -13,7 +13,7 @@ Last reviewed: 2026-08-07
 | # | Task | Where | Role needed to do it | State |
 |---|---|---|---|---|
 | **A1** | App registration `sp_fabric_powerapp` (broker) | Entra ID | Application Administrator | ✅ Done |
-| **A2** | App registration `gateway_lister_app` (delegated) | Entra ID | Application Administrator | ✅ Done |
+| **A2** | App registration `SVC_PROD_AT43156_FABRIC_POLICY` (delegated) | Entra ID | Application Administrator | ✅ Done |
 | **A3** | Security group `fabric_power_app_grp` containing the broker SP | Entra ID | Groups Administrator | ✅ Done |
 | **B1** | **"Service principals can call Fabric public APIs"** enabled, scoped to `fabric_power_app_grp` | Fabric Admin portal | Fabric Administrator | ✅ Done |
 | **B2** | Git integration tenant switch enabled | Fabric Admin portal | Fabric Administrator | 🟡 Not verified |
@@ -47,7 +47,7 @@ App-only client credentials. Needs a client secret. **No Azure DevOps rights.**
 
 ### A2 — Delegated app registration
 
-`gateway_lister_app` — backs the custom connector `FabricSetting`; runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration.
+`SVC_PROD_AT43156_FABRIC_POLICY` — backs the custom connector `FabricSetting`; runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration.
 
 Delegated scopes are published by the **Power BI Service** Entra app (`00000009-0000-0000-c000-000000000000`), not by a Fabric app. Add them under **API permissions → Add a permission → Power BI Service → Delegated permissions**.
 
@@ -69,7 +69,7 @@ Gateway.Read.All Connection.ReadWrite.All offline_access
 
 The two are edited separately and neither validates the other. If the connector asks for a scope the app registration does not publish, the connector saves without complaint and the failure appears later, at **connection creation**, as `AADSTS65001` or an invalid-scope error — which reads like a connector bug and is not one. **Always change the app registration first.**
 
-> Editing the OAuth section of the connector's Security tab blanks the client secret and will not save without it. Have the `gateway_lister_app` secret to hand; it lives outside the repo.
+> Editing the OAuth section of the connector's Security tab blanks the client secret and will not save without it. Have the `SVC_PROD_AT43156_FABRIC_POLICY` secret to hand; it lives outside the repo.
 
 **Grant every scope this connector will ever need in one pass.** Adding one later is expensive in a way that is easy to underestimate: consent is stored in Entra as an `oauth2PermissionGrant` keyed on (user, app, resource), and it **outlives the connection**. Deleting and recreating the connection silently reuses the old grant and issues the same narrow token — no prompt, no error, and a `403 InsufficientScopes` at the first call. The grant has to be revoked first, for every existing user, before any of them can reconsent. Procedure and commands: OPEN-ISSUES §9.3. Adding an *operation* later costs nothing.
 

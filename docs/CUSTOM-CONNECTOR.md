@@ -30,7 +30,7 @@ Base URL stays `/v1`. If it already contains the operation path, the path resolv
 |---|---|
 | Authentication type | Azure Active Directory |
 | Client ID | `<delegated app client id>` |
-| Client secret | from the `gateway_lister_app` registration |
+| Client secret | from the `SVC_PROD_AT43156_FABRIC_POLICY` registration |
 | Login URL | `https://login.microsoftonline.com` |
 | Tenant ID | `<tenant id>` |
 | Resource URL | `https://api.fabric.microsoft.com` |
