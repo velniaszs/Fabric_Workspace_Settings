@@ -33,8 +33,8 @@ Three consequences, all of which shape the design below:
 ## 1. Before you start
 
 - [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md) and [MIG_RebuildAllCapacityPolicies](MIG_RebuildAllCapacityPolicies.md) must both have run.
-- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector.
-- The connection's identity needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
+- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the `workspace provisioning` service account. Connector pattern in [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0.
+- The `workspace provisioning` account needs **Capacity Admin on every capacity being activated**. Registration only needed Contributor on the holder workspace, so **this is the first time that permission is exercised at scale** — and a gap in it shows up as a per-capacity failure, not a run failure.
 - No child flow. The activate call is three lines; wrapping it would add a 120-second budget for nothing.
 - Reads the **`ubsppcoe_PolicyApiBeta`** environment variable in §4b — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 - Step 5 adds an **Office 365 Outlook** connection, and both its send actions read the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable first**, or this flow will not publish.

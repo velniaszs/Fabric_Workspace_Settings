@@ -28,13 +28,16 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 
 **Membership is derived, never stored.** A workspace is whitelisted because `ubsppcoe_oapenabled` is true on its row and its `Node` lookup points at the capacity. No flow here writes either column — both belong to the platform team.
 
+**One identity, one connector.** Every Fabric call goes through the **HTTP with Microsoft Entra ID (preauthorized)** connector, signed in as the `workspace provisioning` service account. The connector attaches the bearer token itself, so there is no token flow, no client secret and no `Authorization` header anywhere in the solution — and no service principal either. **No custom connector is used here**: a custom connector is the mechanism for calls that must run as the *signed-in end user*, and nothing in capacity policies is user-specific. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.
+
 ---
 
 ## Where to start
 
 | If you are… | Read |
 |---|---|
-| New to this | This file, then [docs/CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §1–§4 |
+| New to this | This file, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Going deeper on behaviour | [docs/CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §1–§4 |
 | Responding to a change in the estate | [docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) |
 | Running the one-off cutover | [docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md](docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md) |
 | Building or repairing a table | [docs/CAPACITY-POLICY-TABLES.md](docs/CAPACITY-POLICY-TABLES.md) |
@@ -44,7 +47,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 | Something is broken | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) |
 | Granting access, or diagnosing a `401` | [docs/SECURITY-AND-IDENTITY.md](docs/SECURITY-AND-IDENTITY.md) |
 | Switching the API to beta at public preview, or back at GA | [docs/API-BETA-SWITCH.md](docs/API-BETA-SWITCH.md) — one toggle, six call sites |
-| Asking *why is it like this* | [docs/ADR.md](docs/ADR.md) — the Q1–Q50 decision log |
+| Asking *why is it like this* | [docs/ADR.md](docs/ADR.md) — the Q1–Q53 decision log |
 
 ---
 

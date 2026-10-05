@@ -2,7 +2,7 @@
 
 Operational guide for bringing an existing Fabric estate under capacity item-creation policy. Follow it in order. Each phase names what to check before moving on, and what "stop" looks like.
 
-Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema and seeding), the four `MIG_` flow documents in [migration/](../migration/).
+Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what the system is, and the connection it runs on), [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 (design and build order), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema and seeding), the four `MIG_` flow documents in [migration/](../migration/).
 
 **Once cutover is done, day-to-day operations are in [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](CAPACITY-POLICY-OPERATIONS-RUNBOOK.md)** — which flow to run when a capacity or workspace is created, deleted or moved.
 
@@ -75,12 +75,16 @@ A missing one fails at runtime with `The workflow parameter … is not found`, p
 
 **`ubsppcoe_PolicyApiBeta` pointing the wrong way fails differently** — every Fabric call is rejected by the service rather than by the flow engine, so the run history shows a per-capacity `400`/`404` with nothing naming the variable. Confirm it before a migration run, not during one.
 
-### 0.4 Confirm permissions on the connection identity
+### 0.4 Confirm the connection, and the permissions on the account behind it
+
+**Every Fabric call in the migration goes through the *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the `workspace provisioning` service account.** Before anything else, open one `MIG_` flow and confirm the Fabric connection is that account's — not a personal sign-in left over from a rehearsal. A connection created by the wrong account fails in exactly the way §1.1 describes: a short capacity list, not an error.
 
 | Needed | For | Checked in |
 |---|---|---|
 | **Contributor on the holder workspace** | Creating policy sets | Phase 1 |
 | **Capacity Admin on every capacity** | Activating | **Phase 5 — not before** |
+
+Both are granted **directly to the account**. There is no service principal, no app registration and no client secret in this solution, so there is nothing else to check — see [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.
 
 Capacity Admin is the one that bites late. It is not exercised until Phase 5, and a gap in it shows up as a per-capacity failure there. If it can be confirmed in advance from the Fabric admin portal, do so.
 
@@ -122,7 +126,7 @@ Creates one policy set per eligible capacity, with **no rules**, **deactivated**
 
 Start the run and let it reach `Compose_eligible_count`, then look at that value.
 
-**If it is materially smaller than the estate you expect, stop and cancel.** `GET /v1/capacities` is scoped to the connection's identity — a capacity that identity does not administer is simply absent, and the flow will never know it existed. A short list is an identity problem, not a data problem, and this is the cheapest possible moment to find it.
+**If it is materially smaller than the estate you expect, stop and cancel.** `GET /v1/capacities` is scoped to the `workspace provisioning` account — a capacity that account does not administer is simply absent, and the flow will never know it existed. A short list means the connection was created by the wrong account, or that account is missing Capacity Admin. It is an identity problem, not a data problem, and this is the cheapest possible moment to find it.
 
 ### 1.2 Run the first tranche — five capacities
 

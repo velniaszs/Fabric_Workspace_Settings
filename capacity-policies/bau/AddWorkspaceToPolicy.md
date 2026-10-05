@@ -51,7 +51,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildC
 ## 0. Before you start
 
 - Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first. This flow validates, then wraps it.
-- Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. It makes **no Fabric calls of its own** — every Fabric interaction, and therefore the whole auth question, lives inside the child flow.
+- Needs a **Dataverse connection** only — **not** the *HTTP with Microsoft Entra ID (preauthorized)* connector. It makes **no Fabric calls of its own**: every Fabric interaction, and therefore the whole auth question, lives inside the child flow. See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) §4.
 - **Reads only, apart from one column.** `Scope_catch` writes `ubsppcoe_lasterror` on a `Capacity Policies` row and inserts a row into `Logging`, and only when something has failed. Nothing else in the flow writes anything — see Step 7.
 
 > ## This flow does not add anything

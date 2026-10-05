@@ -73,7 +73,7 @@ Other traps:
 
 **`Select columns` decides *whether the flow fires*, not what the body contains.** It is **update-only**. On the *Added* half of *Added or Modified* it is ignored and every insert is evaluated — `Filter rows` is what constrains inserts.
 
-**Scope defaults to `User`.** At that scope the trigger only fires for changes the connection's own account made. **Set `Organization`** or the flow never fires for anyone else's edits — with no error and an empty run history.
+**Scope defaults to `User`.** At that scope the trigger only fires for changes made by the account the Dataverse connection signed in as — the `workspace provisioning` service account. **Set `Organization`** or the flow never fires for anyone else's edits, which is every edit that matters here — with no error and an empty run history.
 
 **"To use filtering attributes your trigger must include an update event"** means `Change type` has no *Modified* in it. The error points at the filters; the fault is the dropdown.
 

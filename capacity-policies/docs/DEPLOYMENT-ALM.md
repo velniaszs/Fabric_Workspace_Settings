@@ -13,7 +13,8 @@ What the solution contains, what travels with an export, and how source control 
 | Cloud flows | 11 | 7 BAU (incl. `ListCapacityPolicySets`), 4 `MIG_` |
 | Dataverse tables | 3 | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` |
 | Environment variables | 7 | §3 |
-| Connection references | 3 | Fabric HTTP, Dataverse, Office 365 Outlook |
+| Connection references | 3 | **Fabric — *HTTP with Microsoft Entra ID (preauthorized)***, Dataverse, Office 365 Outlook |
+| Custom connectors | 0 | Deliberate — [ARCHITECTURE.md](ARCHITECTURE.md) §4.3 |
 
 **Publisher prefix is `ubsppcoe`.** Not `crbab` — that belongs to the workspace-settings canvas app and is a different solution entirely.
 
@@ -41,6 +42,8 @@ A target environment without the platform team's tables cannot run any of this �
 | Connection *references* | The holder workspace, and Fabric roles on it |
 
 **The two that catch people:** environment variable values and connections. A solution imports cleanly with neither, and the flows then fail at runtime — a blank variable silently builds a URL with a missing segment rather than erroring.
+
+> **Recreating the Fabric connection means signing in again as the `workspace provisioning` service account.** The connection reference travels; the authorisation behind it does not. **A connection created by whoever happened to import the solution authenticates as that person** — the flows run, the rebuild writes rules, and `GET /v1/capacities` quietly returns only the capacities they administer. Nothing errors. Confirm the sign-in on the connection, not just that one exists. [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.
 
 ---
 

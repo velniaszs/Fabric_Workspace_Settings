@@ -12,26 +12,29 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §2 and §
 
 - **There is no token flow.** Fabric is called through the *HTTP with Microsoft Entra ID (preauthorized)* connector, which attaches the bearer token itself — see the box below. [GetPolicyToken.md](../discarded/GetPolicyToken.md) is retired.
 - The new tables from [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3 must exist, and `Policy Item Types` must be seeded. `Policy Exceptions` may legitimately be empty.
-- **This flow needs two connections** — Dataverse, and the Entra ID HTTP connector. Both appear in `connectionReferences` on export. That is expected here.
+- **This flow needs two connections** — Dataverse, and *HTTP with Microsoft Entra ID (preauthorized)*. Both appear in `connectionReferences` on export, and both are signed in as the `workspace provisioning` service account. That is expected here.
 - Logical names below use the **`ubsppcoe_`** prefix — for the four tables this project creates **and** for the platform team's two. Since 2026-09-07 they share it, so **the prefix no longer tells you which table you are pointed at.** Pick tables and columns from the designer dropdowns rather than typing them, and see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0 for the two logical names that now exist on more than one table.
 
-### How every Fabric call in this folder is made
+### How every Fabric call in this solution is made
 
-**This is the pattern. It is written out once here; the other flow docs refer back to it.**
+**This is the pattern, and there is only one. It is written out once here; every other flow document refers back to it.** The rationale is in [ARCHITECTURE.md](../docs/ARCHITECTURE.md) §4.
 
 1. **+ New step** → search **HTTP with Microsoft Entra ID (preauthorized)**.
 2. Choose the action **Invoke an HTTP request**.
-3. First time only, create the connection: **Base Resource URL** and **Microsoft Entra ID Resource URI (Application ID URI)** are both `https://api.fabric.microsoft.com`.
+3. First time only, create the connection: **Base Resource URL** and **Microsoft Entra ID Resource URI (Application ID URI)** are both `https://api.fabric.microsoft.com`. **Sign in as the `workspace provisioning` service account** — that account, and nothing else, is what Fabric sees on every call.
 4. Fill in **Method**, **URL of the request**, and where needed **Headers** and **Body of the request**.
 
 | Do | Do not |
 |---|---|
 | Set `Content-Type: application/json` on POST and PATCH | **Add an `Authorization` header.** The connector adds it. A hand-written one is either ignored or breaks the call |
 | Leave **Retry Policy** at Default — it covers `429` | Reference `variables('accessToken')`. There is no such variable any more |
+| Use this connector for **every** Fabric call | Use the plain **HTTP** action, or a **custom connector**. Neither appears anywhere in this solution |
 
 **Headers, in full:** a `GET` needs none — `Accept: application/json` is optional and harmless, and the flow docs include it only so every `GET` looks alike. A `POST` or `PATCH` carrying a body needs `Content-Type: application/json`. Nothing in this design needs any other header.
 
-> **The connection's identity is what Fabric sees**, not the flow and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5 must be held by that identity — **the `workspace provisioning` service account**, settled 2026-09-18 (Q45).
+> **Fabric sees the `workspace provisioning` service account** — not the flow, and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5 is granted to that account directly: Contributor on the holder workspace, Capacity Admin on every managed capacity.
+
+> **There is no custom connector here, and adding one would be a design change.** A custom connector runs as the *signed-in end user* (`runtimeSource: invoker`), which is the right mechanism only when the answer depends on who is asking. Nothing in capacity policies is user-specific — a capacity's rule list is the same whoever triggered the rebuild, and most triggers have no interactive user at all. See [SECURITY-AND-IDENTITY.md](../docs/SECURITY-AND-IDENTITY.md) §2.1.
 
 > **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.
 

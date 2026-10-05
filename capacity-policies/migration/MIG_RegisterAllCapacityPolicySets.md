@@ -32,7 +32,7 @@ Related: [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md
 ## 1. Before you start
 
 - Build [MIG_InitializeCapacityPolicySet](MIG_InitializeCapacityPolicySet.md) first and run its test 7. This flow is a loop around it.
-- Needs the *HTTP with Microsoft Entra ID (preauthorized)* connector for one `GET`. **No Dataverse connection** — every table read and write happens inside the child.
+- Needs the *HTTP with Microsoft Entra ID (preauthorized)* connector for one `GET`, signed in as the `workspace provisioning` service account. **No Dataverse connection** — every table read and write happens inside the child. Connector pattern in [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0.
 - **Check for duplicate capacity display names before the first run.** Two capacities with the same name produce one policy set name and the second create fails. See [MIG_InitializeCapacityPolicySet.md](MIG_InitializeCapacityPolicySet.md) Step 5.
 - Easiest build path: **copy `MIG_RebuildAllCapacityPolicies`** and make two substitutions.
 - Step 5b adds an **Office 365 Outlook** connection, and reads the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable first**, or this flow will not publish.
@@ -98,7 +98,7 @@ Three `Initialize variable` actions, **at the top level**, before Step 3.
 
 **No `Authorization` header** — the connector supplies it.
 
-> **This list is scoped to the connection's identity.** A capacity that identity does not administer is simply absent, and this flow will never know it existed. **Check the count against what you expect before proceeding** — if `Filter_eligible` returns 12 and the estate is 200, the identity is wrong and you have found it at the cheapest possible moment. This is **Q45** made concrete.
+> **This list is scoped to the `workspace provisioning` service account.** A capacity that account does not administer is simply absent, and this flow will never know it existed. **Check the count against what you expect before proceeding** — if `Filter_eligible` returns 12 and the estate is 200, the account is missing Capacity Admin and you have found it at the cheapest possible moment. This is **Q45** made concrete.
 
 ### 3b. `Filter_eligible` — **Filter array**
 
@@ -287,7 +287,7 @@ There is no batching control in the flow, so the tranche is you: run it, and **c
 | # | Test | Expect |
 |---|---|---|
 | 1 | Run with the loop's **Degree of Parallelism 1** and cancel after 2 iterations | Two policy sets, two rows, both `Inactive`. Nothing else touched |
-| 2 | Compare `Compose_eligible_count` against the estate you expect | Equal. **A short list means the connection identity, not the data** — see §3a |
+| 2 | Compare `Compose_eligible_count` against the estate you expect | Equal. **A short list means the `workspace provisioning` account is missing Capacity Admin, not that the data is wrong** — see §3a |
 | 3 | Run again immediately | `registered` = `0`, no new policy sets, no failures |
 | 4 | A capacity you know has no Node row | Appears in `noNode`, **not** in `failures`, and no policy set was created for it |
 | 5 | A paused capacity, and a P-SKU capacity | Absent from `Filter_eligible`. Not counted anywhere, not reported |

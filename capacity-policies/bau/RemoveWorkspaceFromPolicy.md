@@ -28,7 +28,7 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildC
 ## 0. Before you start
 
 - Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first, and confirm the placeholder column names in its §0.
-- Needs a **Dataverse connection** for reads only, and **not** the Entra ID HTTP connector. No Fabric calls of its own.
+- Needs a **Dataverse connection** for reads only — **not** the *HTTP with Microsoft Entra ID (preauthorized)* connector. No Fabric calls of its own; the child flow makes them all.
 - Build [AddWorkspaceToPolicy.md](AddWorkspaceToPolicy.md) first and copy it. Steps 1–3 are nearly identical; Step 4 is where they diverge, and they diverge on purpose.
 
 > ## This flow removes nothing

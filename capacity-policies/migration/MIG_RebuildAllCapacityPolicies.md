@@ -37,7 +37,7 @@ The last three were what `SyncCapacityPolicySets` would have detected. **That fl
 ## 1. Before you start
 
 - Build [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) first. This flow is a loop around it.
-- Needs a **Dataverse connection**, and **not** the Entra ID HTTP connector. No direct Fabric calls — the child flow makes them all.
+- Needs a **Dataverse connection** only — **not** the *HTTP with Microsoft Entra ID (preauthorized)* connector. No direct Fabric calls; the child flow makes them all.
 - Step 4 adds an **Office 365 Outlook** connection, and reads the **`ubsppcoe_PolicyMailRecipients`** environment variable — [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §8.11. **Create the variable before building Step 4**: a Text variable that does not exist, or exists with a blank value, stops this flow publishing at all.
 
 ---

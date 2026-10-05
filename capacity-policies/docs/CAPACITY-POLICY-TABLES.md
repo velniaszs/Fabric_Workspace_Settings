@@ -2,7 +2,7 @@
 
 Everything that has to exist in Dataverse before any capacity policy flow can be built. **Four tables are created by this project; two existing tables are read and never written.**
 
-Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3. This file is the build sheet — what to create, what to type into each column, and the rules that make the flows work.
+Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §3, and the system-level view is in [ARCHITECTURE.md](ARCHITECTURE.md) §3.2. This file is the build sheet — what to create, what to type into each column, and the rules that make the flows work.
 
 > **Nothing is built yet.** Specification, not a description of something that exists.
 

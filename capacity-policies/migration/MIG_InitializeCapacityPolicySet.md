@@ -34,11 +34,11 @@ Three reasons, and the first is the one that forces the issue.
 ## 1. Before you start
 
 - Build this **before** [MIG_RegisterAllCapacityPolicySets](MIG_RegisterAllCapacityPolicySets.md), which calls it.
-- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
-- The connection's identity needs **Contributor on the holder workspace**. It does **not** need Capacity Admin, because this flow never activates — that permission is only required by [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md).
+- Needs a **Dataverse connection** and the *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the `workspace provisioning` service account. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 for the connector pattern.
+- The `workspace provisioning` account needs **Contributor on the holder workspace**. It does **not** need Capacity Admin for this flow, because this flow never activates — that permission is only exercised by [MIG_ActivateAllCapacityPolicySets](MIG_ActivateAllCapacityPolicySets.md).
 - Reads the **`ubsppcoe_PolicyApiBeta`** environment variable in Step 6 — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 
-> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md).
+> **Build it fresh. Do not try to copy `InitializeCapacityPolicySet` and change the trigger.** Power Automate does not let you swap a trigger, and Power Apps (V2) → *Manually trigger a flow* is precisely the swap it refuses — `Save As` keeps the original trigger, and the designer will not let you delete it. The same constraint is recorded in [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md) — **cited for the trigger constraint only.** That flow belongs to the workspace-settings solution and its client-credentials token pattern has no counterpart here; this solution has no token flow at all.
 >
 > It is about twenty actions and every value is below, so building it from this document is quicker than fighting the platform. **Use ⋯ → *Copy to my clipboard* on the three Step 5 Composes** and paste them into the new flow — those expressions are long enough that retyping them is where a typo would come from, and they are unchanged from the BAU flow.
 

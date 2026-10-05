@@ -4,6 +4,8 @@ Symptom → cause → fix. Grouped by what you actually observed.
 
 > **Two failures in this system look like success.** A rebuild against a deactivated policy set returns `200`, and a wrong workspace GUID is accepted and silently never matches. If someone reports being denied while every signal reads healthy, start at §6.
 
+> **A third looks like a Fabric outage and is not.** Every Fabric call in the solution runs on one *HTTP with Microsoft Entra ID (preauthorized)* connection, signed in as the `workspace provisioning` service account. When that connection lapses, **every capacity fails at once with `401`** and nothing in the run history names the connection. [ARCHITECTURE.md](ARCHITECTURE.md) §4.4.
+
 ---
 
 ## 1. Triage
@@ -12,7 +14,7 @@ Symptom → cause → fix. Grouped by what you actually observed.
 |---|---|
 | Did the flow run at all? | Flow run history. **Empty** means it never triggered — §5 |
 | Did it fail? | `ubsppcoe_lasterror` on the `Capacity Policies` row, then the run history |
-| Is it one capacity or all of them? | **All at once = the connection.** One = data or permissions on that capacity |
+| Is it one capacity or all of them? | **All at once = the connection**, not Fabric and not the data. One = data or permissions on that capacity |
 | Was the change ever published? | `ubsppcoe_lastrebuild` on the row. Stale means nothing rebuilt it |
 
 ---
@@ -21,11 +23,13 @@ Symptom → cause → fix. Grouped by what you actually observed.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| **`401` on every capacity at once** | The `workspace provisioning` account: password rotated, MFA prompt, Conditional Access, licence removed, or disabled | Re-authenticate the connection. See [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.5 |
-| `GET /v1/capacities` returns far fewer capacities than exist | The account is not **Capacity Admin** on the missing ones | Grant Capacity Admin. They report `Skipped` until then |
+| **`401` on every capacity at once** | The `workspace provisioning` account: password rotated, MFA prompt, Conditional Access, licence removed, or disabled | Re-authenticate the *HTTP with Microsoft Entra ID (preauthorized)* connection. See [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.5 |
+| `GET /v1/capacities` returns far fewer capacities than exist | The account is not **Capacity Admin** on the missing ones — **or the connection was created by the wrong account**, which looks identical | Check whose sign-in the Fabric connection holds, then grant Capacity Admin. Missing capacities report `Skipped` until then |
 | Creating a policy set fails | **Contributor** missing on the holder workspace | Grant it on that one workspace |
 | Activation fails, policy set created | Capacity Admin missing on **that** capacity | Grant, then re-run. **Check the row first** — the set is already registered |
-| Connection cannot be created at all | Tenant blocks user consent to apps | A tenant admin must grant consent |
+| `401` or `403` with an `Authorization` header in the action | A hand-written auth header was added | **Remove it.** The connector supplies the token; a hand-written header is ignored or breaks the call |
+| `variables('accessToken')` is not found | A step was copied from the workspace-settings solution, which does use a token flow | **There is no token flow here.** Rebuild the action on the preauthorized connector — [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md) §0 |
+| Connection cannot be created at all | Tenant blocks user consent to apps | A tenant admin must grant consent for the *HTTP with Microsoft Entra ID (preauthorized)* connector |
 | Flows will not save or run | DLP policy separates the Fabric connector from Dataverse | Put both connectors in the same data group |
 
 ---

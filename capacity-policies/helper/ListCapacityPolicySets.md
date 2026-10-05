@@ -11,7 +11,9 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §3 and §
 ## 0. Before you start
 
 - Needs a **Dataverse connection**, for reads only.
-- **No Fabric calls and no child flows.** This flow reads one table and formats it. If it grows an *Invoke an HTTP request* action, something has gone wrong — see below. It needs a Dataverse connection and nothing else; **not** the Entra ID HTTP connector.
+- **No Fabric calls and no child flows.** This flow reads one table and formats it. If it grows an *Invoke an HTTP request* action, something has gone wrong — see below. It needs a Dataverse connection and nothing else: **not** the *HTTP with Microsoft Entra ID (preauthorized)* connector, and **not** a custom connector.
+
+> **This is the only app-facing flow, and it is the one place a custom connector might look tempting.** It is not: the answer it returns is the same for every caller, so there is nothing for a delegated, run-as-the-user call to add. The app shows what the `Capacity Policies` table says, as of the last rebuild. See [ARCHITECTURE.md](../docs/ARCHITECTURE.md) §4.3.
 - Build it after [RebuildCapacityPolicyRules.md](../bau/RebuildCapacityPolicyRules.md), because two of the columns it returns are written by that flow and will be empty until it has run.
 
 > ### One table, one query, no joins

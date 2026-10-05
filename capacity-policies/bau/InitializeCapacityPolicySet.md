@@ -29,9 +29,9 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md), [RebuildC
 ## 0. Before you start
 
 - Build [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) first. This flow calls it, and its §0 defines the Fabric connector pattern used below.
-- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header**.
+- **There is no token flow.** Every Fabric call is *HTTP with Microsoft Entra ID (preauthorized)* → **Invoke an HTTP request**, with **no `Authorization` header**, signed in as the `workspace provisioning` service account. The pattern is in [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) §0; the rationale in [ARCHITECTURE.md](../docs/ARCHITECTURE.md) §4.
 - Needs a **Dataverse connection**.
-- The SPN needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
+- The `workspace provisioning` account needs **Contributor on the holder workspace** and **Capacity Admin on the capacity being initialised**. **There is no SPN** — both roles are granted to that account directly. The second is what step 8 requires; without it activation fails and the capacity is left with rules that are not in force.
 - Needs the **`ubsppcoe_PolicyApiBeta`** environment variable, read by Steps 6 and 8c — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 - Logical names below use the **`ubsppcoe_`** prefix, shared with the platform team's tables since 2026-09-07 — see [CAPACITY-POLICY-TABLES.md](../docs/CAPACITY-POLICY-TABLES.md) §0. Pick tables and columns from the dropdowns rather than typing them.
 
@@ -197,7 +197,7 @@ The branch ends there. Execution falls out of the Condition and reaches Step 9.
 | URL of the request | `https://api.fabric.microsoft.com/v1/capacities` |
 | Header `Accept` | `application/json` |
 
-> **This list is scoped to the connection's identity**, not to the flow. A capacity the identity does not administer is simply absent, and Step 4 reports `Skipped` — indistinguishable from the capacity not existing. If every capacity comes back `Skipped`, suspect the connection before suspecting the data (Q45).
+> **This list is scoped to the `workspace provisioning` service account**, not to the flow. A capacity that account does not administer is simply absent, and Step 4 reports `Skipped` — indistinguishable from the capacity not existing. If every capacity comes back `Skipped`, suspect the connection before suspecting the data (Q45).
 
 `Filter_capacity` — **Filter array**:
 
@@ -233,7 +233,7 @@ Set the group's join to **And**, not `Or`.
 
 ```
 if(equals(length(body('Filter_capacity')), 0),
-   'Capacity not found, or the connection identity does not administer it.',
+   'Capacity not found, or the workspace provisioning account does not administer it.',
    if(not(equals(first(body('Filter_capacity'))?['state'], 'Active')),
       concat('Capacity state is ', coalesce(first(body('Filter_capacity'))?['state'], 'unknown'), ', not Active.'),
       concat('Capacity SKU is ', coalesce(first(body('Filter_capacity'))?['sku'], 'unknown'), '. Only F SKUs can host a policy set.')))
@@ -245,7 +245,7 @@ Three separate reasons, one outcome:
 
 | Condition | Why |
 |---|---|
-| Not in the list | Either it does not exist, or **the connection's identity** is not an admin on it — indistinguishable from here, and both mean this flow cannot proceed |
+| Not in the list | Either it does not exist, or **the `workspace provisioning` account** is not an admin on it — indistinguishable from here, and both mean this flow cannot proceed |
 | Not `Active` | A paused capacity cannot host a working policy set |
 | SKU is not `F*` | **Only Fabric capacities can hold a policy set.** Power BI SKUs — `P`, `A`, `EM`, `PP` — are a normal thing to encounter, not an error. `Skipped`, not `Failed` |
 

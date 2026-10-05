@@ -68,7 +68,7 @@ Everything else in this design is fail-closed. A missing Node row refuses a rebu
 ## 1. Before you start
 
 - Build [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) first. This flow reverses it, and reuses its connector pattern.
-- Needs a **Dataverse connection**, and — for §3 only — the *HTTP with Microsoft Entra ID (preauthorized)* connector.
+- Needs a **Dataverse connection**, and — for §3 only — the *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the `workspace provisioning` service account. **No `Authorization` header** — see [RebuildCapacityPolicyRules.md](RebuildCapacityPolicyRules.md) §0 for the connector pattern.
 - §3c reads the **`ubsppcoe_PolicyApiBeta`** environment variable — [API-BETA-SWITCH.md](../docs/API-BETA-SWITCH.md).
 - §2 makes **no Fabric calls at all**. That is most of why it is the recommended version.
 
@@ -146,11 +146,11 @@ Everything below is in the **Yes** branch.
 
 **Match on our own `ubsppcoe_capacityid`, not the trigger's copy.** It is the value `InitializeCapacityPolicySet` wrote and the one Fabric was called with; the Node's `ubsppcoe_nodeuniqueid` should agree but nothing reconciles them (Q29).
 
-> ### This list is scoped to the connection's identity, and that is dangerous here
+> ### This list is scoped to the `workspace provisioning` account, and that is dangerous here
 >
-> A capacity the identity does not administer is **absent from this list** — indistinguishable from one that has been deprovisioned. Everywhere else in the design that produces a `Skipped` and no action. **Here it would produce a deletion.**
+> A capacity that account does not administer is **absent from this list** — indistinguishable from one that has been deprovisioned. Everywhere else in the design that produces a `Skipped` and no action. **Here it would produce a deletion.**
 >
-> So the identity losing Capacity Admin — a permissions change, an expired assignment, the Q45 service account being altered — would make every subsequent Node soft-delete destroy a policy set for a capacity that is alive and well.
+> So the account losing Capacity Admin — a permissions change, an expired assignment, the Q45 service account being altered — would make every subsequent Node soft-delete destroy a policy set for a capacity that is alive and well.
 >
 > **Guard it with a sanity check on the list itself**, not just on the one capacity. If `Get_capacities` returns an empty or implausibly short list, treat it as a permissions failure and take the *suspend* branch regardless. A capacity list that has lost every entry is not an estate that was decommissioned overnight.
 
@@ -337,13 +337,13 @@ Keep `Scope_try` **flat** — Step 3 must not sit inside a Condition that can it
 | 2 | Soft-delete a governed Node row whose capacity **still exists** in Fabric | `Suspended`. Policy set deactivated and **still present**. `lasterror` names the disagreement |
 | 3 | Deprovision a throwaway capacity in Fabric, **then** soft-delete its Node row | `Deleted`. Policy set gone from the holder workspace, `Capacity Policies` row **retained** with `status = Deleted` |
 | 3a | *(Answered 2026-09-13 — no longer needs running)* | `deactivate` on a deleted capacity returns `404 Capacity not found`; `DELETE` on the policy set succeeds. See 3c |
-| 4 | **Revoke Capacity Admin from the connection identity, then soft-delete a governed Node row** | `Suspended`, **never `Deleted`**. This is the sanity check in 3b — if it deletes, the guard is wrong and a permissions lapse becomes a destructive event |
+| 4 | **Revoke Capacity Admin from the `workspace provisioning` account, then soft-delete a governed Node row** | `Suspended`, **never `Deleted`**. This is the sanity check in 3b — if it deletes, the guard is wrong and a permissions lapse becomes a destructive event |
 | 5 | Break `Delete_policy_set`, then run test 3 again | The row must **not** say `Deleted`. If it does, the ordering in 3c is wrong and the flow has manufactured an orphan |
 | 6 | After test 2, clear the soft-delete flag on that Node row | [InitializeCapacityPolicySet](InitializeCapacityPolicySet.md) fires and returns `AlreadyExists`. **The policy set stays deactivated and the capacity stays ungoverned** — the gap named in 3d. Confirm it, then decide who closes it |
 | 7 | After test 2, run `MIG_RebuildAllCapacityPolicies` | The capacity is rebuilt as normal — the Node link still resolves. Rules are republished into a **deactivated** set: harmless, but `lastrebuild` keeps moving on a retired capacity. Decide whether the estate-wide rebuild should skip `Suspended` rows |
 | 8 | Soft-delete the same Node row twice | Fires again, deactivates an already-inactive set. Must be harmless |
 
-**Test 4 is the one to write first.** It is the only test where a bug destroys something. `GET /v1/capacities` is scoped to the connection's identity, so *absent from the list* and *we cannot see it* are the same response — and one of those must never reach the delete branch.
+**Test 4 is the one to write first.** It is the only test where a bug destroys something. `GET /v1/capacities` is scoped to the `workspace provisioning` account, so *absent from the list* and *we cannot see it* are the same response — and one of those must never reach the delete branch.
 
 **Test 3 needs a real deprovisioned capacity**, which is awkward to arrange and is why it will get skipped. Do not skip it: it is the only test that exercises the branch this flow exists for.
 

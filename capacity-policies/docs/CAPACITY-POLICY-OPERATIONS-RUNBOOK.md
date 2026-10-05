@@ -4,7 +4,7 @@ What to run when the estate changes. One section per lifecycle event.
 
 Companion to [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](CAPACITY-POLICY-MIGRATION-RUNBOOK.md), which covers the one-off cutover. This document covers everything after it.
 
-Related: [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema).
+Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what the system is), [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) (design), [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md) (schema).
 
 ---
 

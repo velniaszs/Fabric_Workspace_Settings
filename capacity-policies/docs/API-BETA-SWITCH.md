@@ -38,6 +38,8 @@ At **GA** the parameter is removed again and the URL returns to what it is today
 
 Six actions across four flow documents. Each needs the beta parameter appended to the **end** of its URL.
 
+**Every one of the six is an *Invoke an HTTP request* action on the *HTTP with Microsoft Entra ID (preauthorized)* connector** — that is the only way Fabric is called in this solution ([ARCHITECTURE.md](ARCHITECTURE.md) §4). So the edit is identical in all six places: open the action, change the **URL of the request** field, change nothing else. **Do not touch headers while you are in there** — in particular, the absence of an `Authorization` header is correct and must stay that way.
+
 | # | Flow | Action | Method + path today |
 |---|---|---|---|
 | 1 | [RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md) Step 9 | `Replace_rules` | `POST /v1/workspaces/{holderWs}/policySets/{id}/policyRules/replaceByPolicy` |
@@ -139,7 +141,7 @@ So:
 | Public preview | **Yes** | `…/replaceByPolicy?beta=true` |
 | GA | **No** | `…/replaceByPolicy` |
 
-> **If the connector ever hands the toggle over as text rather than a boolean**, the expression becomes `@{if(equals(string(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)')), 'True'), '?beta=true', '')}`. §3.2 is where that is discovered — in one Compose, not in six URLs.
+> **If the environment-variable parameter ever resolves as text rather than a boolean**, the expression becomes `@{if(equals(string(parameters('PolicyApiBeta (ubsppcoe_PolicyApiBeta)')), 'True'), '?beta=true', '')}`. §3.2 is where that is discovered — in one Compose, not in six URLs. *(This is about how Power Automate hands over the variable, not about the Fabric connector, which plays no part in the toggle.)*
 
 ### 3.2. Prove the expression resolves — two minutes, before editing six flows
 
@@ -424,7 +426,7 @@ The three event flows trigger on Dataverse row changes, get one attempt, write `
 
 Same sequence each time. It exercises four of the six call sites.
 
-1. **`GET /v1/capacities`** from a throwaway manual flow — confirms the connection and identity before anything writes. [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 step 3 describes it.
+1. **`GET /v1/capacities`** from a throwaway manual flow — confirms the *HTTP with Microsoft Entra ID (preauthorized)* connection is live and signed in as the `workspace provisioning` account, before anything writes. [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8 step 3 describes it.
 2. **`RebuildCapacityPolicyRules` against one non-production capacity** — call 1. A `200` and the expected rule count. **On the first run this also proves the snippet resolves to nothing**, leaving the URL exactly as it was (§3.1).
 3. **`InitializeCapacityPolicySet` against a test capacity** — calls 2 and 3, plus the `202` polling path, which §6 Q2 confirms is unaffected.
 4. **Read the rules back in the portal.** A rebuild that returns `200` having written nothing is the failure mode this subsystem cannot otherwise see.

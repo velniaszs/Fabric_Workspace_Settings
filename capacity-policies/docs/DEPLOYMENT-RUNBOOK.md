@@ -2,7 +2,7 @@
 
 Deploying this subsystem to **another tenant**. Everything that must exist, be created, be populated or be granted, in the order it has to happen.
 
-> **Companion:** [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) covers what travels with a solution export and how source control works. This document is the procedure.
+> **Companion:** [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) covers what travels with a solution export and how source control works. This document is the procedure. **[ARCHITECTURE.md](ARCHITECTURE.md) §4 explains the identity and connector model** that §2.1, §2.2 and §2.5 implement.
 
 ---
 
@@ -35,7 +35,7 @@ Three tables are read and written but **not owned by this project**: `ubsppcoe_W
 | Dataverse tables to create | 3 |
 | Dataverse tables that must already exist | 3 |
 | Environment variables | 7 |
-| Connections | 3 |
+| Connections | 3 (no custom connector) |
 | Fabric workspaces to create | 1 (the holder) |
 | Seed data files | 2 |
 
@@ -78,8 +78,22 @@ No app registration, no client secret, no API permissions to configure — the i
 |---|---|---|
 | P1 | A target **environment with Dataverse** | |
 | P2 | A **publisher with prefix `ubsppcoe`** | **Do not create a new one with a different prefix** — every logical name in every document would be wrong |
-| P3 | **DLP policy** permits the Fabric connector, Dataverse and Office 365 Outlook in the same data group | Otherwise the flows will not save or run |
+| P3 | **DLP policy** permits *HTTP with Microsoft Entra ID (preauthorized)*, Dataverse and Office 365 Outlook in the **same data group** | Otherwise the flows will not save or run |
 | P4 | Dataverse **security role** for the service account | §4.3 |
+
+### 2.5 Connections — three, all signed in as the same account
+
+| Connection | Connector | Used by |
+|---|---|---|
+| Fabric | **HTTP with Microsoft Entra ID (preauthorized)** | Every flow that calls Fabric. Base Resource URL and Entra ID Resource URI are both `https://api.fabric.microsoft.com` |
+| Dataverse | **Microsoft Dataverse** | Every flow |
+| Mail | **Office 365 Outlook** | The `MIG_` flows' run reports only |
+
+**All three are created by signing in as the service account from §2.1.** There is no app registration, no client secret and no API permission to configure anywhere in this deployment.
+
+> **There is no custom connector in this solution, and none needs to be built.** A custom connector runs as the *signed-in end user*; nothing in capacity policies depends on who triggered it. If a deployment checklist from the workspace-settings solution is being reused, **drop its custom-connector and app-registration steps entirely** — they have no counterpart here. [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
+
+> **The connection is the thing most likely to be got wrong on a redeployment**, because it fails quietly. A Fabric connection created by whoever imported the solution authenticates as *them*: the flows run, `GET /v1/capacities` returns only the capacities that person administers, and every other capacity reports `Skipped` as though it did not exist. Step 9 in §7 is what catches it.
 
 ---
 
@@ -210,8 +224,8 @@ Seven, created inside the solution so they inherit the prefix. **All Text except
 5. **Create the service account** and grant its Dataverse security role (§2.1, §4.3)
 6. **Create the holder workspace** in Fabric; grant Contributor to the service account (§2.3 F1–F2)
 7. **Grant Capacity Admin** on every capacity to be governed (F3)
-8. **Create the three connections** as the service account; obtain Entra admin consent if prompted (§2.2)
-9. **Smoke-test the connection** — one throwaway flow doing `GET /v1/capacities`. Compare the count against the expected estate. **A short list means the wrong identity or missing Capacity Admin** — the cheapest possible moment to find out. Delete the flow afterwards
+8. **Create the three connections** as the service account (§2.5); obtain Entra admin consent if prompted (§2.2)
+9. **Smoke-test the connection** — one throwaway flow doing `GET /v1/capacities`. Compare the count against the expected estate. **A short list means the connection was created by the wrong account, or Capacity Admin is missing** — the cheapest possible moment to find out. Delete the flow afterwards
 10. **Seed `Policy Item Types`** (§5 D1)
 11. **Build or import the flows**, in the order in §3
 12. **Set every Dataverse trigger's Scope to `Organization`**

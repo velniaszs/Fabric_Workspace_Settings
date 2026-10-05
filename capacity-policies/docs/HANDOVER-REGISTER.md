@@ -2,7 +2,7 @@
 
 Everything the receiving team inherits that is **not** self-evident from the code: obligations a person must perform, dependencies on other teams, risks accepted deliberately, and gaps that were considered and left unbuilt.
 
-**Nothing here is a defect.** Every entry was decided; the reasoning is in [ADR.md](ADR.md), referenced by question number.
+**Nothing here is a defect.** Every entry was decided; the reasoning is in [ADR.md](ADR.md), referenced by question number. For what the system is and how it hangs together, start at [ARCHITECTURE.md](ARCHITECTURE.md).
 
 > **Read §A first.** Those are the items where *doing nothing* silently produces a wrong estate. The rest describe risk that is already understood.
 
@@ -36,7 +36,7 @@ Running the rebuild does **not** detect a policy set that is no longer in force 
 
 ### Why A3 is not optional
 
-Every Fabric call in the solution authenticates as that one account. If it expires or loses Capacity Admin, the estate-wide rebuild fails against **every** capacity at once, and the run history says `401` rather than naming the connection. See [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md).
+Every Fabric call in the solution goes through one *HTTP with Microsoft Entra ID (preauthorized)* connection, signed in as that one account. There is no service principal and no second credential to fall back on. If the account expires or loses Capacity Admin, the estate-wide rebuild fails against **every** capacity at once, and the run history says `401` rather than naming the connection. See [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md).
 
 ---
 

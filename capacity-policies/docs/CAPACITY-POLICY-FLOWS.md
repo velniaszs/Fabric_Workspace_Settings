@@ -6,7 +6,7 @@ Plan for the Power Automate flows that operate the capacity-scoped `ItemCreation
 
 Source material reviewed 2026-09-02, all in `C:\GIT\ubs-policies`: `migrate_policy_sets.ps1`, `add_policy_rule.ps1`, `remove_workspace_from_rule.ps1`, `new_policy_set.ps1`, `list_policy_sets.ps1`, `FabricPolicies.Common.ps1`, `Migration-Steps.md`, and `docs/Fabric-Policies-REST-API-Reference.md`.
 
-> **Different system, same tenant.** This is not the workspace-settings app. It shares the broker-SPN pattern and the Fabric REST conventions documented in [ARCHITECTURE.md](../../docs/ARCHITECTURE.md) §2 and [FLOWS.md](../../docs/FLOWS.md), and should reuse them, but it governs capacities rather than workspace settings.
+> **Different system, same tenant.** This is not the workspace-settings app. It governs capacities rather than workspace settings, and shares no component, table, identity or publisher prefix with it. **It does not share that app's broker-service-principal pattern either** — every Fabric call here is made by the *HTTP with Microsoft Entra ID (preauthorized)* connector signed in as the `workspace provisioning` service account, with no app registration and no client secret anywhere. See [ARCHITECTURE.md](ARCHITECTURE.md) §4. What the two solutions genuinely have in common is the Fabric REST conventions in [FLOWS.md](../../docs/FLOWS.md).
 
 ---
 
@@ -29,6 +29,8 @@ The flows must reproduce this model exactly, or they will fight the PowerShell.
 | An empty `values` list is rejected (`PropertyMinCount`) — delete the rule instead | same |
 | Only **F SKU** capacities can host a policy set | `-CapacitySkuPattern 'F*'` |
 | Auth in the scripts is **app-only client credentials**, scope `https://api.fabric.microsoft.com/.default` | `FabricPolicies.Common.ps1` |
+
+**The one line above that the flows deliberately do *not* reproduce is the last one.** The scripts authenticate as a service principal with a client secret; the flows authenticate as the `workspace provisioning` service account through the *HTTP with Microsoft Entra ID (preauthorized)* connector, with no secret anywhere. Only the **algorithm** is being reproduced — see §5 and [ARCHITECTURE.md](ARCHITECTURE.md) §4.
 
 Item types come from `fabric_item_types.csv`; workspace whitelists from `fabric_workspaces.csv`; exceptions from `fabric_workspaces_exceptions.csv`. **None of the three is reachable from a flow** — see §6.
 
@@ -470,25 +472,29 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 
 **Decision 2026-09-08: every Fabric call uses the *HTTP with Microsoft Entra ID (preauthorized)* connector, not the plain `HTTP` action.** The connector attaches the bearer token itself, so there is no token flow, no client secret, and no `Authorization` header anywhere in this design. `GetPolicyToken` is retired.
 
-> ### What that changes, and it is not only plumbing
+**Decision 2026-09-18 (Q45): the connection is created by signing in as the `workspace provisioning` service account**, and that account is the whole identity model.
+
+> ### What that means, and it is not only plumbing
 >
-> **The identity stops being a service principal we configured and becomes whatever the connection authenticates as.** Everything in this section hangs off that, so settle it before granting anything:
+> **There is no service principal in this solution.** The connector authenticates as the account the connection signed in with, so every call is **delegated** — the account acting as itself, with the roles it personally holds:
 >
-> | | Old — app-only token flow | New — connector connection |
+> | | Rejected — app-only token flow | Built — preauthorized connector |
 > |---|---|---|
-> | Who calls Fabric | The policy SPN, via client credentials | **The connection's identity** |
-> | Where the secret lives | An environment variable we manage | Nowhere. The platform holds it |
-> | *Service principals can call Fabric public APIs* tenant setting | Hard prerequisite | **Only if the connection is a service principal.** Irrelevant for a user connection |
-> | `Item.ReadWrite.All` etc. | Delegated scopes, and therefore **not** the mechanism | **The mechanism, if the connection is delegated** — this inverts |
-> | Breaks when | The secret expires | The secret expires **or the connection owner leaves, loses the role, or has the connection revoked** |
+> | Who calls Fabric | A policy SPN, via client credentials | **The `workspace provisioning` service account** |
+> | Where the secret lives | An environment variable we manage | **Nowhere.** The platform holds the connection |
+> | *Service principals can call Fabric public APIs* tenant setting | A hard prerequisite | **Irrelevant** — nothing here is a service principal |
+> | How Fabric rights are obtained | Application permissions plus a Fabric role | **Roles granted directly to the account** |
+> | Breaks when | The secret expires | The account's password rotates or expires, MFA or Conditional Access blocks it, or it is disabled or unlicensed |
 >
-> **The Fabric-side roles below attach to the connection's identity** — they do not follow the flow. **Settled 2026-09-18 (Q45): that identity is the `workspace provisioning` service account — a *user* account, email and password.** So every call is **delegated**: there is no service principal, no app registration and no client secret anywhere in this solution, and the roles are granted to the account directly.
+> **The Fabric roles below are granted to that account**, not to the flow and not to whoever runs it.
+>
+> **No custom connector is used either.** A custom connector runs as the *signed-in end user*, which is the right mechanism only when the answer depends on who is asking — and nothing in capacity policies is user-specific. [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.1 sets out the division.
 
 | Need | Where | Notes |
 |---|---|---|
-| **Contributor on the holder workspace** | Fabric workspace role, on **one** workspace | Held by the connection's identity. See below |
+| **Contributor on the holder workspace** | Fabric workspace role, on **one** workspace | Held by the `workspace provisioning` account. See below |
 | **Capacity Admin on every managed capacity** | Capacity role | Confirmed requirement for activating a policy set on that capacity |
-| Capacity enumeration | `GET /v1/capacities` | Returns what the **connection's identity** administers, so a capacity it does not administer is simply absent — and flow 1 reads `Skipped` off exactly that list |
+| Capacity enumeration | `GET /v1/capacities` | Returns what the **account** administers, so a capacity it does not administer is simply absent — and flow 1 reads `Skipped` off exactly that list |
 | *Service principals can call Fabric public APIs* | Tenant setting | **Not required.** The connection is a user account, not a service principal. That setting, and every Admin API setting, is scoped to SPNs in an allowed security group — see [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.3 |
 | Fabric administrator | only for `/v1/admin/policySets/*` | **Not needed.** Those operations are tenant-scope only; nothing here uses them |
 
@@ -498,7 +504,7 @@ Not on the workspaces being whitelisted. Every write path is `/v1/workspaces/{ho
 
 The workspaces in a whitelist are never touched. They are string values inside `predicate.values` — data, not resources. `migrate_policy_sets.ps1` demonstrates this: it takes one `-WorkspaceId` for the holder and reads every whitelisted GUID from a CSV without any permission check.
 
-So the calling identity needs Contributor on **one** workspace, Capacity Admin on the capacities, and **nothing at all** on the thousands of workspaces it grants access to.
+So the `workspace provisioning` account needs Contributor on **one** workspace, Capacity Admin on the capacities, and **nothing at all** on the thousands of workspaces it grants access to.
 
 > **The sting: whitelist GUIDs are never validated.** Fabric accepts any well-formed GUID in `workspace.id`. A typo, a deleted workspace, or a workspace from another tenant is stored happily and simply never matches. Nothing fails, and the owner is left with a policy that looks correct and denies them.
 >
@@ -551,7 +557,7 @@ One document per flow in [bau/](../bau/) and [migration/](../migration/); build 
 
 1. **The three new tables** — `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` — plus the environment variables in §6. **Build them from [CAPACITY-POLICY-TABLES.md](CAPACITY-POLICY-TABLES.md)**, which carries every column and type. `Policy Drift` is **dropped** — its only writer was discarded (§3). Seed `Policy Item Types` from [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv), and `Policy Exceptions` from [input/PolicyExceptions.csv](../input/PolicyExceptions.csv) — **a template whose three `EXAMPLE` rows must be deleted first**. Every column read from `ubsppcoe_Workspace` and `ubsppcoe_Node` is now confirmed (Q19 closed), so no filter is blocked on a name.
 2. **The connector connection.** Create one *HTTP with Microsoft Entra ID (preauthorized)* connection against `https://api.fabric.microsoft.com` as the **`workspace provisioning` service account** (Q45), and grant that account Contributor on the holder workspace and Capacity Admin on a throwaway capacity. There is no token flow to build — that is the whole of the auth work.
-3. **Prove the connection before anything writes.** A throwaway manual flow with a single *Invoke an HTTP request* — `GET https://api.fabric.microsoft.com/v1/capacities` — and nothing else. **This is where a wrong or under-privileged identity surfaces**, as an empty list or a `401`, rather than halfway through the first rebuild. Compare the count against the size of the estate: the list is scoped to the connection's identity, so a short list means the wrong identity and you have found it at the cheapest possible moment. Delete the flow afterwards. *(This step used to be `SyncCapacityPolicySets`, which was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md).)*
+3. **Prove the connection before anything writes.** A throwaway manual flow with a single *Invoke an HTTP request* — `GET https://api.fabric.microsoft.com/v1/capacities` — and nothing else. **This is where a wrong or under-privileged sign-in surfaces**, as an empty list or a `401`, rather than halfway through the first rebuild. Compare the count against the size of the estate: the list is scoped to the `workspace provisioning` account, so a short list means the connection was created by the wrong account or that account is missing Capacity Admin — and you have found it at the cheapest possible moment. Delete the flow afterwards. *(This step used to be `SyncCapacityPolicySets`, which was discarded on 2026-09-18 — [discarded/SyncCapacityPolicySets.md](../discarded/SyncCapacityPolicySets.md).)*
 4. **[RebuildCapacityPolicyRules](../bau/RebuildCapacityPolicyRules.md)** — the writer. Test on one throwaway capacity. Exercise the **zero-enabled-workspace** case first and confirm it emits rule 1 alone; that is the path that silently unlocks a capacity if it is wrong. Then blank the policy row's **`node` lookup**, and confirm it fails rather than emitting rule 1. Add one `Policy Exceptions` row last and confirm rule 3 appears with **one** condition.
 5. **[InitializeCapacityPolicySet](../bau/InitializeCapacityPolicySet.md)** — end to end on the same throwaway capacity, including activation. Confirms Capacity Admin is sufficient (§5).
 6. **[AddWorkspaceToPolicy](../bau/AddWorkspaceToPolicy.md)**, then **[RemoveWorkspaceFromPolicy](../bau/RemoveWorkspaceFromPolicy.md)** — build add first and copy it. Verify the validation outcomes before the happy path: `NotEnabled` on add and `StillEnabled` on remove are the two that a bare rebuild wrapper could not report, and they are the reason both flows exist.
