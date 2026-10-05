@@ -59,7 +59,7 @@ Open items that need an owner are also listed, with their owners, in [HANDOVER-R
 
 | # | Question | Answer |
 |---|---|---|
-| Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on **every** Fabric call — there is no second mechanism. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven. **The plain `HTTP` action is not used, and neither is a custom connector**: a custom connector runs as the *signed-in end user*, which is the right mechanism only where the answer depends on who is asking, and nothing in capacity policies is user-specific. See [ARCHITECTURE.md](ARCHITECTURE.md) §4.3 |
+| Q44 | How do the flows authenticate to Fabric? | **The *HTTP with Microsoft Entra ID (preauthorized)* connector**, action *Invoke an HTTP request*, on **every** Fabric call — there is no second mechanism. The connector attaches the bearer token. **`GetPolicyToken` is retired**, along with the client secret, the tenant/client-id environment variables, and every `Authorization` header. Eight flows become seven. **The plain `HTTP` action is not used.** See [ARCHITECTURE.md](ARCHITECTURE.md) §4 |
 | Q45 | What identity does that connection use? | **Answered 2026-09-18 — the `workspace provisioning` service account.** See the 2026-09-18 table below |
 
 ### Decision taken 2026-09-15

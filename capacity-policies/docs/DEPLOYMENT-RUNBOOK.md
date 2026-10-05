@@ -35,7 +35,7 @@ Three tables are read and written but **not owned by this project**: `ubsppcoe_W
 | Dataverse tables to create | 3 |
 | Dataverse tables that must already exist | 3 |
 | Environment variables | 7 |
-| Connections | 3 (no custom connector) |
+| Connections | 3 |
 | Fabric workspaces to create | 1 (the holder) |
 | Seed data files | 2 |
 
@@ -90,8 +90,6 @@ No app registration, no client secret, no API permissions to configure — the i
 | Mail | **Office 365 Outlook** | The `MIG_` flows' run reports only |
 
 **All three are created by signing in as the service account from §2.1.** There is no app registration, no client secret and no API permission to configure anywhere in this deployment.
-
-> **There is no custom connector in this solution, and none needs to be built.** A custom connector runs as the *signed-in end user*; nothing in capacity policies depends on who triggered it. If a deployment checklist from the workspace-settings solution is being reused, **drop its custom-connector and app-registration steps entirely** — they have no counterpart here. [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
 
 > **The connection is the thing most likely to be got wrong on a redeployment**, because it fails quietly. A Fabric connection created by whoever imported the solution authenticates as *them*: the flows run, `GET /v1/capacities` returns only the capacities that person administers, and every other capacity reports `Skipped` as though it did not exist. Step 9 in §7 is what catches it.
 

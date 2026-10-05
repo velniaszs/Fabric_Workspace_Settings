@@ -4,7 +4,7 @@ Symptom → cause → fix. Grouped by what you actually observed.
 
 > **Two failures in this system look like success.** A rebuild against a deactivated policy set returns `200`, and a wrong workspace GUID is accepted and silently never matches. If someone reports being denied while every signal reads healthy, start at §6.
 
-> **A third looks like a Fabric outage and is not.** Every Fabric call in the solution runs on one *HTTP with Microsoft Entra ID (preauthorized)* connection, signed in as the `workspace provisioning` service account. When that connection lapses, **every capacity fails at once with `401`** and nothing in the run history names the connection. [ARCHITECTURE.md](ARCHITECTURE.md) §4.4.
+> **A third looks like a Fabric outage and is not.** Every Fabric call in the solution runs on one *HTTP with Microsoft Entra ID (preauthorized)* connection, signed in as the `workspace provisioning` service account. When that connection lapses, **every capacity fails at once with `401`** and nothing in the run history names the connection. [ARCHITECTURE.md](ARCHITECTURE.md) §4.3.
 
 ---
 

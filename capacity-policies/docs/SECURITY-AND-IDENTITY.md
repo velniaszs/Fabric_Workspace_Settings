@@ -47,22 +47,7 @@ The connector attaches the bearer token itself. **There is no token flow and no 
 
 > **Never add an `Authorization` header to a Fabric action.** The connector supplies one; a hand-written header is either ignored or breaks the call.
 
-**This connector carries every HTTP call in the solution — there is no second mechanism.** The plain `HTTP` action is not used, and neither is a custom connector.
-
-> ### Why no custom connector, and when one would be right
->
-> The two mechanisms differ in **whose permissions the call runs with**, and that is the only thing that should decide between them:
->
-> | | HTTP with Entra ID (preauthorized) | Custom connector |
-> |---|---|---|
-> | Runs as | **The account the connection signed in as** — the same on every run | **The signed-in end user**, `runtimeSource: invoker` — different on every run |
-> | Use when | The answer must not depend on who triggered the flow | The answer **depends on who is asking** and must reflect that user's own rights |
-> | Needs an app registration | No | Yes, with explicit delegated scopes and a redirect URL |
-> | In this subsystem | **Every call** | **None** |
->
-> **Nothing in capacity policies is user-specific.** A capacity's rule list is identical regardless of who triggered the rebuild, and most triggers are row changes with no interactive user at all. The one app-facing flow, [ListCapacityPolicySets](../helper/ListCapacityPolicySets.md), answers from Dataverse and calls Fabric not at all.
->
-> A custom connector does exist in this tenant — `gateway_lst_app_con`, built for the workspace-settings app ([docs/CUSTOM-CONNECTOR.md](../../docs/CUSTOM-CONNECTOR.md)). **It is unrelated to this solution and nothing here should start using it.** If a requirement ever does depend on the caller's own Fabric permissions, a custom connector is the mechanism — **widening this account's rights to simulate the user is the wrong fix, and the one that will be reached for first.**
+**This connector carries every HTTP call in the solution — there is no second mechanism.** The plain `HTTP` action is not used anywhere.
 
 ### 2.2 Fabric roles the account must hold
 

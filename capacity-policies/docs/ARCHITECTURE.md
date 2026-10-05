@@ -95,7 +95,6 @@ A workspace is whitelisted because **`ubsppcoe_oapenabled` is `true` on its row*
 | Dataverse tables read, not owned | **3** | `ubsppcoe_Workspace`, `ubsppcoe_Node`, `Logging` |
 | Environment variables | **7** | [DEPLOYMENT-ALM.md](DEPLOYMENT-ALM.md) §3 |
 | Connection references | **3** | Fabric HTTP (preauthorized), Dataverse, Office 365 Outlook |
-| Custom connectors | **0** | See §4.3 |
 | Service principals | **0** | See §4.2 |
 | Scheduled flows | **0** | See §8 |
 
@@ -208,7 +207,7 @@ What that buys, and what it costs:
 | Gained | Given up |
 |---|---|
 | No secret to store, rotate, or leak into run history | The identity is no longer one we configure per flow — it is **whatever the connection signed in as** |
-| No expiry to monitor on a credential we hold | A new failure mode: the connection itself lapsing (§4.4) |
+| No expiry to monitor on a credential we hold | A new failure mode: the connection itself lapsing (§4.3) |
 | No token flow to build, test, and keep in step with its callers | Nothing in the run history names the connection when it does |
 | No token ever reaches the run history, so no Secure Inputs/Outputs to set | — |
 
@@ -246,24 +245,7 @@ Two roles, and they are the complete list:
 >
 > Nothing in these flows can fix it — the GUIDs come from `ubsppcoe_Workspace`, which this project never writes. **Validation has to happen where the row is created.**
 
-### 4.3 Why there is no custom connector here
-
-A custom connector exists in this tenant — `gateway_lst_app_con`, built for the workspace-settings app and documented in [`docs/CUSTOM-CONNECTOR.md`](../../docs/CUSTOM-CONNECTOR.md). **It is not used by this subsystem, and nothing here should start using it.**
-
-The division is the same one in both solutions, and it is worth stating plainly because the two mechanisms are easy to conflate:
-
-| | HTTP with Entra ID (preauthorized) | Custom connector |
-|---|---|---|
-| Runs as | **The account the connection signed in as** — fixed, the same for every run | **The signed-in end user**, `runtimeSource: invoker` — different on every run |
-| Use it when | The answer must not depend on who clicked the button | The answer **depends on who is asking**, and must reflect that user's own permissions |
-| Needs an app registration | No | Yes — with explicit delegated scopes and a redirect URL |
-| In this subsystem | **Every call** | **None** |
-
-**Nothing in capacity policies is user-specific.** A capacity's rule list is the same regardless of who triggered the rebuild, and the triggers are mostly row changes with no interactive user at all. The one app-facing flow, `ListCapacityPolicySets`, answers from the `Capacity Policies` table and makes no Fabric call whatsoever.
-
-> **If a requirement ever arrives that genuinely depends on the caller's own Fabric permissions, a custom connector is the mechanism — not a second preauthorized connection.** Widening the service account's rights to simulate the user is the wrong fix and the one that will be reached for first.
-
-### 4.4 What breaks an account connection
+### 4.3 What breaks an account connection
 
 A delegated connection has failure modes an application identity does not, and **all of them present identically: `401` on every capacity at once.**
 

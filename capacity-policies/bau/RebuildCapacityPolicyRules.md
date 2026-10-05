@@ -28,13 +28,11 @@ Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §2 and §
 |---|---|
 | Set `Content-Type: application/json` on POST and PATCH | **Add an `Authorization` header.** The connector adds it. A hand-written one is either ignored or breaks the call |
 | Leave **Retry Policy** at Default — it covers `429` | Reference `variables('accessToken')`. There is no such variable any more |
-| Use this connector for **every** Fabric call | Use the plain **HTTP** action, or a **custom connector**. Neither appears anywhere in this solution |
+| Use this connector for **every** Fabric call | Use the plain **HTTP** action. It appears nowhere in this solution |
 
 **Headers, in full:** a `GET` needs none — `Accept: application/json` is optional and harmless, and the flow docs include it only so every `GET` looks alike. A `POST` or `PATCH` carrying a body needs `Content-Type: application/json`. Nothing in this design needs any other header.
 
 > **Fabric sees the `workspace provisioning` service account** — not the flow, and not whoever ran it. Every role in [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5 is granted to that account directly: Contributor on the holder workspace, Capacity Admin on every managed capacity.
-
-> **There is no custom connector here, and adding one would be a design change.** A custom connector runs as the *signed-in end user* (`runtimeSource: invoker`), which is the right mechanism only when the answer depends on who is asking. Nothing in capacity policies is user-specific — a capacity's rule list is the same whoever triggered the rebuild, and most triggers have no interactive user at all. See [SECURITY-AND-IDENTITY.md](../docs/SECURITY-AND-IDENTITY.md) §2.1.
 
 > **Verify the output shape on your first build.** This document keeps using `outputs('X')?['statusCode']` and `outputs('X')?['headers']` — the same expressions the plain `HTTP` action supports — because API-connection actions expose them too. Confirm it once in a real run before relying on the `202` branch in [InitializeCapacityPolicySet.md](InitializeCapacityPolicySet.md) Step 7, which reads `x-ms-operation-id` out of the response headers. If the shape differs, that branch is the only thing that needs rewriting.
 

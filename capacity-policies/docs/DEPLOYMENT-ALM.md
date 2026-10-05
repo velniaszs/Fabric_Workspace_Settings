@@ -14,7 +14,6 @@ What the solution contains, what travels with an export, and how source control 
 | Dataverse tables | 3 | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` |
 | Environment variables | 7 | §3 |
 | Connection references | 3 | **Fabric — *HTTP with Microsoft Entra ID (preauthorized)***, Dataverse, Office 365 Outlook |
-| Custom connectors | 0 | Deliberate — [ARCHITECTURE.md](ARCHITECTURE.md) §4.3 |
 
 **Publisher prefix is `ubsppcoe`.** Not `crbab` — that belongs to the workspace-settings canvas app and is a different solution entirely.
 

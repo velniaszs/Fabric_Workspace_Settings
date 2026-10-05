@@ -487,8 +487,6 @@ The cases that made this awkward incrementally are gone. There is no last-worksp
 > | Breaks when | The secret expires | The account's password rotates or expires, MFA or Conditional Access blocks it, or it is disabled or unlicensed |
 >
 > **The Fabric roles below are granted to that account**, not to the flow and not to whoever runs it.
->
-> **No custom connector is used either.** A custom connector runs as the *signed-in end user*, which is the right mechanism only when the answer depends on who is asking — and nothing in capacity policies is user-specific. [SECURITY-AND-IDENTITY.md](SECURITY-AND-IDENTITY.md) §2.1 sets out the division.
 
 | Need | Where | Notes |
 |---|---|---|

@@ -28,7 +28,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 
 **Membership is derived, never stored.** A workspace is whitelisted because `ubsppcoe_oapenabled` is true on its row and its `Node` lookup points at the capacity. No flow here writes either column — both belong to the platform team.
 
-**One identity, one connector.** Every Fabric call goes through the **HTTP with Microsoft Entra ID (preauthorized)** connector, signed in as the `workspace provisioning` service account. The connector attaches the bearer token itself, so there is no token flow, no client secret and no `Authorization` header anywhere in the solution — and no service principal either. **No custom connector is used here**: a custom connector is the mechanism for calls that must run as the *signed-in end user*, and nothing in capacity policies is user-specific. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.
+**One identity, one connector.** Every Fabric call goes through the **HTTP with Microsoft Entra ID (preauthorized)** connector, signed in as the `workspace provisioning` service account. The connector attaches the bearer token itself, so there is no token flow, no client secret and no `Authorization` header anywhere in the solution — and no service principal either. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.
 
 ---
 
