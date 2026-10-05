@@ -60,7 +60,7 @@ flowchart TB
     subgraph pp["Power Platform — solution WorkspaceSol"]
         DV[("Dataverse<br/>crbab_Workspaces<br/>crbab_PrivateLinkTarget<br/>crbab_AllowedConnectionType")]
         FLOWS["Cloud flows<br/><i>the broker tier</i>"]
-        CONN["Custom connector<br/><b>gateway_lst_app_con</b><br/><i>delegated only</i>"]
+        CONN["Custom connector<br/><b>FabricSetting</b><br/><i>delegated only</i>"]
     end
 
     subgraph entra["Microsoft Entra ID"]

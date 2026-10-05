@@ -45,7 +45,7 @@ Verified against the solution export on 2026-09-25.
 | Cloud flows | 17 | Definitions only — connections, secrets and run-only settings do not travel |
 | Dataverse tables | 2 | `crbab_Workspaces`, `crbab_AllowedConnectionType` — **schema only, no data** |
 | Canvas app | 1 | `crbab_app5` |
-| Custom connector | 1 | `ab_gateway-5flst-5fapp-5fcon` — **including a hardcoded tenant ID** |
+| Custom connector | 1 | `ab_FabricSetting` — **including a hardcoded tenant ID** |
 | Connection references | 5 | 4 × custom connector, 1 × Office 365 Users — **arrive unbound** |
 | Environment variables | 3 | `ab_TenantId`, `ab_BrokerClientId`, `ab_BrokerObjectId` — **values are defaults, not bindings** |
 
@@ -249,13 +249,15 @@ Five references arrive **unbound**. A reference is only a pointer; the connectio
 
 | Connection reference | Connector |
 |---|---|
-| `ab_sharedgateway5flst5fapp5fcon…_36424` | Custom connector |
-| `ab_sharedgateway5flst5fapp5fcon…_502aa` | Custom connector |
-| `ab_sharedgateway5flst5fapp5fcon…_78f84` | Custom connector |
-| `ab_sharedgateway5flst5fapp5fcon…_e7dd2` | Custom connector |
+| `ab_shared<connector id>…_36424` | `FabricSetting` |
+| `ab_shared<connector id>…_502aa` | `FabricSetting` |
+| `ab_shared<connector id>…_78f84` | `FabricSetting` |
+| `ab_shared<connector id>…_e7dd2` | `FabricSetting` |
 | `ab_sharedoffice365users_a9929` | Office 365 Users |
 
 **If skipped:** flows fail at their first connector action.
+
+> **`<connector id>` is generated when the connector is created and differs per environment.** Match the references by their trailing suffix and by connector, not by the full logical name — and re-read them from the imported solution rather than from this table.
 
 > Create the custom connector connections **after** Step 13, or they will be created against the source tenant.
 

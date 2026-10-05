@@ -596,7 +596,7 @@ Symptom: `403` with `x-ms-public-api-error-code: InsufficientScopes`. That code 
 The grant must be **revoked first**, per user:
 
 ```powershell
-$spId = az ad sp show --id 1c221a2d-9a70-48cc-81b8-e68dfba7afbd --query id -o tsv
+$spId = az ad sp show --id <delegated app client id> --query id -o tsv
 az rest --method get --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants?`$filter=clientId eq '$spId'" `
   --query "value[].{id:id, principalId:principalId, scope:scope}" -o json
 az rest --method delete --url "https://graph.microsoft.com/v1.0/oauth2PermissionGrants/<id>"
@@ -612,8 +612,8 @@ Confirm tenant consent policy allows user consent for these scopes, or arrange a
 
 Three commands beat portal archaeology, which is where an afternoon went on 2026-08-07:
 
-1. Read the grants — `oauth2PermissionGrants` filtered by the connector's SP object ID (`aa7ae000-45ee-4740-98a6-041213afc2b4`). This is what the token will actually contain.
-2. Compare against `Connector/ab_gateway-5flst-5fapp-5fcon_connectionparameters.json` in a fresh export. That file is what drives the authorize request; if the scope is not there, the Security tab never saved.
+1. Read the grants — `oauth2PermissionGrants` filtered by the connector's SP object ID (`<delegated app object id>`). This is what the token will actually contain.
+2. Compare against `Connector/ab_FabricSetting_connectionparameters.json` in a fresh export. That file is what drives the authorize request; if the scope is not there, the Security tab never saved. **The export checked in under `Connector/` predates the rename to `FabricSetting` and still carries the former filename.**
 3. Only then look at the portal.
 
 The Entra portal's *Enterprise applications → Permissions* blade shows the same data, but revoke is a per-row `⋯` that appears on hover and only for Cloud Application Administrator — easy to conclude the option does not exist.

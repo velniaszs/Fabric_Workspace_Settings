@@ -68,7 +68,7 @@ flowchart TB
     subgraph pp["Power Platform — solution WorkspaceSol"]
         DV[("<b>Dataverse</b><br/>crbab_Workspaces<br/>crbab_AllowedConnectionType")]
         FLOWS["<b>Cloud flows</b><br/><i>the broker tier</i>"]
-        CONN["<b>Custom connector</b><br/>ab_gateway-5flst-5fapp-5fcon<br/><i>delegated calls only</i>"]
+        CONN["<b>Custom connector</b><br/>ab_FabricSetting<br/><i>delegated calls only</i>"]
     end
 
     subgraph entra["Microsoft Entra ID"]
@@ -126,7 +126,7 @@ Verified against the solution export on 2026-09-25.
 | Cloud flows | 17 | See §7 |
 | Dataverse tables | 2 | `crbab_Workspaces`, `crbab_AllowedConnectionType` |
 | Canvas app | 1 | `crbab_app5` |
-| Custom connector | 1 | `ab_gateway-5flst-5fapp-5fcon` |
+| Custom connector | 1 | `ab_FabricSetting` |
 | Connection references | 5 | 4 × custom connector, 1 × Office 365 Users |
 | Environment variables | 3 | `ab_TenantId`, `ab_BrokerClientId`, `ab_BrokerObjectId` |
 
@@ -149,12 +149,12 @@ Two identities, deliberately separated, because they answer two different questi
 
 | | **Broker** — `sp_fabric_powerapp` | **Delegated app** — `gateway_lister_app` |
 |---|---|---|
-| Client ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `1c221a2d-9a70-48cc-81b8-e68dfba7afbd` |
+| Client ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | *Per-tenant — read from the app registration* |
 | Object ID | `6f70a764-908f-435b-a930-ffcb375577f3` | — |
 | OAuth flow | App-only, client credentials | Authorization code, runs as the signed-in user |
 | Effective rights | Workspace **Admin** on all managed workspaces | Whatever the calling user already holds |
 | Used for | Every privileged write, and most reads | Calls whose *answer depends on who is asking* |
-| Reached via | `GetFabricToken` child flow | The custom connector, `runtimeSource: invoker` |
+| Reached via | `GetFabricToken` child flow | The custom connector `FabricSetting`, `runtimeSource: invoker` |
 
 > The broker's **object ID** and **client ID** are different identifiers for the same principal and are **not interchangeable**. `AddConnectionRoleAssignment` passes the *object* ID as `principal.id`; supplying the client ID produces a role assignment that grants nothing, and the subsequent connect fails as though the connection had never been shared. Both are published as environment variables precisely to stop this being retyped from memory.
 

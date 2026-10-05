@@ -129,7 +129,7 @@ Supplying the client ID where the object ID is required produces a role assignme
 
 ## 4. The delegated application
 
-`gateway_lister_app` — client ID `1c221a2d-9a70-48cc-81b8-e68dfba7afbd`. Backs the custom connector and runs as the signed-in user.
+`gateway_lister_app` — backs the custom connector `FabricSetting` and runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration; [MIGRATION.md](./MIGRATION.md) collects it per deployment.
 
 ### Required delegated scopes
 

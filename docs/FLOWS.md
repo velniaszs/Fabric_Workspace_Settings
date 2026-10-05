@@ -381,7 +381,7 @@ Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](do
 | | |
 |---|---|
 | Trigger | PowerApp V2, no inputs |
-| Calls | `GET /v1/gateways` via **custom connector** `gateway_lst_app_con` |
+| Calls | `GET /v1/gateways` via **custom connector** `FabricSetting` |
 | Returns | `GatewaysJson` |
 
 The only flow running in **delegated** (per-user) context. Everything else uses the broker SPN.

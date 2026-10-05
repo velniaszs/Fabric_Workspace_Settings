@@ -11,7 +11,7 @@ Related: `../FLOWS.md` §7 (design rationale), `../CUSTOM-CONNECTOR.md` (the con
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to a connection reference rather than a raw connection.
-- The custom connector `gateway_lst_app_con` must already exist with operations `ListConnectionRoleAssignments` and `AddConnectionRoleAssignment`.
+- The custom connector `FabricSetting` must already exist with operations `ListConnectionRoleAssignments` and `AddConnectionRoleAssignment`.
 - The connector connection is **delegated** — it runs as the signed-in user. Sharing must be *Provided by run-only user*.
 - Environment variable `ab_BrokerObjectId` must exist. Current default: `6f70a764-908f-435b-a930-ffcb375577f3`.
 

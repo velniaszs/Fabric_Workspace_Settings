@@ -1,6 +1,10 @@
 # Custom connector — build instructions
 
-How to recreate `gateway_lst_app_con` from scratch in the maker portal. Values verified against the exported artifacts in `Connector/` on 2026-08-17.
+How to recreate **`FabricSetting`** from scratch in the maker portal. Values verified against the exported artifacts in `Connector/` on 2026-08-17.
+
+> **Identifiers are shown as placeholders, not literals.** `<delegated app client id>`, `<tenant id>` and `<connector redirect id>` are per-tenant values — read them from the app registration and the connector's Security tab rather than from this document. [`workspace-settings/MIGRATION.md`](../workspace-settings/MIGRATION.md) is where they are collected per deployment.
+>
+> **The exported artifacts in `Connector/` still carry the connector's former name** in their filenames and contents. They predate the rename to `FabricSetting` and have not been re-exported.
 
 Related: `ARCHITECTURE.md` §5 (what the connector is), `PREREQUISITES.md` (the backing app registration), `OPEN-ISSUES.md` §9 (consent and connection-recreation problems), `FLOWS.md` (which flow calls which operation).
 
@@ -8,7 +12,7 @@ Related: `ARCHITECTURE.md` §5 (what the connector is), `PREREQUISITES.md` (the 
 
 ## 1. Connector-level settings
 
-Schema name `ab_gateway-5flst-5fapp-5fcon`. Create it **inside the solution** so it becomes a Dataverse row rather than a classic connector.
+Schema name `ab_FabricSetting`. Create it **inside the solution** so it becomes a Dataverse row rather than a classic connector.
 
 ### General tab
 
@@ -25,10 +29,10 @@ Base URL stays `/v1`. If it already contains the operation path, the path resolv
 | Field | Value |
 |---|---|
 | Authentication type | Azure Active Directory |
-| Client ID | `1c221a2d-9a70-48cc-81b8-e68dfba7afbd` |
+| Client ID | `<delegated app client id>` |
 | Client secret | from the `gateway_lister_app` registration |
 | Login URL | `https://login.microsoftonline.com` |
-| Tenant ID | `9e929790-272d-4977-a2ab-301443c11ece` |
+| Tenant ID | `<tenant id>` |
 | Resource URL | `https://api.fabric.microsoft.com` |
 | Scope | `Gateway.Read.All Connection.ReadWrite.All offline_access` |
 | Enable on-behalf-of login | `false` |
@@ -37,11 +41,13 @@ The single space-delimited scope key is the connector UI's own encoding, not a m
 
 `security` and `securityDefinitions` are regenerated from this tab — edits made in the Swagger Editor are discarded.
 
-After the first save the portal issues a redirect URL. Paste it into the app registration. Current value:
+After the first save the portal issues a redirect URL. **It is generated, not chosen** — read it off the Security tab and paste it into the app registration. It has the shape:
 
 ```
-https://global.consent.azure-apim.net/redirect/gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac
+https://global.consent.azure-apim.net/redirect/<connector redirect id>
 ```
+
+> **The identifier is minted per connector, so it changes if the connector is recreated** — and a stale redirect URL in the app registration fails at consent, not at save. Re-read it after any recreate.
 
 ---
 

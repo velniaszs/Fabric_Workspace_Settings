@@ -47,7 +47,7 @@ App-only client credentials. Needs a client secret. **No Azure DevOps rights.**
 
 ### A2 — Delegated app registration
 
-`gateway_lister_app` — client ID `1c221a2d-9a70-48cc-81b8-e68dfba7afbd`. Backs the custom connector; runs as the signed-in user.
+`gateway_lister_app` — backs the custom connector `FabricSetting`; runs as the signed-in user. **Its client ID is a per-tenant value and is not recorded here** — read it from the app registration.
 
 Delegated scopes are published by the **Power BI Service** Entra app (`00000009-0000-0000-c000-000000000000`), not by a Fabric app. Add them under **API permissions → Add a permission → Power BI Service → Delegated permissions**.
 

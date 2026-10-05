@@ -66,11 +66,11 @@ A dedicated Git service principal ("SPN-B") was considered and **dropped** — i
 
 Consequence either way: ADO shows the commit as pushed by the connection's identity, not the requester.
 
-### `gateway_lister_app` (`1c221a2d-9a70-48cc-81b8-e68dfba7afbd`)
+### `gateway_lister_app`
 
-Delegated app behind the custom connector. Runs as the signed-in user so gateway listings reflect what that user can actually see.
+Delegated app behind the custom connector `FabricSetting`. Runs as the signed-in user so gateway listings reflect what that user can actually see.
 
-Tenant: `9e929790-272d-4977-a2ab-301443c11ece`
+**Client ID, object ID and tenant are per-tenant values and are not recorded here** — read them from the app registration. They are collected per deployment in [workspace-settings/MIGRATION.md](../workspace-settings/MIGRATION.md).
 
 > Secrets are in the user's OneDrive `internal_power_app.txt`, outside the repo. Rotation is the customer's responsibility. Inside the solution only `GetFabricToken` holds a secret; moving it to a Key Vault-backed environment variable is deferred. See OPEN-ISSUES §2.
 ---
@@ -126,11 +126,11 @@ Read flows may stay on PowerApp V2 with no row at all.
 
 ---
 
-## 5. Custom connector — `gateway_lst_app_con`
+## 5. Custom connector — `FabricSetting`
 
-Schema name `ab_gateway-5flst-5fapp-5fcon` (note the `ab_` prefix, not `crbab_`). Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
+Schema name `ab_FabricSetting` (note the `ab_` prefix, not `crbab_`). Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
 
-Connection reference: `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e4bca`.
+Connection reference: `ab_shared<connector id>_e4bca`.
 
 | Field | Value |
 |---|---|

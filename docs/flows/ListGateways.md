@@ -11,7 +11,7 @@ Related: [../FLOWS.md](../FLOWS.md) (Networking flows → ListGateways), [../CUS
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to a connection reference rather than a raw connection.
-- The custom connector `gateway_lst_app_con` (schema name `ab_gateway-5flst-5fapp-5fcon`) must already exist with the operation `ListGateways`. See `CUSTOM-CONNECTOR.md` §2.1.
+- The custom connector `FabricSetting` (schema name `ab_FabricSetting`) must already exist with the operation `ListGateways`. See `CUSTOM-CONNECTOR.md` §2.1.
 - The connector connection is **delegated** — `runtimeSource` is `"invoker"`, which is what makes the action run as the signed-in user rather than as the flow owner. Sharing must be *Provided by run-only user* (PREREQUISITES E5).
 - The delegated app registration `gateway_lister_app` must publish `Gateway.Read.All` and `offline_access`, and the connector's Security tab must ask for the same space-delimited string. The two are edited separately and neither validates the other (PREREQUISITES A2).
 - **No environment variables are referenced by this flow.** `ab_TenantId`, `ab_BrokerClientId` and `ab_BrokerObjectId` all describe the broker service principal; this flow never touches the broker.
@@ -23,7 +23,7 @@ Related: [../FLOWS.md](../FLOWS.md) (Networking flows → ListGateways), [../CUS
   | `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | no |
 
 - The connector hardcodes `TenantId` in its connection parameters and that value travels with the export. In another tenant every sign-in fails until it is corrected (PREREQUISITES E8).
-- The connection reference in the export is `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_502aa`, bound under the local name `shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_1`.
+- The connection reference in the export is `ab_shared<connector id>_502aa`, bound under the local name `shared_<connector id>_1`.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
 
@@ -142,9 +142,9 @@ Runs after `Increment_variable` on **Succeeded**.
 
 | Field | Value |
 |---|---|
-| `host.connectionName` | `shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac_1` |
+| `host.connectionName` | `shared_<connector id>_1` |
 | `host.operationId` | `ListGateways` |
-| `host.apiId` | `/providers/Microsoft.PowerApps/apis/shared_gateway-5flst-5fapp-5fcon-5fe4e6bd1abcd77fac-5f0c1c5dd7f4e428ac` |
+| `host.apiId` | `/providers/Microsoft.PowerApps/apis/shared_<connector id>` |
 | Parameter `continuationToken` | `@variables('cont')` |
 | `authentication` | `@parameters('$authentication')` |
 
@@ -230,5 +230,5 @@ Output names come back **lowercased** in Power Fx — bind to `gatewaysjson`, no
 ## Known drift from the exported definition
 
 - **`FLOWS.md` claims `ListGateways` is the only flow with a loop.** Under *Gotchas*: "`ListGateways` is the only flow with a loop left." `OPEN-ISSUES.md` §6.2 repeats it: "The underlying warning still stands for `ListGateways`, which keeps its loop." The export has `Do_until` loops in **three** flows — this one, `ListMyConnections-98B3E46A-…` and `AddConnectionRoleAssignment-5C9CFCBF-…`. The Do-until-reports-success warning applies to all three.
-- **The connection reference logical name does not match the documented one.** `ARCHITECTURE.md` §5 gives `ab_sharedgateway5flst5fapp5fcon5fe4e6bd1abcd77fac5f0c1c5dd7f4e428ac_e4bca`, and `OPEN-ISSUES.md` §1.5 says "A single connection reference remains". This flow's export carries `…_502aa`; `ListMyConnections` carries `…_78f84`; `AddConnectionRoleAssignment` carries `…_e7dd2` and `…_36424`. Four distinct references across three flows, and **none** of them is `…_e4bca`. Recreating a connection mints a new reference, so re-check every flow after any connection change rather than assuming one name covers the solution.
+- **The connection reference logical name does not match the documented one.** `ARCHITECTURE.md` §5 gives `ab_shared<connector id>_e4bca`, and `OPEN-ISSUES.md` §1.5 says "A single connection reference remains". This flow's export carries `…_502aa`; `ListMyConnections` carries `…_78f84`; `AddConnectionRoleAssignment` carries `…_e7dd2` and `…_36424`. Four distinct references across three flows, and **none** of them is `…_e4bca`. Recreating a connection mints a new reference, so re-check every flow after any connection change rather than assuming one name covers the solution.
 - **The connector scope string differs between docs.** `ARCHITECTURE.md` §5 lists `Gateway.Read.All offline_access`; `CUSTOM-CONNECTOR.md` §1 and `PREREQUISITES.md` A2 both list `Gateway.Read.All Connection.ReadWrite.All offline_access`. The connector is shared with `ListMyConnections` and `AddConnectionRoleAssignment`, which need `Connection.ReadWrite.All`, so the longer string is the correct one — `ARCHITECTURE.md` predates those operations.

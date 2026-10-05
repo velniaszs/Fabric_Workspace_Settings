@@ -97,7 +97,7 @@ The app has needed delegated calls twice, and both times for the same structural
 
 So delegation is not merely unnecessary here, it is **impossible for the write path** and pointless for the read path. Brokering through SPN-A is the only design that works, and it is the same shape as `GetOutboundRules` / `SetOutboundRules`.
 
-Concretely, this means **no** change to `gateway_lst_app_con`:
+Concretely, this means **no** change to `FabricSetting`:
 
 - no new operations to add
 - no new scope (`Workspace.Read.All` / `Workspace.ReadWrite.All` are **delegated** scopes; they are irrelevant to a client-credentials token)
