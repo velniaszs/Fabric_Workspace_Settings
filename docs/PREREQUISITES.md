@@ -140,7 +140,7 @@ None of this survives solution import. All of it must be redone on every deploym
 
 ### E1 — Import the solution
 
-`WorkspaceSol` (unique name `Cr08ecd`, prefix `crbab`, publisher `Crf5954`).
+`WorkspaceSol` (unique name `Cr08ecd`, component prefix `crbab`, publisher `Crf5954`). **Tables are not in this solution** — they carry the `ubsppcoe` prefix and belong to the platform team's shared solution, which must already exist in the target environment.
 
 ### E2 — Bind connection references
 
@@ -152,9 +152,9 @@ Three, all describing the broker identity:
 
 | Variable | Value in this tenant | Consumed by |
 |---|---|---|
-| `ab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` |
-| `ab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` |
-| `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | `AddConnectionRoleAssignment` (flow 7) |
+| `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` |
+| `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` |
+| `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | `AddConnectionRoleAssignment` (flow 7) |
 
 `BrokerClientId` and `BrokerObjectId` are two different identifiers for the same service principal and are not interchangeable. Entra token requests take the **client (application)** ID; the Fabric roleAssignments API takes the **object** ID of the service principal in the tenant. Getting them the wrong way round fails at runtime, not at import.
 
@@ -181,7 +181,7 @@ The custom connector is solution-aware, so it is a Dataverse row — access need
 
 In order:
 
-1. Create security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType`, and add it to the solution.
+1. Create security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType`, and add it to the solution.
 2. Create an Entra group → Dataverse **group team**.
 3. Assign the role to the team.
 
@@ -204,7 +204,7 @@ Unlike E3, this is not an environment variable and cannot be supplied at import 
 ### F1 — Connection and role assignment
 
 1. The owner creates their own *Azure DevOps – Source Control* connection in the Fabric UI and is **Owner** on it.
-2. The app grants the broker SPN the `User` role on that connection, passing the broker's **object ID**, read from the `ab_BrokerObjectId` environment variable (E3) rather than hardcoded.
+2. The app grants the broker SPN the `User` role on that connection, passing the broker's **object ID**, read from the `crbab_BrokerObjectId` environment variable (E3) rather than hardcoded.
 
 Step 2 runs **delegated as the owner**, because an SPN cannot grant itself a role on a connection. It needs `Connection.ReadWrite.All` on the delegated connector (A2).
 

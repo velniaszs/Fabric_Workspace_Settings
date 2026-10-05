@@ -403,35 +403,35 @@ Seed data, from Fabric's supported-sources table crossed with Azure's private-li
 | `microsoft.apimanagement/service` | `gateway` |
 | `microsoft.web/sites` | `sites` |
 
-> **`microsoft.network/privatelinkservices` is deliberately absent.** Azure defines its sub-resource as *empty*, and Fabric additionally requires `targetFQDNs` for it — which the app does not send in v1 (§6). Listing it would offer owners a choice that cannot succeed, and it would be the only row with a blank `crbab_subresource`, forcing the flow to build its request body conditionally instead of from a literal. Excluded on both counts. Add it if and when `targetFQDNs` is implemented.
+> **`microsoft.network/privatelinkservices` is deliberately absent.** Azure defines its sub-resource as *empty*, and Fabric additionally requires `targetFQDNs` for it — which the app does not send in v1 (§6). Listing it would offer owners a choice that cannot succeed, and it would be the only row with a blank `ubsppcoe_subresource`, forcing the flow to build its request body conditionally instead of from a literal. Excluded on both counts. Add it if and when `targetFQDNs` is implemented.
 
 > **Two caveats on this data.** Azure defines more values than Fabric documents — storage also has `web` and a `_secondary` variant of every entry, and Cosmos DB also has `Cassandra`, `Gremlin`, `Table`, `Analytical` and `SqlDedicated`. They are omitted above because Fabric does not list them as supported sources. Second, `microsoft.openenergyplatform/energyservices` (Azure Data Manager for Energy) is in Fabric's supported list but **not** in Azure's published group-ID table — its sub-resource is unverified. Both are reasons to keep the free-text fallback for unrecognised types rather than hard-failing.
 
 #### Where it lives
 
-A flat Dataverse table, **`crbab_PrivateLinkTarget`**, one row per **(resource type, sub-resource)** pair — this resolves P3. Seed data is in [data/PrivateLinkTargets.csv](data/PrivateLinkTargets.csv), 28 rows, matching the tables above.
+A flat Dataverse table, **`ubsppcoe_PrivateLinkTarget`**, one row per **(resource type, sub-resource)** pair — this resolves P3. Seed data is in [data/PrivateLinkTargets.csv](data/PrivateLinkTargets.csv), 28 rows, matching the tables above.
 
 | Column | Type | Purpose |
 |---|---|---|
-| `crbab_resourcetype` | Text (100) | Lookup key, lowercased — `microsoft.storage/storageaccounts` |
-| `crbab_subresource` | Text (100) | The value sent as `targetSubresourceType`. **Case-sensitive** — `sqlServer`, `SqlOnDemand`, `MongoDB`. Never blank |
-| `crbab_displayname` | Text (100) | Primary name column. What the owner reads — *"Data Lake Storage Gen2 (dfs)"* rather than `dfs` |
-| `crbab_sortorder` | Whole number | So the common choice sits at the top of a dropdown |
+| `ubsppcoe_resourcetype` | Text (100) | Lookup key, lowercased — `microsoft.storage/storageaccounts` |
+| `ubsppcoe_subresource` | Text (100) | The value sent as `targetSubresourceType`. **Case-sensitive** — `sqlServer`, `SqlOnDemand`, `MongoDB`. Never blank |
+| `ubsppcoe_displayname` | Text (100) | Primary name column. What the owner reads — *"Data Lake Storage Gen2 (dfs)"* rather than `dfs` |
+| `ubsppcoe_sortorder` | Whole number | So the common choice sits at the top of a dropdown |
 
-**`crbab_subresource` is never blank**, and that is load-bearing: it means the app always sends a non-empty `targetSubresourceType`, so `CreatePrivateEndpoint` can use a literal JSON body rather than composing one conditionally. A row with an empty sub-resource would send `"targetSubresourceType": ""`, which is not the same as omitting the property.
+**`ubsppcoe_subresource` is never blank**, and that is load-bearing: it means the app always sends a non-empty `targetSubresourceType`, so `CreatePrivateEndpoint` can use a literal JSON body rather than composing one conditionally. A row with an empty sub-resource would send `"targetSubresourceType": ""`, which is not the same as omitting the property.
 
 Create it in the maker portal, **never by editing `customizations.xml`** (ARCHITECTURE §4), then import the CSV. It follows the existing seed-data convention alongside `data/AllowedConnectionType.xlsx`; CSV rather than XLSX because it diffs in review.
 
-Add it to the `Fabric Workspace Owner` security role with **Read**, alongside `crbab_Workspaces` and `crbab_AllowedConnectionType` (ARCHITECTURE §6). Owners only ever read it.
+Add it to the `Fabric Workspace Owner` security role with **Read**, alongside `ubsppcoe_Workspace` and `ubsppcoe_AllowedConnectionType` (ARCHITECTURE §6). Owners only ever read it.
 
 App behaviour, given the type parsed out of the resource ID:
 
 ```
-Filter(PrivateLinkTargets, crbab_resourcetype = parsedType)
+Filter(PrivateLinkTargets, ubsppcoe_resourcetype = parsedType)
 ```
 
 - **1 row** → auto-select it, show read-only. No decision to make.
-- **2+ rows** → dropdown on `crbab_displayname`, **no default**, Create disabled until chosen.
+- **2+ rows** → dropdown on `ubsppcoe_displayname`, **no default**, Create disabled until chosen.
 - **0 rows** → free text, and let Fabric have it.
 
 Flat beats parent/child here: the dropdown is a filter on one table, and adding a newly supported source is one row, addable by anyone with Dataverse access and no app republish. That matters because Fabric's supported-source list grows — and because the two gaps noted above (`web`/`_secondary` variants, and Azure Data Manager for Energy) get closed by adding rows rather than by shipping a new app version.
@@ -520,13 +520,13 @@ Apply the load-flash lesson from [APP-OUTBOUND-TAB.md](docs/APP-OUTBOUND-TAB.md)
 
 | # | Question | Why it matters |
 |---|---|---|
-| P1 | **Authorization.** These are writes, and the app still has no `crbab_Workspaces` ownership check (OPEN-ISSUES §10.3, F5.9). A forged `workspaceId` on `DeletePrivateEndpoint` deletes a real endpoint in someone else's workspace | The Git flows deferred this on the argument that the app is limited to the build team. Deleting a private endpoint breaks a live data path — **this feature should not ship without F5.9** |
-| P2 | Do we **allow-list** target resource IDs (subscription prefix, or a `crbab_AllowedPrivateEndpointTarget` table mirroring `crbab_AllowedConnectionType`)? | §5.1 — approval already gates real access, so this is governance, not security. Customer's call |
+| P1 | **Authorization.** These are writes, and the app still has no `ubsppcoe_Workspace` ownership check (OPEN-ISSUES §10.3, F5.9). A forged `workspaceId` on `DeletePrivateEndpoint` deletes a real endpoint in someone else's workspace | The Git flows deferred this on the argument that the app is limited to the build team. Deleting a private endpoint breaks a live data path — **this feature should not ship without F5.9** |
+| P2 | Do we **allow-list** target resource IDs (subscription prefix, or a `ubsppcoe_AllowedPrivateEndpointTarget` table mirroring `ubsppcoe_AllowedConnectionType`)? | §5.1 — approval already gates real access, so this is governance, not security. Customer's call |
 | P3 | ~~Where does the sub-resource list live?~~ | ✅ **Decided 2026-09-02.** A flat Dataverse table, one row per (resource type, sub-resource) pair, seeded from §5.6. No Fabric API exists; the Azure ARM one needs RBAC we deliberately do not hold |
 | P4 | Is **delete** exposed at all in v1, or is the app read + create only? | Halves the risk surface and drops one flow. Deleting is rare and the Fabric UI can do it |
 | P5 | How much of the estate is on **F64+/Trial**? | If most workspaces don't qualify, the tab is mostly a "not available on this capacity" message |
 | P6 | Do we surface **`targetFQDNs`** (Private Link Service / API Management)? | REST-only capability — the app could beat the Fabric UI here, but it adds a repeating field and validation for a rare case |
-| P7 | Audit rows for create/delete | Same gap as F5.10. If `crbab_GitAuditLog` is generalised, these belong in it |
+| P7 | Audit rows for create/delete | Same gap as F5.10. If `ubsppcoe_GitAuditLog` is generalised, these belong in it |
 | P8 | ~~Does Fabric reject duplicates itself?~~ | ✅ **Answered 2026-09-02.** Yes, both: `DuplicatePrivateEndpointName` for the name, `DuplicateTargetPrivateLinkResourceId` for the (resource ID + sub-resource) pair. Flow carries no duplicate logic. §5.5 |
 | P9 | ~~Is a mismatched-sub-resource failure visible?~~ | ✅ **Answered 2026-09-02.** The row is created and shows **Activation = `Failed`**. No further handling — delete and recreate. The combination list in §5.6 is the real fix · §5.2 |
 

@@ -586,7 +586,7 @@ Solution toolbar → **Publish all customizations**. Nothing is live to the conn
 
 The flow docs reference seven of these. **They do not exist until you create them**, and a flow referencing a missing one fails at runtime with:
 
-> *Unable to process template language expressions in action `Initialize_nextUri` … The workflow parameter `policyholderworkspaceid ab_policyholderworkspaceid` is not found.*
+> *Unable to process template language expressions in action `Initialize_nextUri` … The workflow parameter `policyholderworkspaceid ubsppcoe_policyholderworkspaceid` is not found.*
 
 For each, in your solution: **+ New** → **More** → **Environment variable**.
 
@@ -640,7 +640,7 @@ For each, in your solution: **+ New** → **More** → **Environment variable**.
 >
 > **Decision 2026-09-08: the policy environment variables use the `ubsppcoe_` prefix**, like everything else this project creates. The flow docs have been updated to match.
 >
-> The `ab_` prefix belongs to the **workspace-settings** solution — `ab_TenantId`, `ab_BrokerClientId` and the rest. Those are unrelated to policy rules and must not be reused here. If you find an `ab_Policy…` reference anywhere, it is a leftover from an earlier draft and should be corrected.
+> The `crbab_` prefix belongs to the **workspace-settings** solution — `crbab_TenantId`, `crbab_BrokerClientId` and the rest. Those are unrelated to policy rules and must not be reused here. If you find a `crbab_Policy…` reference anywhere, it is a leftover from an earlier draft and should be corrected.
 
 #### Referencing one in a flow
 

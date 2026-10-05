@@ -18,9 +18,9 @@ Related: [../../FLOWS.md](../../FLOWS.md) §4 (design rationale), [../../PREREQU
 
   | Variable | Default in the solution | Used by |
   |---|---|---|
-  | `ab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `ab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
+  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
+  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
+  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
 
   The broker **client secret** is not an environment variable — it is an `Initialize variable` inside `GetFabricToken`, scrubbed on export and re-entered per environment (PREREQUISITES E4). Never commit it.
 - The broker SPN must be a member of the Fabric API security group and the tenant setting must be on, or every call here returns a bare `401`.

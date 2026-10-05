@@ -14,14 +14,14 @@ Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (desig
 - **No connector connection is needed.** Built-in actions only: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` must end up `{}`.
 - The child flow **`GetFabricToken`** must already exist: `50895fca-088f-f111-8076-7ced8d76bf1b`.
 - Authentication is **service principal** (`sp_fabric_powerapp`). The create API requires **workspace Admin**, which the owners running the app do not have and will not be granted — a delegated call here would `403` for every user. Brokering is not a preference, it is the only design that works. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.
-- Environment variables are **not referenced directly by this flow** — the child flow consumes `ab_TenantId` and `ab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
+- Environment variables are **not referenced directly by this flow** — the child flow consumes `crbab_TenantId` and `crbab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
 - **No Azure permission is required to run this**, by anyone. The endpoint is provisioned in a Microsoft-managed VNet and what reaches the customer's resource is an inert `Pending` request. The Azure rights sit entirely with the *approver* — [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.2.
 
 > ### This flow must not ship without an authorization check
 >
 > It takes `workspaceId` at face value. Anyone who can reach the trigger URL can create a private endpoint in **any** workspace the broker administers, naming any Azure resource they like, with a justification message that will be read by a stranger in another organisation's Azure portal.
 >
-> The Git flows deferred the `crbab_Workspaces` ownership check (OPEN-ISSUES §10.3, F5.9) on the argument that the app is limited to the build team. That argument does not survive first contact with 4000 owners here, because the side effect of this flow leaves Fabric entirely. **Land F5.9 before this flow is shared**, and add the audit row (F5.10) at the same time — an outbound connection request with no record of who asked for it is the kind of thing that gets found during an audit rather than before one.
+> The Git flows deferred the `ubsppcoe_Workspace` ownership check (OPEN-ISSUES §10.3, F5.9) on the argument that the app is limited to the build team. That argument does not survive first contact with 4000 owners here, because the side effect of this flow leaves Fabric entirely. **Land F5.9 before this flow is shared**, and add the audit row (F5.10) at the same time — an outbound connection request with no record of who asked for it is the kind of thing that gets found during an audit rather than before one.
 
 ---
 
@@ -165,7 +165,7 @@ Paste the JSON, then replace each `@{...}` by clicking that spot and inserting t
 
 `take(…, 140)` enforces the API's limit on `requestMessage`. `substring(x, 0, 140)` throws when the string is shorter than 140; `take` does not, which is why it is used here. `name` is capped at 64 characters by the API — validate that in the app rather than truncating silently, because a truncated name is a name the owner did not choose.
 
-> **`targetSubresourceType` is never blank**, so this literal body is always valid. Every row in `crbab_PrivateLinkTarget` carries a non-empty sub-resource, and the one type whose sub-resource is empty — `Microsoft.Network/privateLinkServices` — is deliberately excluded from the picker ([../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §5.6). If that ever changes, the body must be built in a `Compose` with an `if()` that drops the property when blank, because `"targetSubresourceType": ""` is not the same as omitting it.
+> **`targetSubresourceType` is never blank**, so this literal body is always valid. Every row in `ubsppcoe_PrivateLinkTarget` carries a non-empty sub-resource, and the one type whose sub-resource is empty — `Microsoft.Network/privateLinkServices` — is deliberately excluded from the picker ([../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §5.6). If that ever changes, the body must be built in a `Compose` with an `if()` that drops the property when blank, because `"targetSubresourceType": ""` is not the same as omitting it.
 
 On the retry policy: a `POST` retried after a response was lost in transit will attempt a second create. Whether that produces a **second endpoint** or a rejection depends on whether Fabric enforces uniqueness, which is what test 1 below settles. A flow-side duplicate check would not have helped either way — the retry re-runs the HTTP action, not the actions before it.
 

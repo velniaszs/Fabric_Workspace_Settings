@@ -55,14 +55,14 @@ The requirements the solution is designed to meet. Each is traced to its control
 | **S1** | No end user is granted Fabric Workspace Admin | Brokered architecture; owners remain Contributors | ✅ Met |
 | **S2** | The privileged identity is never reachable directly by a user | The broker token is acquired inside a child flow and never returned to the canvas app | ✅ Met |
 | **S3** | The privileged identity is scoped as narrowly as the function allows | Workspace-scoped roles only; no tenant-scoped permission; no Azure RBAC; no Azure DevOps rights | ✅ Met |
-| **S4** | A user may only act on workspaces they own | Dataverse ownership check against `crbab_Workspaces`, fail closed | ❌ **Not implemented** — §10.1 |
+| **S4** | A user may only act on workspaces they own | Dataverse ownership check against `ubsppcoe_Workspace`, fail closed | ❌ **Not implemented** — §10.1 |
 | **S5** | Write operations authorize on an identity the caller cannot forge | Audit-row pattern using the Dataverse `createdby` stamp | ❌ **Not implemented** — §10.1 |
 | **S6** | The solution never holds a user's Git credentials | Owners create their own connections; the broker is granted a role on them and references them by ID | ✅ Met |
 | **S7** | Per-user data is returned per user, never through the privileged identity | Delegated calls through the custom connector, `runtimeSource: invoker` | ✅ Met |
 | **S8** | The solution cannot grant itself rights a user does not already have | `AddConnectionRoleAssignment` is delegated; the Fabric API only permits grants on connections the caller controls | ✅ Met |
 | **S9** | Secrets are not committed to source control | Repository verified clean; exports scrub the secret to a blank | ✅ Met |
 | **S10** | Secrets are held in a managed secret store | Key Vault-backed environment variable | ❌ **Not implemented** — §10.2 |
-| **S11** | Privileged actions are attributable to a named user | `crbab_GitAuditLog` row recording actor, action, target and outcome | ❌ **Not implemented** — §10.3 |
+| **S11** | Privileged actions are attributable to a named user | `ubsppcoe_GitAuditLog` row recording actor, action, target and outcome | ❌ **Not implemented** — §10.3 |
 | **S12** | Concurrent edits cannot silently overwrite one another | ETag optimistic concurrency on outbound rules | ✅ Met |
 | **S13** | Fabric state is not duplicated into a second store | No caching of Fabric state in Dataverse; live GETs only | ✅ Met |
 
@@ -158,7 +158,7 @@ Residual consideration to communicate to owners: Azure DevOps records commits as
 
 ### The authorization decision point is Dataverse
 
-Fabric cannot answer *"does this user own this workspace?"* — owners hold no Fabric role that says so. The ownership record exists only in `crbab_Workspaces`, and every flow acting on a workspace must confirm the caller appears there as primary or secondary owner.
+Fabric cannot answer *"does this user own this workspace?"* — owners hold no Fabric role that says so. The ownership record exists only in `ubsppcoe_Workspace`, and every flow acting on a workspace must confirm the caller appears there as primary or secondary owner.
 
 **The check must fail closed.** Absence of a row is a denial, not a pass-through.
 
@@ -174,7 +174,7 @@ Fabric cannot answer *"does this user own this workspace?"* — owners hold no F
 1. The canvas app writes a request row **as the signed-in user** — Dataverse stamps `createdby`.
 2. The app calls the flow passing **only that row's ID**.
 3. The flow reads the row. `_createdby_value` cannot be forged, and neither can the parameters sitting beside it in the same row.
-4. The flow authorizes `createdby` against `crbab_Workspaces`.
+4. The flow authorizes `createdby` against `ubsppcoe_Workspace`.
 5. The flow acts as the broker.
 6. The flow writes the outcome back to the row and returns it.
 
@@ -225,7 +225,7 @@ The current arrangement has three drawbacks:
 2. Rotation requires a flow edit in every environment, rather than a Key Vault update.
 3. There is no access log for reads of the secret.
 
-The three existing environment variables (`ab_TenantId`, `ab_BrokerClientId`, `ab_BrokerObjectId`) are all plain string variables with `secretstore` disabled — the pattern for a secret variable is not yet established in this solution.
+The three existing environment variables (`crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId`) are all plain string variables with `secretstore` disabled — the pattern for a secret variable is not yet established in this solution.
 
 **Status: deferred, not resolved.** See §10.2.
 
@@ -256,7 +256,7 @@ Rotation of both client secrets is the **customer's responsibility**. The proced
 
 ### Required control — S11
 
-`crbab_GitAuditLog` must record, for every brokered write:
+`ubsppcoe_GitAuditLog` must record, for every brokered write:
 
 | Field | Purpose |
 |---|---|
@@ -281,8 +281,8 @@ Retention policy for the audit table has not been set and should be agreed with 
 
 | Data | Classification | Where it rests | Notes |
 |---|---|---|---|
-| Workspace ID, name | Low | Dataverse `crbab_Workspaces` | Populated externally |
-| Owner identity (name, email) | **Personal data** | Dataverse `crbab_Workspaces` | Used solely for the authorization decision |
+| Workspace ID, name | Low | Dataverse `ubsppcoe_Workspace` | Populated externally |
+| Owner identity (name, email) | **Personal data** | Dataverse `ubsppcoe_Workspace` | Used solely for the authorization decision |
 | Connection IDs and display names | Low | Transient — never persisted | Read live from Fabric, per user |
 | **Git credentials** | **High** | **Never in the solution** | Held in the owner's Fabric connection only |
 | Azure resource IDs for private endpoints | Low–Medium | Transient | May reveal internal resource naming |
@@ -319,14 +319,14 @@ These three items are the gate. **The application must not be shared beyond the 
 
 ### 10.1 🔴 Ownership authorization is not implemented
 
-**Requirement:** S4, S5 · **Threat:** T1, T2 · **Current state:** No flow performs a `crbab_Workspaces` lookup.
+**Requirement:** S4, S5 · **Threat:** T1, T2 · **Current state:** No flow performs a `ubsppcoe_Workspace` lookup.
 
 Every write flow acts on whatever `workspaceId` it receives. Any user who can reach a flow URL can act on any workspace in the managed estate.
 
 **To close:**
-1. Create `crbab_GitAuditLog` and add it to the solution.
+1. Create `ubsppcoe_GitAuditLog` and add it to the solution.
 2. Change every write flow to accept a **row ID only**, and read its parameters from that row.
-3. Authorize `_createdby_value` against `crbab_primary_owner` / `crbab_secondary_owner` on `crbab_Workspaces`.
+3. Authorize `_createdby_value` against `ubsppcoe_primary_owner` / `ubsppcoe_secondary_owner` on `ubsppcoe_Workspace`.
 4. **Fail closed** — no matching row means denial, with a message that does not disclose whether the workspace exists.
 5. Apply to `ConnectWorkspaceToGit`, `DisconnectWorkspaceFromGit`, `SyncWorkspaceWithGit`, all three `Set*` networking flows, and both private-endpoint write flows when built.
 
@@ -342,11 +342,11 @@ The secret sits in an `Initialize_variable` action inside `GetFabricToken`, visi
 
 ### 10.3 🔴 No audit record of brokered actions
 
-**Requirement:** S11 · **Threat:** T9 · **Current state:** `crbab_GitAuditLog` does not exist.
+**Requirement:** S11 · **Threat:** T9 · **Current state:** `ubsppcoe_GitAuditLog` does not exist.
 
 No record exists of who connected, disconnected, synced, or changed a workspace's outbound posture. Fabric attributes everything to the broker.
 
-**To close:** implement `crbab_GitAuditLog` per §7. Build it together with 10.1 — the same table serves both.
+**To close:** implement `ubsppcoe_GitAuditLog` per §7. Build it together with 10.1 — the same table serves both.
 
 ---
 
@@ -383,7 +383,7 @@ Use before granting the solution access to a production tenant.
 ### Authorization
 
 - [ ] Every write flow reads its parameters from a Dataverse row, not from trigger parameters
-- [ ] Every write flow authorizes `createdby` against `crbab_Workspaces`
+- [ ] Every write flow authorizes `createdby` against `ubsppcoe_Workspace`
 - [ ] Denial is **fail-closed** and does not disclose workspace existence
 - [ ] `AddConnectionRoleAssignment` remains delegated
 
@@ -396,7 +396,7 @@ Use before granting the solution access to a production tenant.
 
 ### Audit
 
-- [ ] `crbab_GitAuditLog` exists and is written by every brokered write
+- [ ] `ubsppcoe_GitAuditLog` exists and is written by every brokered write
 - [ ] The actor is captured from `createdby`, never from a parameter
 - [ ] A retention policy has been agreed with the compliance function
 

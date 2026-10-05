@@ -58,7 +58,7 @@ flowchart TB
     end
 
     subgraph pp["Power Platform — solution WorkspaceSol"]
-        DV[("Dataverse<br/>crbab_Workspaces<br/>crbab_PrivateLinkTarget<br/>crbab_AllowedConnectionType")]
+        DV[("Dataverse<br/>ubsppcoe_Workspace<br/>ubsppcoe_PrivateLinkTarget<br/>ubsppcoe_AllowedConnectionType")]
         FLOWS["Cloud flows<br/><i>the broker tier</i>"]
         CONN["Custom connector<br/><b>FabricSetting</b><br/><i>delegated only</i>"]
     end
@@ -129,7 +129,7 @@ The app never holds Git credentials. Owners create their own *Azure DevOps – S
 
 ## 4. Authorization boundary
 
-Fabric cannot answer the ownership question. Owners hold no Fabric role, so `roleAssignments` on a workspace returns nothing useful about them. The ownership record therefore lives in Dataverse, in **`crbab_Workspaces`**, and every flow that acts on a workspace must confirm the caller appears there as primary or secondary owner — and **fail closed** if not.
+Fabric cannot answer the ownership question. Owners hold no Fabric role, so `roleAssignments` on a workspace returns nothing useful about them. The ownership record therefore lives in Dataverse, in **`ubsppcoe_Workspace`**, and every flow that acts on a workspace must confirm the caller appears there as primary or secondary owner — and **fail closed** if not.
 
 ### Why writes cannot trust their own trigger
 
@@ -148,7 +148,7 @@ sequenceDiagram
     Note over D: Dataverse stamps createdby — unforgeable
     U->>F: 2. Run(rowId) — nothing else
     F->>D: 3. Read the row
-    F->>D: 4. Authorize createdby against crbab_Workspaces
+    F->>D: 4. Authorize createdby against ubsppcoe_Workspace
     F->>X: 5. Act as SPN-A
     F->>D: 6. Write the outcome back
     F-->>U: 7. Respond
@@ -237,7 +237,7 @@ The sub-resource is a property of the resource *type*, not the resource, so the 
 ```mermaid
 flowchart LR
     A["Resource ID pasted"] --> B["Parse /providers/{ns}/{type}/<br/>lowercased"]
-    B --> C["Filter crbab_PrivateLinkTarget"]
+    B --> C["Filter ubsppcoe_PrivateLinkTarget"]
     C -->|1 row| D["Auto-select, read-only<br/><i>no question asked</i>"]
     C -->|2+ rows| E["Dropdown, <b>no default</b>"]
     C -->|0 rows| F["Free text<br/><i>let Fabric decide</i>"]
@@ -301,17 +301,17 @@ All flows live in `Workflows/` as unpacked solution JSON, edited in the maker po
 
 | Table | Role |
 |---|---|
-| `crbab_Workspaces` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally |
-| `crbab_AllowedConnectionType` | Reference data for the outbound tab |
-| `crbab_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from `data/PrivateLinkTargets.csv` |
-| `crbab_GitAuditLog` | Who did what, when, and with what outcome — and the row that carries unforgeable identity into a write flow |
+| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally |
+| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab |
+| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from `data/PrivateLinkTargets.csv` |
+| `ubsppcoe_GitAuditLog` | Who did what, when, and with what outcome — and the row that carries unforgeable identity into a write flow |
 
 Two rules hold across all of them:
 
 - **Create tables in the maker portal, never by editing `customizations.xml`.**
-- **Do not cache Fabric state in Dataverse.** `crbab_GitConnection` and `crbab_WorkspaceGitMapping` were designed and then dropped for exactly this reason: Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
+- **Do not cache Fabric state in Dataverse.** `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping` were designed and then dropped for exactly this reason: Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
 
-`crbab_PrivateLinkTarget` is flat rather than parent/child on purpose. The picker is a filter on one table, and supporting a newly added Azure source is **one row** — addable by anyone with Dataverse access, with no app republish. That matters because Fabric's supported-source list grows faster than a shipped list would be maintained.
+`ubsppcoe_PrivateLinkTarget` is flat rather than parent/child on purpose. The picker is a filter on one table, and supporting a newly added Azure source is **one row** — addable by anyone with Dataverse access, with no app republish. That matters because Fabric's supported-source list grows faster than a shipped list would be maintained.
 
 There is also no API that can replace it. Fabric publishes nothing; Azure's `privateLinkResources` call is authoritative but requires Reader RBAC on every target resource — which would mean onboarding SPN-A into every subscription any owner might target, and would destroy the single best property of the feature.
 
@@ -325,18 +325,18 @@ Four parties hold rights here, and keeping them separate is the whole security a
 
 | Needs | Where | Why |
 |---|---|---|
-| Dataverse security role **`Fabric Workspace Owner`** | Power Platform | Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType`, `crbab_PrivateLinkTarget` |
+| Dataverse security role **`Fabric Workspace Owner`** | Power Platform | Read on `Connector`, `Connection Reference`, `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType`, `ubsppcoe_PrivateLinkTarget` |
 | Membership of the Entra group behind the **group team** | Entra → Dataverse | How the role is assigned |
 | Share on the **canvas app** and the **connector** | Power Platform | Both, separately |
 | **Run-only** access to each flow the app calls | Power Automate | Per flow, per environment |
-| A row in `crbab_Workspaces` naming them primary or secondary owner | Dataverse | The authorization boundary. Without it the app shows them nothing |
+| A row in `ubsppcoe_Workspace` naming them primary or secondary owner | Dataverse | The authorization boundary. Without it the app shows them nothing |
 | **Contributor** on the Fabric workspace | Fabric | Not for the app — for everything the app deliberately does *not* broker |
 | Azure DevOps access to their own repo | ADO | They create their own connection; the app never holds Git credentials |
 | Consent to the delegated scopes, on first connection | Entra | `Gateway.Read.All` and `Connection.ReadWrite.All` are **user-consentable** — no admin needed |
 
 **What the owner conspicuously does not need: Fabric Workspace Admin, any Entra role, any Azure RBAC, and any credential belonging to the broker.** That is the point of the whole design — the app exists so that these five capabilities can be delivered *without* granting Admin to 4000 people.
 
-Two failure modes here are quiet rather than loud. A missing role on the connector surfaces as a `prvReadConnector` error, which reads like a sharing problem and is not one. A missing read privilege on `crbab_PrivateLinkTarget` surfaces as an **empty dropdown** with no error at all — so check the role before you check the formula.
+Two failure modes here are quiet rather than loud. A missing role on the connector surfaces as a `prvReadConnector` error, which reads like a sharing problem and is not one. A missing read privilege on `ubsppcoe_PrivateLinkTarget` surfaces as an **empty dropdown** with no error at all — so check the role before you check the formula.
 
 ### 8.2 SPN-A — the broker
 
@@ -384,7 +384,7 @@ The connector carries its own copy of the scope list on its Security tab. The tw
 
 Managed private endpoints need **no Azure permissions for the app, the broker, or the owner**. The Azure-side rights sit entirely with the **approver** — the data source admin who accepts or rejects the connection request in the Azure portal.
 
-This is the single best property of that feature and it is worth protecting. The obvious enhancement — calling Azure's `privateLinkResources` API to get authoritative sub-resource lists instead of maintaining `crbab_PrivateLinkTarget` — would require SPN-A to hold Reader in every subscription any owner might ever target. That means Azure onboarding across the whole estate, traded away to avoid maintaining a 28-row table. It was rejected for that reason.
+This is the single best property of that feature and it is worth protecting. The obvious enhancement — calling Azure's `privateLinkResources` API to get authoritative sub-resource lists instead of maintaining `ubsppcoe_PrivateLinkTarget` — would require SPN-A to hold Reader in every subscription any owner might ever target. That means Azure onboarding across the whole estate, traded away to avoid maintaining a 28-row table. It was rejected for that reason.
 
 ### 8.5 Setting it up — administrative roles
 
@@ -429,18 +429,18 @@ The ordering is not cosmetic: several steps fail silently if taken out of sequen
 
 8. **Import the solution** `WorkspaceSol`.
 9. **Bind the connection references** to real connections in the target environment. A reference is only a pointer; the connection holds the credentials and is environment-specific.
-10. **Supply the three environment variables** — `ab_TenantId`, `ab_BrokerClientId` and `ab_BrokerObjectId` — at import. The export carries this tenant's values as *defaults*, not bindings, so an import that skips the prompt silently keeps pointing at the source tenant.
+10. **Supply the three environment variables** — `crbab_TenantId`, `crbab_BrokerClientId` and `crbab_BrokerObjectId` — at import. The export carries this tenant's values as *defaults*, not bindings, so an import that skips the prompt silently keeps pointing at the source tenant.
 11. **Re-enter the client secret** in `GetFabricToken`. Exports scrub it to a blank, and nothing runs until it is replaced. This is the only flow that holds a secret; every other one calls it as a child.
 12. **Correct the connector's tenant ID**, re-enter the delegated app's secret, update the connector, then **delete and recreate the connection**. Unlike step 10 this value is hardcoded in the connector's connection parameters and *is* carried by the export — imported elsewhere it points back at the source tenant and every sign-in fails.
-13. **Create the `crbab_PrivateLinkTarget` table** in the maker portal and import the 28 seed rows from `data/PrivateLinkTargets.csv`. Never by editing `customizations.xml`. Check the column mapping rather than trusting auto-match — the CSV headers are schema names and the mapping screen shows display names, and an unmapped sub-resource column imports 28 rows of blanks that the create panel then sends to Fabric on every attempt.
-14. **Create the security role `Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType` and `crbab_PrivateLinkTarget`, and add the role to the solution. A solution-aware connector is a Dataverse row, so access to it needs **table privileges**, not classic connector sharing.
+13. **Create the `ubsppcoe_PrivateLinkTarget` table** in the maker portal and import the 28 seed rows from `data/PrivateLinkTargets.csv`. Never by editing `customizations.xml`. Check the column mapping rather than trusting auto-match — the CSV headers are schema names and the mapping screen shows display names, and an unmapped sub-resource column imports 28 rows of blanks that the create panel then sends to Fabric on every attempt.
+14. **Create the security role `Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType` and `ubsppcoe_PrivateLinkTarget`, and add the role to the solution. A solution-aware connector is a Dataverse row, so access to it needs **table privileges**, not classic connector sharing.
 15. **Create the Dataverse group team** from an Entra group and assign the role to the team.
 16. **Share the connector and the canvas app** with that group. Both, separately — one without the other leaves users with an app they cannot use.
 17. **Set run-only users on every flow the app calls** — *Provided by run-only user* for the delegated connector, *Use this connection* for SPN-A's HTTP actions. **These settings do not survive solution import**, so this step repeats on every single deployment.
 
 ### Per workspace — recurring
 
-18. **A row in `crbab_Workspaces`** naming the primary and secondary owner. This is the authorization boundary; without a row the app shows that owner nothing.
+18. **A row in `ubsppcoe_Workspace`** naming the primary and secondary owner. This is the authorization boundary; without a row the app shows that owner nothing.
 19. **The owner creates their own ADO connection** in Fabric. The app grants the broker `User` on it at runtime, on the final wizard step.
 20. **The ADO repo, branch and target folder must already exist.** Connect fails with `GitProviderResourceNotFound` if the folder is not already in the branch — the Fabric portal offers to create it, the REST API has no equivalent, and folder names are case-sensitive. State this on the wizard's folder field.
 

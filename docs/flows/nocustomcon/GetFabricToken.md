@@ -10,17 +10,17 @@ Related: [../../FLOWS.md](../../FLOWS.md) §1 (design rationale), [../../PREREQU
 
 ## 0. Before you start
 
-- Create the flow **inside the solution**, so the environment variables resolve as `parameters('… (ab_…)')` rather than literals.
+- Create the flow **inside the solution**, so the environment variables resolve as `parameters('… (crbab_…)')` rather than literals.
 - **No connector connection is needed.** The flow uses only built-in actions: `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` in the export is `{}`.
 - Authentication is **service principal** (client credentials), not delegated. This flow *is* the place where that grant happens.
 - Two environment variables are referenced directly:
 
   | Variable | Parameter name in the definition | Default in the solution |
   |---|---|---|
-  | `ab_TenantId` | `TenantId (ab_TenantId)` | `9e929790-272d-4977-a2ab-301443c11ece` |
-  | `ab_BrokerClientId` | `BrokerClientId (ab_BrokerClientId)` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` |
+  | `crbab_TenantId` | `TenantId (crbab_TenantId)` | `9e929790-272d-4977-a2ab-301443c11ece` |
+  | `crbab_BrokerClientId` | `BrokerClientId (crbab_BrokerClientId)` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` |
 
-  `ab_BrokerObjectId` is **not** used here — that is the directory object ID and belongs to `AddConnectionRoleAssignment`. The client (application) ID is what Entra wants for a token request; the two are not interchangeable and swapping them fails at runtime, not at import.
+  `crbab_BrokerObjectId` is **not** used here — that is the directory object ID and belongs to `AddConnectionRoleAssignment`. The client (application) ID is what Entra wants for a token request; the two are not interchangeable and swapping them fails at runtime, not at import.
 
 - The **client secret** is an `Initialize variable` inside this flow. The solution export scrubs it to a single space, so it must be re-entered by hand in every environment (PREREQUISITES E4). Nothing in the solution runs until it is. Never commit it.
 - PREREQUISITES A3 + B1 must be in place — the broker SP in `fabric_power_app_grp`, and *Service principals can call Fabric public APIs* enabled for that group. Without them this flow still returns a token happily; every downstream Fabric call then returns a bare `401`.
@@ -67,7 +67,7 @@ Runs after `Initialize_variable` on **Succeeded**.
 | Field | Value |
 |---|---|
 | Method | `POST` |
-| URI | `https://login.microsoftonline.com/@{parameters('TenantId (ab_TenantId)')}/oauth2/v2.0/token` |
+| URI | `https://login.microsoftonline.com/@{parameters('TenantId (crbab_TenantId)')}/oauth2/v2.0/token` |
 | Header `Content-Type` | `application/x-www-form-urlencoded` |
 | Authentication block | none — this call *obtains* the credential, it does not present one |
 | `retryPolicy` | *(absent — default exponential, 4 retries)* |
@@ -75,7 +75,7 @@ Runs after `Initialize_variable` on **Succeeded**.
 Body, verbatim — a form-encoded string, not a JSON object:
 
 ```
-grant_type=client_credentials&client_id=@{parameters('BrokerClientId (ab_BrokerClientId)')}&client_secret=@{variables('clientSecret')}&scope=https://api.fabric.microsoft.com/.default
+grant_type=client_credentials&client_id=@{parameters('BrokerClientId (crbab_BrokerClientId)')}&client_secret=@{variables('clientSecret')}&scope=https://api.fabric.microsoft.com/.default
 ```
 
 The secret reaches the request only through `@{variables('clientSecret')}`. Do not inline it.

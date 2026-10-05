@@ -43,11 +43,11 @@ Verified against the solution export on 2026-09-25.
 | Component | Count | Note |
 |---|---|---|
 | Cloud flows | 17 | Definitions only — connections, secrets and run-only settings do not travel |
-| Dataverse tables | 2 | `crbab_Workspaces`, `crbab_AllowedConnectionType` — **schema only, no data** |
+| Dataverse tables | 2 | `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType` — **schema only, no data** |
 | Canvas app | 1 | `crbab_app5` |
-| Custom connector | 1 | `ab_FabricSetting` — **including a hardcoded tenant ID** |
+| Custom connector | 1 | `crbab_FabricSetting` — **including a hardcoded tenant ID** |
 | Connection references | 5 | 4 × custom connector, 1 × Office 365 Users — **arrive unbound** |
-| Environment variables | 3 | `ab_TenantId`, `ab_BrokerClientId`, `ab_BrokerObjectId` — **values are defaults, not bindings** |
+| Environment variables | 3 | `crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId` — **values are defaults, not bindings** |
 
 ### ❌ Not carried — must be created or configured
 
@@ -62,13 +62,13 @@ Verified against the solution export on 2026-09-25.
 | Environment variable **values** for the target tenant | 4 |
 | The broker client secret inside `GetFabricToken` | 4 |
 | The connector's tenant ID and delegated app secret | 4 |
-| The `crbab_PrivateLinkTarget` table and its 28 seed rows | 4 |
-| The `crbab_GitAuditLog` table | 4 |
+| The `ubsppcoe_PrivateLinkTarget` table and its 28 seed rows | 4 |
+| The `ubsppcoe_GitAuditLog` table | 4 |
 | The `Fabric Workspace Owner` security role | 4 |
 | The Dataverse group team | 4 |
 | Connector and canvas app sharing | 4 |
 | **Run-only users on every app-facing flow** | 4 |
-| All `crbab_Workspaces` data | 5 |
+| All `ubsppcoe_Workspace` data | 5 |
 
 ---
 
@@ -109,8 +109,8 @@ Register `sp_fabric_powerapp` as an app-only client-credentials application and 
 
 | Identifier | Used as |
 |---|---|
-| Client (application) ID | `ab_BrokerClientId` — token acquisition |
-| Service principal **object** ID | `ab_BrokerObjectId` — `principal.id` on connection role grants |
+| Client (application) ID | `crbab_BrokerClientId` — token acquisition |
+| Service principal **object** ID | `crbab_BrokerObjectId` — `principal.id` on connection role grants |
 
 > **Add no Fabric application permissions.** Fabric does not grant REST access through them. A broker token legitimately shows `roles: (none)` and works correctly. See [SECURITY.md](./SECURITY.md).
 
@@ -249,11 +249,11 @@ Five references arrive **unbound**. A reference is only a pointer; the connectio
 
 | Connection reference | Connector |
 |---|---|
-| `ab_shared<connector id>…_36424` | `FabricSetting` |
-| `ab_shared<connector id>…_502aa` | `FabricSetting` |
-| `ab_shared<connector id>…_78f84` | `FabricSetting` |
-| `ab_shared<connector id>…_e7dd2` | `FabricSetting` |
-| `ab_sharedoffice365users_a9929` | Office 365 Users |
+| `crbab_shared<connector id>…_36424` | `FabricSetting` |
+| `crbab_shared<connector id>…_502aa` | `FabricSetting` |
+| `crbab_shared<connector id>…_78f84` | `FabricSetting` |
+| `crbab_shared<connector id>…_e7dd2` | `FabricSetting` |
+| `crbab_sharedoffice365users_a9929` | Office 365 Users |
 
 **If skipped:** flows fail at their first connector action.
 
@@ -269,13 +269,13 @@ Supply all three at import time:
 
 | Variable | Source-tenant default | Set to |
 |---|---|---|
-| `ab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | The target tenant ID |
-| `ab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | The target broker **client** ID |
-| `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | The target broker **object** ID |
+| `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | The target tenant ID |
+| `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | The target broker **client** ID |
+| `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | The target broker **object** ID |
 
 > **The export carries this tenant's values as _defaults_, not as bindings.** An import that skips the prompt silently keeps pointing at the source tenant — the import succeeds and the flows fail later, against the wrong directory. **Set all three explicitly, even if the prompt appears pre-filled.**
 
-Double-check that `ab_BrokerObjectId` holds the **object** ID and not the client ID. A wrong value here produces a connection role grant that grants nothing, and connect then fails as though the connection had never been shared.
+Double-check that `crbab_BrokerObjectId` holds the **object** ID and not the client ID. A wrong value here produces a connection role grant that grants nothing, and connect then fails as though the connection had never been shared.
 
 ### Step 13 — Correct the connector and recreate its connections
 
@@ -307,7 +307,7 @@ This is the **only** flow holding a secret; every other flow calls it as a child
 
 > Hardening item: this should become a Key Vault-backed secret environment variable. See [SECURITY.md](./SECURITY.md) §10.2.
 
-### Step 15 — Create the `crbab_PrivateLinkTarget` table
+### Step 15 — Create the `ubsppcoe_PrivateLinkTarget` table
 
 **Role:** System Administrator
 
@@ -317,7 +317,7 @@ Create it **in the maker portal** — never by editing `customizations.xml` — 
 
 **If skipped:** the sub-resource dropdown is empty, with no error.
 
-### Step 16 — Create the `crbab_GitAuditLog` table
+### Step 16 — Create the `ubsppcoe_GitAuditLog` table
 
 **Role:** System Administrator
 
@@ -333,9 +333,9 @@ Grant **Read** on:
 
 - `Connector`
 - `Connection Reference`
-- `crbab_Workspaces`
-- `crbab_AllowedConnectionType`
-- `crbab_PrivateLinkTarget`
+- `ubsppcoe_Workspace`
+- `ubsppcoe_AllowedConnectionType`
+- `ubsppcoe_PrivateLinkTarget`
 
 Add the role to the solution.
 
@@ -383,7 +383,7 @@ For each of the 16 app-facing flows (all except `GetFabricToken`):
 
 ## Phase 5 — Per workspace (recurring)
 
-### Step 22 — Populate `crbab_Workspaces`
+### Step 22 — Populate `ubsppcoe_Workspace`
 
 **Role:** Workspace provisioning automation
 
@@ -421,7 +421,7 @@ Everything above is a one-time cost except these. **All five fail quietly** — 
 | 2 | **Connector tenant ID** (13) | Every sign-in fails, against the *source* tenant | It *is* carried by the export, so it looks configured |
 | 3 | **Environment variable values** (12) | Flows authenticate against the source tenant | The prompt is pre-filled with source values that look right |
 | 4 | **Broker client secret** (14) | Every app-only flow fails at token acquisition | The scrubbed value `" "` is not visibly empty |
-| 5 | **`crbab_PrivateLinkTarget` mapping** (15) | 28 rows of blanks; empty dropdown, no error | Auto-match appears to succeed |
+| 5 | **`ubsppcoe_PrivateLinkTarget` mapping** (15) | 28 rows of blanks; empty dropdown, no error | Auto-match appears to succeed |
 
 **Check these five first** whenever a freshly deployed environment misbehaves.
 
@@ -448,7 +448,7 @@ Work through in order. Each step isolates one layer.
 ### Application
 
 - [ ] A test user can open the canvas app
-- [ ] The workspace picker shows only workspaces where that user is named in `crbab_Workspaces`
+- [ ] The workspace picker shows only workspaces where that user is named in `ubsppcoe_Workspace`
 - [ ] The Git tab loads without a `prvReadConnector` error
 - [ ] The outbound tab reflects the real OAP state
 - [ ] The sub-resource dropdown is **populated** — an empty one means Step 15 or 17 failed
@@ -490,15 +490,15 @@ Carried forward from the engineering issue log, with their current state.
 | M3 | Connector tenant ID is hardcoded and travels with the export | Every sign-in fails in the target tenant | 🟡 Open — Step 13 is the workaround |
 | M4 | Broker secret is a flow variable, scrubbed on export | Token acquisition fails until re-entered | 🟡 Open — Step 14. Fix is Key Vault ([SECURITY.md](./SECURITY.md) §10.2) |
 | M5 | Two empty path stubs in the connector's OpenAPI — `/connections/{connectionId}` and `/connections/{connectionId}/roleAssignments` | Harmless today; may confuse future imports or validation | 🟡 Open — delete at the next connector edit |
-| M6 | `crbab_PrivateLinkTarget` and `crbab_GitAuditLog` are not in the solution | Manual creation per environment; drift between environments | 🟡 Open — Steps 15 and 16. Add both to the solution |
+| M6 | `ubsppcoe_PrivateLinkTarget` and `ubsppcoe_GitAuditLog` are not in the solution | Manual creation per environment; drift between environments | 🟡 Open — Steps 15 and 16. Add both to the solution |
 | M7 | The solution is exported unmanaged | Production environment remains customizable | 🟡 Open — produce a managed export for production |
 | M8 | Private-endpoint flows are documented but not built | The private-endpoints tab is non-functional | 🔴 Open — three flows to build |
 
-> **Resolved since the issue log was written:** the tenant ID and broker client ID are no longer hardcoded in `GetFabricToken`. Both are now read from the `ab_TenantId` and `ab_BrokerClientId` environment variables, verified in the current export. Earlier notes describing them as hardcoded are superseded by this document.
+> **Resolved since the issue log was written:** the tenant ID and broker client ID are no longer hardcoded in `GetFabricToken`. Both are now read from the `crbab_TenantId` and `crbab_BrokerClientId` environment variables, verified in the current export. Earlier notes describing them as hardcoded are superseded by this document.
 
 ### The two structural improvements worth making
 
 Both remove a recurring manual step rather than documenting it better:
 
-1. **Add `crbab_PrivateLinkTarget` and `crbab_GitAuditLog` to the solution** (M6). This removes Steps 15 and 16 from every future deployment and eliminates schema drift between environments.
+1. **Add `ubsppcoe_PrivateLinkTarget` and `ubsppcoe_GitAuditLog` to the solution** (M6). This removes Steps 15 and 16 from every future deployment and eliminates schema drift between environments.
 2. **Move the broker secret to a Key Vault-backed environment variable** (M4). This removes Step 14 and makes rotation a Key Vault operation rather than a flow edit in every environment.

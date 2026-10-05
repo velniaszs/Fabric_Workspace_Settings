@@ -22,7 +22,7 @@ The app therefore brokers connect and disconnect only. Everything else stays in 
 
 ### Wizard
 
-1. Pick a workspace from `crbab_Workspaces` (only rows where the caller is primary or secondary owner).
+1. Pick a workspace from `ubsppcoe_Workspace` (only rows where the caller is primary or secondary owner).
 2. Pick a connection — **delegated** call, so only the caller's own connections appear. Filtered client-side to `AzureDevOpsSourceControl`. Shows name, URL and ID.
 3. Confirm org / project / repo **derived** from `connectionDetails.path` — no URL pasting. Branch defaults to `main`; directory defaults to `/` and is editable, with a hint for shared repos. Choose the initialization strategy, with a warning and wiki links.
 4. On the final step only: grant SPN-A on the connection (delegated), then connect (SPN-A).
@@ -79,7 +79,13 @@ Delegated app behind the custom connector `FabricSetting`. Runs as the signed-in
 
 Fabric cannot answer "does this user own this workspace?" — owners hold no Fabric role, so `roleAssignments` returns nothing useful. The ownership record lives in Dataverse.
 
-**`crbab_Workspaces`** (exists): `crbab_workspace_id`, `crbab_workspace_name`, `crbab_primary_owner`, `crbab_primary_owner_email`, `crbab_secondary_owner`, `crbab_secondary_owner_email`
+**`ubsppcoe_Workspace`** (exists, in the platform team's shared solution): `ubsppcoe_workspaceid`, `ubsppcoe_workspacename`, `ubsppcoe_primary_owner`, `ubsppcoe_primary_owner_email`, `ubsppcoe_secondary_owner`, `ubsppcoe_secondary_owner_email`
+
+> **The first two logical names are verified; the four owner columns are not.** `ubsppcoe_workspaceid` (the Fabric workspace GUID) and `ubsppcoe_workspacename` are confirmed in [capacity-policies/docs/CAPACITY-POLICY-TABLES.md](../capacity-policies/docs/CAPACITY-POLICY-TABLES.md) §1, which reads the same table. The four `*_owner*` names carry the underscore style this solution used before the tables moved to the shared `ubsppcoe_` solution — **read them off the maker portal before building a filter against them.**
+>
+> **A wrong logical name does not fail loudly.** Dataverse returns `400` for an unknown column, but an expression that resolves to blank returns **every row** — which, on an ownership check, authorises everyone.
+
+> **Note the row key.** On this table the key is `ubsppcoe_workspaceuniqueid`; `ubsppcoe_workspaceid` is the **Fabric** workspace GUID despite looking like a row key. Matching on the wrong one silently finds nothing.
 
 Every flow that acts on a workspace must first confirm the caller appears as primary or secondary owner. Fail closed.
 
@@ -89,17 +95,17 @@ The app passes the user identity as a parameter, and anyone who can reach the fl
 
 For `ConnectWorkspaceToGit`, `SyncWorkspaceWithGit` and `DisconnectWorkspaceFromGit`, use the **audit-row pattern**:
 
-1. The app writes a row to `crbab_GitAuditLog` — as the signed-in user, so Dataverse stamps `createdby`
+1. The app writes a row to `ubsppcoe_GitAuditLog` — as the signed-in user, so Dataverse stamps `createdby`
 2. The app calls the flow, passing only that row's ID
 3. The flow reads the row: `_createdby_value` cannot be forged, and neither can the parameters beside it
-4. The flow authorizes `createdby` against `crbab_Workspaces`, then acts
+4. The flow authorizes `createdby` against `ubsppcoe_Workspace`, then acts
 5. The flow updates the row with the outcome and returns it to the app
 
 The flow keeps its PowerApp V2 trigger, so the app still gets an immediate answer. Identity is trusted because of *where it was read from*, not because of who called.
 
 Read flows may stay on PowerApp V2 with no row at all.
 
-> **Not built yet. Decision 2026-08-06: defer.** No flow currently performs any `crbab_Workspaces` lookup. `ConnectWorkspaceToGit` acts on whatever `workspaceId` it receives. This is acceptable only while the app is limited to the build team \u2014 it must land before the app is shared. See OPEN-ISSUES \u00a71.7.
+> **Not built yet. Decision 2026-08-06: defer.** No flow currently performs any `ubsppcoe_Workspace` lookup. `ConnectWorkspaceToGit` acts on whatever `workspaceId` it receives. This is acceptable only while the app is limited to the build team \u2014 it must land before the app is shared. See OPEN-ISSUES \u00a71.7.
 
 `AddConnectionRoleAssignment` is the exception: it is self-authorizing, because the Fabric API only lets a caller grant roles on a connection they already control. PowerApp V2 is fine there.
 
@@ -111,16 +117,17 @@ Read flows may stay on PowerApp V2 with no row at all.
 |---|---|
 | Display name | `WorkspaceSol` |
 | Unique name | `Cr08ecd` |
-| Prefix | `crbab` |
+| Prefix — components | `crbab` (flows, canvas app, connector, environment variables, connection references) |
+| Prefix — tables | **`ubsppcoe`** — in the platform team's separate shared solution |
 | Publisher | `Crf5954` |
 
-**Existing tables:** `crbab_Workspaces`, `crbab_AllowedConnectionType`
+**Existing tables:** `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType` — **both live in the shared solution, not in `WorkspaceSol`.** They are read and written here but not defined here, and they do not travel with this solution's export.
 
-`crbab_Workspaces` is populated externally — out of scope here.
+`ubsppcoe_Workspace` is populated externally — out of scope here.
 
-**Planned tables:** `crbab_GitAuditLog` (who did what, when, outcome), the request table backing the write pattern in §3, and `crbab_PrivateLinkTarget` (resource type → valid private-link sub-resources, seeded from `data/PrivateLinkTargets.csv` — see [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.6). Create via maker portal, never by editing `customizations.xml`.
+**Planned tables:** `ubsppcoe_GitAuditLog` (who did what, when, outcome), the request table backing the write pattern in §3, and `ubsppcoe_PrivateLinkTarget` (resource type → valid private-link sub-resources, seeded from `data/PrivateLinkTargets.csv` — see [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.6). Create via maker portal, never by editing `customizations.xml`.
 
-**Dropped:** `crbab_GitConnection` and `crbab_WorkspaceGitMapping`. Fabric owns that state and the GET APIs return it live — caching it only creates a second source of truth to reconcile.
+**Dropped:** `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping`. Fabric owns that state and the GET APIs return it live — caching it only creates a second source of truth to reconcile.
 
 **Canvas app:** `CanvasApps/crbab_app5_baf10_DocumentUri.msapp`. Data sources are the 8 networking/gateway flows plus Dataverse `Workspaceses`, `Users`, `AllowedConnectionTypes`.
 
@@ -128,9 +135,9 @@ Read flows may stay on PowerApp V2 with no row at all.
 
 ## 5. Custom connector — `FabricSetting`
 
-Schema name `ab_FabricSetting` (note the `ab_` prefix, not `crbab_`). Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
+Schema name `crbab_FabricSetting`. Solution-aware, so it lives in the Dataverse `connector` table (OTC 372), not in the classic connector store.
 
-Connection reference: `ab_shared<connector id>_e4bca`.
+Connection reference: `crbab_shared<connector id>_e4bca`.
 
 | Field | Value |
 |---|---|
@@ -177,7 +184,7 @@ A solution-aware connector is a Dataverse row, so access needs **table privilege
 
 Required, in order:
 
-1. Security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType` — and `crbab_PrivateLinkTarget` once it exists — add it to the solution
+1. Security role **`Fabric Workspace Owner`** with Read on `Connector`, `Connection Reference`, `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType` — and `ubsppcoe_PrivateLinkTarget` once it exists — add it to the solution
 2. Entra group → Dataverse **group team** → assign the role to the team
 3. Share the **connector** with the group
 4. Share the **canvas app** with the group
@@ -325,7 +332,7 @@ Flow-level work is tracked as **F\<flow\>.\<n\>** in the *Issues* table in OPEN-
 3. Move tenant ID, client ID and secret to environment variables (**F1.1**) — multi-environment deployment is confirmed
 4. Update the custom connector in **one pass**: add `Connection.ReadWrite.All`, add the three connection operations, then delete and recreate the connection (OPEN-ISSUES §9)
 5. Create the `Fabric Workspace Owner` security role and wire up the group team, connector share and app share (§6)
-6. Create `crbab_GitAuditLog` and the request table for the write pattern (§3)
+6. Create `ubsppcoe_GitAuditLog` and the request table for the write pattern (§3)
 7. Run the end-to-end test scenario (OPEN-ISSUES §7)
 8. Build `AddConnectionRoleAssignment`, `DisconnectWorkspaceGit`
 9. Move write flows onto the Dataverse request-row trigger (**F5.9**) — required before the app is shared

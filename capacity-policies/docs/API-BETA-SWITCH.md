@@ -12,7 +12,7 @@ At **GA** the parameter is removed again and the URL returns to what it is today
 
 > **So the URL changes twice, in opposite directions, on dates nobody here controls.** Hard-coding it means opening six actions in four flows twice. This document specifies one environment variable instead, so both transitions are a **Yes/No change in the solution**, not a flow edit.
 
-**Scope: the capacity-policy APIs only** — `/policySets`, `/policyRules`, `/activate`, `replaceByPolicy`, and the `DELETE` on a set. The workspace-settings app's calls (`/networking/communicationPolicy/*`, `/managedPrivateEndpoints`, `/git/*`, and [scripts/Get-FabricOutboundRules.ps1](../../scripts/Get-FabricOutboundRules.ps1)) are **out of scope by decision** and are not listed below. If that decision changes, the same pattern applies but the variable belongs in the `ab_` solution, not this one.
+**Scope: the capacity-policy APIs only** — `/policySets`, `/policyRules`, `/activate`, `replaceByPolicy`, and the `DELETE` on a set. The workspace-settings app's calls (`/networking/communicationPolicy/*`, `/managedPrivateEndpoints`, `/git/*`, and [scripts/Get-FabricOutboundRules.ps1](../../scripts/Get-FabricOutboundRules.ps1)) are **out of scope by decision** and are not listed below. If that decision changes, the same pattern applies but the variable belongs in the `crbab_` solution, not this one.
 
 ---
 

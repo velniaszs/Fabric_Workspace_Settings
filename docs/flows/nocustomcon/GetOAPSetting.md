@@ -18,9 +18,9 @@ Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PRERE
 
   | Variable | Default in the solution | Used by |
   |---|---|---|
-  | `ab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `ab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `ab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
+  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
+  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
+  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
 
   The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
 
@@ -98,7 +98,7 @@ Runs after `Initialize_variable` on **Succeeded**.
 
 This is the **root** of the communication-policy resource — no `/outbound/...` suffix. It returns both the `inbound` and `outbound` blocks in one document, which is why this flow can answer the OAP question without a second call.
 
-The token comes from the `accessToken` variable, which comes from the child flow, which reads `ab_TenantId` and `ab_BrokerClientId` and holds the secret. Nothing sensitive appears in this action beyond the interpolated bearer value at run time.
+The token comes from the `accessToken` variable, which comes from the child flow, which reads `crbab_TenantId` and `crbab_BrokerClientId` and holds the secret. Nothing sensitive appears in this action beyond the interpolated bearer value at run time.
 
 **Headers are not copied when you duplicate an action.** A missing `Authorization` comes back as `401` with the same generic `RequestFailed` body Fabric uses for semantic rejections — check the header on every new HTTP action before chasing anything else.
 

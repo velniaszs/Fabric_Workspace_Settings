@@ -12,7 +12,7 @@ Design rationale lives in [APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.
 
 | Step | What | State |
 |---|---|---|
-| 1 | Dataverse table `crbab_PrivateLinkTarget` + seed import | Not started |
+| 1 | Dataverse table `ubsppcoe_PrivateLinkTarget` + seed import | Not started |
 | 2 | Tab button and container | Not started |
 | 3 | Load block and gallery | Not started |
 | 4 | Create panel | Not started |
@@ -155,7 +155,7 @@ The create panel needs a lookup of resource type → valid sub-resources. Seed d
 | Plural name | `Private Link Targets` |
 | Primary column display name | `Display Name` |
 
-Expand **Advanced options** and confirm the schema name comes out as `crbab_PrivateLinkTarget`. The primary column becomes `crbab_displayname`.
+Expand **Advanced options** and confirm the schema name comes out as `ubsppcoe_PrivateLinkTarget`. The primary column becomes `ubsppcoe_displayname`.
 
 **Create it in the maker portal, never by editing `customizations.xml`** (ARCHITECTURE §4).
 
@@ -165,11 +165,11 @@ Table → **Columns** → **+ New column**, three times:
 
 | Display name | Schema name | Data type | Format / length |
 |---|---|---|---|
-| `Resource Type` | `crbab_resourcetype` | Single line of text | 100 |
-| `Sub Resource` | `crbab_subresource` | Single line of text | 100 |
-| `Sort Order` | `crbab_sortorder` | Whole number | — |
+| `Resource Type` | `ubsppcoe_resourcetype` | Single line of text | 100 |
+| `Sub Resource` | `ubsppcoe_subresource` | Single line of text | 100 |
+| `Sort Order` | `ubsppcoe_sortorder` | Whole number | — |
 
-`crbab_subresource` is **case-sensitive in use** — `sqlServer`, `SqlOnDemand`, `MongoDB` are sent verbatim to Fabric. Dataverse will not correct a typo and Fabric will accept it, then fail during provisioning.
+`ubsppcoe_subresource` is **case-sensitive in use** — `sqlServer`, `SqlOnDemand`, `MongoDB` are sent verbatim to Fabric. Dataverse will not correct a typo and Fabric will accept it, then fail during provisioning.
 
 ### 1c. Import the seed data
 
@@ -179,18 +179,18 @@ In the mapping screen, map all four columns by name:
 
 | CSV column | Table column |
 |---|---|
-| `crbab_resourcetype` | Resource Type |
-| `crbab_subresource` | Sub Resource |
-| `crbab_displayname` | Display Name |
-| `crbab_sortorder` | Sort Order |
+| `ubsppcoe_resourcetype` | Resource Type |
+| `ubsppcoe_subresource` | Sub Resource |
+| `ubsppcoe_displayname` | Display Name |
+| `ubsppcoe_sortorder` | Sort Order |
 
-**Check the mapping rather than trusting auto-match.** The CSV headers use schema names and the mapping screen shows display names, so auto-match may leave one unmapped — an unmapped `crbab_subresource` imports 28 rows with a blank sub-resource and the create panel then sends `""` to Fabric on every attempt.
+**Check the mapping rather than trusting auto-match.** The CSV headers use schema names and the mapping screen shows display names, so auto-match may leave one unmapped — an unmapped `ubsppcoe_subresource` imports 28 rows with a blank sub-resource and the create panel then sends `""` to Fabric on every attempt.
 
 After publishing, confirm **28 rows** and spot-check that `microsoft.storage/storageaccounts` has five.
 
 ### 1d. Grant read access
 
-Solution → **Security role** `Fabric Workspace Owner` → add **Read** on `Private Link Target`, alongside `crbab_Workspaces` and `crbab_AllowedConnectionType` (ARCHITECTURE §6).
+Solution → **Security role** `Fabric Workspace Owner` → add **Read** on `Private Link Target`, alongside `ubsppcoe_Workspace` and `ubsppcoe_AllowedConnectionType` (ARCHITECTURE §6).
 
 Owners only ever read this table. A missing privilege shows up as an **empty dropdown**, not an error — so if the sub-resource picker is blank for a type you know is seeded, check the role before checking the formula.
 
@@ -396,11 +396,11 @@ Set(varPeType,
 ClearCollect(
     colPeSubres,
     SortByColumns(
-        Filter(PrivateLinkTargets, crbab_resourcetype = varPeType),
-        "crbab_sortorder"
+        Filter(PrivateLinkTargets, ubsppcoe_resourcetype = varPeType),
+        "ubsppcoe_sortorder"
     )
 );
-Set(varPeSubres, If(CountRows(colPeSubres) = 1, First(colPeSubres).crbab_subresource, ""))
+Set(varPeSubres, If(CountRows(colPeSubres) = 1, First(colPeSubres).ubsppcoe_subresource, ""))
 ```
 
 This is the whole point of Step 1. For a 1:1 type the sub-resource is decided here and the owner never sees a choice; for a 1:many type the dropdown appears with **no default**.
@@ -409,10 +409,10 @@ This is the whole point of Step 1. For a 1:1 type the sub-resource is decided he
 |---|---|---|
 | `CmbPeSubres` | `Visible` | `CountRows(colPeSubres) > 1` |
 | `CmbPeSubres` | `Items` | `colPeSubres` |
-| `CmbPeSubres` | display field | `crbab_displayname` |
-| `CmbPeSubres` | `OnChange` | `Set(varPeSubres, CmbPeSubres.Selected.crbab_subresource)` |
+| `CmbPeSubres` | display field | `ubsppcoe_displayname` |
+| `CmbPeSubres` | `OnChange` | `Set(varPeSubres, CmbPeSubres.Selected.ubsppcoe_subresource)` |
 | `LblPeSubresFixed` | `Visible` | `CountRows(colPeSubres) = 1` |
-| `LblPeSubresFixed` | `Text` | `First(colPeSubres).crbab_displayname` |
+| `LblPeSubresFixed` | `Text` | `First(colPeSubres).ubsppcoe_displayname` |
 
 **No default on the dropdown, deliberately.** A wrong-but-valid sub-resource — `blob` where the work needs `dfs` — provisions cleanly, gets approved, and then fails to carry traffic, with every signal the app can see reporting success. Making the owner choose is the only protection against that.
 
@@ -576,5 +576,5 @@ Test 7 is the one worth doing deliberately — it is the case a naive duplicate 
 
 - **No auto-refresh.** `Provisioning` and `Pending` are states owners will watch; they must press refresh. A timer was considered and left out — polling every workspace's endpoints on a timer is a lot of flow runs to save one click.
 - **Approval cannot be done here.** It happens in the Azure portal, by the data source admin. There is no Fabric API for it and the app must not imply otherwise.
-- **No authorization check.** The three flows take `gblWsId` at face value. This tab must not ship before the `crbab_Workspaces` ownership check (OPEN-ISSUES F5.9) — a forged call to `DeletePrivateEndpoint` breaks a live data path in someone else's workspace.
+- **No authorization check.** The three flows take `gblWsId` at face value. This tab must not ship before the `ubsppcoe_Workspace` ownership check (OPEN-ISSUES F5.9) — a forged call to `DeletePrivateEndpoint` breaks a live data path in someone else's workspace.
 - **No `targetFQDNs` support**, so Private Link Service targets are out of scope and deliberately absent from the sub-resource table.

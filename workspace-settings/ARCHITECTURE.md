@@ -66,9 +66,9 @@ flowchart TB
     end
 
     subgraph pp["Power Platform — solution WorkspaceSol"]
-        DV[("<b>Dataverse</b><br/>crbab_Workspaces<br/>crbab_AllowedConnectionType")]
+        DV[("<b>Dataverse</b><br/>ubsppcoe_Workspace<br/>ubsppcoe_AllowedConnectionType")]
         FLOWS["<b>Cloud flows</b><br/><i>the broker tier</i>"]
-        CONN["<b>Custom connector</b><br/>ab_FabricSetting<br/><i>delegated calls only</i>"]
+        CONN["<b>Custom connector</b><br/>crbab_FabricSetting<br/><i>delegated calls only</i>"]
     end
 
     subgraph entra["Microsoft Entra ID"]
@@ -114,8 +114,17 @@ Verified against the solution export on 2026-09-25.
 | Unique name | `WorkspaceSol` |
 | Version | `1.0.0.12` |
 | Managed | No — exported **unmanaged** |
-| Publisher | `Arunas`, customization prefix `ab` |
-| Table prefix | `crbab` (legacy prefix retained on the two shipped tables) |
+| Publisher | `Crf5954`, customization prefix `crbab` |
+| Prefix — this solution's components | `crbab` — flows, canvas app, custom connector, environment variables, connection references |
+| Prefix — tables | **`ubsppcoe`** — and the tables are **not in this solution** |
+
+> ### Two prefixes, two solutions, and the tables are not ours
+>
+> **Every component this solution owns carries `crbab_`.** The flows, the canvas app, the `crbab_FabricSetting` connector, the three environment variables and all five connection references.
+>
+> **The Dataverse tables carry `ubsppcoe_` and live in a separate, shared solution** owned by the platform team. This solution reads and writes them; it does not define them, and they do not travel with its export. A target environment without that shared solution cannot run any of this.
+>
+> **An `ab_`-prefixed element does not exist** in either solution. If you meet one in an older note, draft, or in the checked-in export artifacts, it is stale — `ab_oapenabled` in `customizations.xml` is the clearest example, and it is `ubsppcoe_oapenabled` today.
 
 > **Note for production.** The solution is currently exported unmanaged. Production deployment should use a **managed** export so that the target environment cannot be customized out from under the solution. See [MIGRATION.md](./MIGRATION.md).
 
@@ -124,22 +133,26 @@ Verified against the solution export on 2026-09-25.
 | Component | Count | Detail |
 |---|---|---|
 | Cloud flows | 17 | See §7 |
-| Dataverse tables | 2 | `crbab_Workspaces`, `crbab_AllowedConnectionType` |
 | Canvas app | 1 | `crbab_app5` |
-| Custom connector | 1 | `ab_FabricSetting` |
-| Connection references | 5 | 4 × custom connector, 1 × Office 365 Users |
-| Environment variables | 3 | `ab_TenantId`, `ab_BrokerClientId`, `ab_BrokerObjectId` |
+| Custom connector | 1 | `crbab_FabricSetting` |
+| Connection references | 5 | 4 × `crbab_FabricSetting`, 1 × Office 365 Users |
+| Environment variables | 3 | `crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId` |
+
+**No Dataverse table travels with this export.** The tables are `ubsppcoe_`-prefixed and belong to the platform team's shared solution — see below.
 
 ### Components *not* carried by the export
 
-These are required for full function and must be created in the target environment:
+These are required for full function and must exist in the target environment:
 
 | Component | Why it is absent |
 |---|---|
-| `crbab_PrivateLinkTarget` table | Not yet added to the solution. Seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) |
-| `crbab_GitAuditLog` table | Designed, not yet built — see §5 and [SECURITY.md](./SECURITY.md) |
+| **The `ubsppcoe_` tables** — the workspace inventory and the allowed-connection-type list | **Owned by the platform team, in a separate shared solution.** This solution reads and writes them but does not define them. A target environment without that solution cannot run any of this |
+| `PrivateLinkTarget` table | Not yet built. Seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) |
+| `GitAuditLog` table | Designed, not yet built — see §5 and [SECURITY.md](./SECURITY.md) |
 | Security role `Fabric Workspace Owner` | Not yet added to the solution |
 | Private-endpoint flows | Designed and documented, **not yet built** — see §7 |
+
+> **The dependency on the shared solution is the one that breaks a fresh deployment silently.** Importing `WorkspaceSol` into an environment without the `ubsppcoe_` tables succeeds — the flows import, the app imports, and every table reference fails at runtime instead. Confirm the shared solution is present *before* importing, not after.
 
 ---
 
@@ -200,7 +213,7 @@ A dedicated Git service principal was considered and dropped — it existed only
 
 Fabric cannot answer the ownership question. Workspace owners hold no Fabric role that identifies them as owners, so querying `roleAssignments` on a workspace returns nothing useful about them.
 
-**The ownership record therefore lives in Dataverse**, in `crbab_Workspaces`. Every flow that acts on a workspace must confirm the caller appears there as primary or secondary owner, and **fail closed** if not.
+**The ownership record therefore lives in Dataverse**, in `ubsppcoe_Workspace`. Every flow that acts on a workspace must confirm the caller appears there as primary or secondary owner, and **fail closed** if not.
 
 ### Why write flows cannot trust their own trigger
 
@@ -219,7 +232,7 @@ sequenceDiagram
     Note over D: Dataverse stamps createdby — unforgeable
     U->>F: 2. Run(rowId) — and nothing else
     F->>D: 3. Read the row
-    F->>D: 4. Authorize createdby against crbab_Workspaces
+    F->>D: 4. Authorize createdby against ubsppcoe_Workspace
     F->>X: 5. Act as the broker
     F->>D: 6. Write the outcome back
     F-->>U: 7. Respond
@@ -234,7 +247,7 @@ Two deliberate exceptions:
 
 > ### ⚠️ Current implementation status
 >
-> **The ownership check is designed but not yet implemented.** No flow currently performs a `crbab_Workspaces` lookup, and `crbab_GitAuditLog` does not exist. Each write flow acts on whatever `workspaceId` it is handed.
+> **The ownership check is designed but not yet implemented.** No flow currently performs a `ubsppcoe_Workspace` lookup, and `ubsppcoe_GitAuditLog` does not exist. Each write flow acts on whatever `workspaceId` it is handed.
 >
 > This is acceptable only while the application's audience is the build team. **It must be implemented before the application is shared with workspace owners.** It is tracked as the top security item in [SECURITY.md](./SECURITY.md) and gates general availability.
 
@@ -312,7 +325,7 @@ The sub-resource is a property of the resource *type*, not the resource, so the 
 ```mermaid
 flowchart LR
     A["Resource ID pasted"] --> B["Parse /providers/{ns}/{type}<br/>lowercased"]
-    B --> C["Filter crbab_PrivateLinkTarget"]
+    B --> C["Filter ubsppcoe_PrivateLinkTarget"]
     C -->|1 row| D["Auto-select, read-only<br/><i>no question asked</i>"]
     C -->|2+ rows| E["Dropdown, <b>no default</b>"]
     C -->|0 rows| F["Free text<br/><i>let Fabric decide</i>"]
@@ -384,19 +397,19 @@ Design documentation for all three exists under [`docs/flows/nocustomcon/`](../d
 
 | Table | Role | In the export? |
 |---|---|---|
-| `crbab_Workspaces` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally | ✅ Yes |
-| `crbab_AllowedConnectionType` | Reference data for the outbound tab | ✅ Yes |
-| `crbab_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) | ❌ Must be created |
-| `crbab_GitAuditLog` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow | ❌ Must be created |
+| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally | ✅ Yes |
+| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab | ✅ Yes |
+| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) | ❌ Must be created |
+| `ubsppcoe_GitAuditLog` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow | ❌ Must be created |
 
-`crbab_Workspaces` is populated by external workspace-provisioning automation and is out of scope for this solution.
+`ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
 
 ### Two rules that hold across all tables
 
 - **Create tables in the maker portal, never by editing `customizations.xml`.**
-- **Do not cache Fabric state in Dataverse.** Two tables — `crbab_GitConnection` and `crbab_WorkspaceGitMapping` — were designed and then dropped for exactly this reason: Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
+- **Do not cache Fabric state in Dataverse.** Two tables — `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping` — were designed and then dropped for exactly this reason: Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
 
-### Why `crbab_PrivateLinkTarget` is flat
+### Why `ubsppcoe_PrivateLinkTarget` is flat
 
 It is a flat type → sub-resource table rather than a parent/child model on purpose. The picker is a filter on one table, and supporting a newly added Azure source is **one row** — addable by anyone with Dataverse access, with no application republish. That matters because Fabric's supported-source list grows faster than a shipped list would realistically be maintained.
 

@@ -13,7 +13,7 @@ Related: `../FLOWS.md` §7 (design rationale), `../CUSTOM-CONNECTOR.md` (the con
 - Create the flow **inside the solution**, so it binds to a connection reference rather than a raw connection.
 - The custom connector `FabricSetting` must already exist with operations `ListConnectionRoleAssignments` and `AddConnectionRoleAssignment`.
 - The connector connection is **delegated** — it runs as the signed-in user. Sharing must be *Provided by run-only user*.
-- Environment variable `ab_BrokerObjectId` must exist. Current default: `6f70a764-908f-435b-a930-ffcb375577f3`.
+- Environment variable `crbab_BrokerObjectId` must exist. Current default: `6f70a764-908f-435b-a930-ffcb375577f3`.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
 
@@ -111,7 +111,7 @@ Add **Filter array** immediately after the loop.
 | Field | Value |
 |---|---|
 | From | `@variables('assignments')` |
-| Where | `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))` |
+| Where | `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (crbab_BrokerObjectId)'))` |
 
 **This must run after `Do_until`, not after `Initialize_isDone`.** If it ends up parented to the wrong predecessor it forms a parallel branch, reads `assignments` before the loop has written it, finds nothing, and issues a duplicate `POST`. The symptom is a correct-looking answer arriving by the wrong route — check the run graph, not just the output.
 
@@ -132,7 +132,7 @@ Add **Filter array** immediately after the loop.
 | Parameter | Value |
 |---|---|
 | `fabricConnectionId` | `@triggerBody()['text']` |
-| `body/principal/id` | `@parameters('BrokerObjectId (ab_BrokerObjectId)')` |
+| `body/principal/id` | `@parameters('BrokerObjectId (crbab_BrokerObjectId)')` |
 | `body/principal/type` | `ServicePrincipal` |
 | `body/role` | `User` |
 

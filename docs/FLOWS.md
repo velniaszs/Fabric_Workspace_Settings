@@ -42,7 +42,7 @@ Child flow. Central place to acquire an SPN-A token so the client-credentials bl
 | Scope | `https://api.fabric.microsoft.com/.default` |
 | Returns | `access_token` |
 
-Tenant ID and client ID come from the `ab_TenantId` and `ab_BrokerClientId` environment variables, both present in the solution — no hand-editing after import. The **secret** is still an `Initialize_variable` inside the flow; exports scrub it to `" "`, so it must be re-entered per environment (PREREQUISITES E4). Migrate to a Key Vault-backed secret variable before production (OPEN-ISSUES §2).
+Tenant ID and client ID come from the `crbab_TenantId` and `crbab_BrokerClientId` environment variables, both present in the solution — no hand-editing after import. The **secret** is still an `Initialize_variable` inside the flow; exports scrub it to `" "`, so it must be re-entered per environment (PREREQUISITES E4). Migrate to a Key Vault-backed secret variable before production (OPEN-ISSUES §2).
 
 ### 2. GetGitOperationStatus
 
@@ -175,7 +175,7 @@ All three handoffs to flow 8 were then driven from these results, including a fi
 
 The wizard supplies `organizationName` / `projectName` / `repositoryName` derived from `GET /v1/connections/{id}` → `connectionDetails.path`, so the user does not paste a URL.
 
-> **No authorization check yet.** The flow connects any workspace the broker administers, for any caller who can run it. The audit row and the `crbab_Workspaces` check (F5.9, F5.10) are absent from the exported JSON. Deferred by decision, not oversight — see OPEN-ISSUES §10.3.
+> **No authorization check yet.** The flow connects any workspace the broker administers, for any caller who can run it. The audit row and the `ubsppcoe_Workspace` check (F5.9, F5.10) are absent from the exported JSON. Deferred by decision, not oversight — see OPEN-ISSUES §10.3.
 
 ---
 
@@ -203,7 +203,7 @@ Synchronous — returns `200`, no polling. The state guard means a repeat call r
 
 Requires **workspace Admin**, which the broker holds. A `403` here means the broker lost its role on the workspace, not a scope problem.
 
-> **No authorization check yet.** The flow takes `workspaceId` directly and will disconnect any workspace the broker administers, for any caller who can run it. The `crbab_Workspaces` ownership check is deferred by decision, not oversight — see OPEN-ISSUES §10.3.
+> **No authorization check yet.** The flow takes `workspaceId` directly and will disconnect any workspace the broker administers, for any caller who can run it. The `ubsppcoe_Workspace` ownership check is deferred by decision, not oversight — see OPEN-ISSUES §10.3.
 
 Renamed from `DisconnectWorkspaceGit` for symmetry with `ConnectWorkspaceToGit`; the old name read as if "Git" were the object being disconnected.
 
@@ -223,7 +223,7 @@ As built:
 
 1. `Initialize_assignments` (array), `Initialize_cont` (string, no value), `Initialize_isDone` (boolean `false`).
 2. `Do_until` — exits on `@equals(variables('isDone'), true)`, limits count 10 / `PT1M`. Inside, in order: `ListConnectionRoleAssignments` (`fabricConnectionId` from the trigger, `continuationToken` from `variables('cont')`) → `Merge_assignments` → `Set_variable_assignments` → `Set_variable_cont` → `Set_variable_isDone`.
-3. `Filter_array` — from `@variables('assignments')`, where `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (ab_BrokerObjectId)'))`. **Runs after `Do_until`.**
+3. `Filter_array` — from `@variables('assignments')`, where `@equals(item()?['principal']?['id'], parameters('BrokerObjectId (crbab_BrokerObjectId)'))`. **Runs after `Do_until`.**
 4. `Condition` — `@empty(body('Filter_array'))` equals `true`.
 5. Yes branch → `AddConnectionRoleAssignment` with `id` = the same environment variable, `type` = `ServicePrincipal`, `role` = `User`, then respond on **Succeeded or Failed**.
 6. No branch → respond `AlreadyGranted`.
@@ -268,13 +268,13 @@ Note that `AlreadyGranted` is returned by **both** the else branch and the 409 h
 
 The multi-page path is unverified and cannot be produced with the current test connections, which hold a handful of assignments each. What the test above establishes is that paging did not break the single-page path; correctness beyond one page rests on the pattern being identical to flow 3's.
 
-The object ID comes from the `ab_BrokerObjectId` environment variable (PREREQUISITES E3). It is **not** `ab_BrokerClientId` — the roleAssignments API wants the service principal's directory object ID, and the client ID is silently wrong rather than rejected.
+The object ID comes from the `crbab_BrokerObjectId` environment variable (PREREQUISITES E3). It is **not** `crbab_BrokerClientId` — the roleAssignments API wants the service principal's directory object ID, and the client ID is silently wrong rather than rejected.
 
 **No polling.** The API documents only `201`, `429` and error codes — there is no `202`, no `x-ms-operation-id` and no long-running operation. When the call returns, the grant is in effect.
 
 **This must be delegated.** The API requires the caller to hold `UserWithReshare` or higher on the connection, or Admin on the bound gateway — an SPN cannot self-grant. The owner is Owner on the connection they created, so the delegated call succeeds.
 
-Self-authorizing by construction: the caller can only grant on connections they already control, so no `crbab_Workspaces` check is needed and a PowerApp V2 trigger is acceptable.
+Self-authorizing by construction: the caller can only grant on connections they already control, so no `ubsppcoe_Workspace` check is needed and a PowerApp V2 trigger is acceptable.
 
 Runs on the **final** wizard step, immediately before the write flow is called, so an abandoned wizard leaves no stray grants.
 
@@ -400,7 +400,7 @@ Three networking flows for the app's Private endpoints tab. **Built and tested 2
 | CreatePrivateEndpoint | `workspaceId`, `name`, `targetPrivateLinkResourceId`, `targetSubresourceType`, `requestMessage` | `POST` | `Outcome`, `EndpointId`, `ProvisioningState`, `Message` | [flows/nocustomcon/CreatePrivateEndpoint.md](docs/flows/nocustomcon/CreatePrivateEndpoint.md) |
 | DeletePrivateEndpoint | `workspaceId`, `managedPrivateEndpointId` | `DELETE /{mpeId}` | `Outcome`, `Message` | [flows/nocustomcon/DeletePrivateEndpoint.md](docs/flows/nocustomcon/DeletePrivateEndpoint.md) |
 
-The two writes require **workspace Admin**, which owners do not hold — brokering is the only design that works, not a preference. Neither write may ship before the `crbab_Workspaces` ownership check (F5.9): a create sends a request that leaves Fabric entirely, and a delete breaks a live data path with a 15-minute cooldown before it can be undone.
+The two writes require **workspace Admin**, which owners do not hold — brokering is the only design that works, not a preference. Neither write may ship before the `ubsppcoe_Workspace` ownership check (F5.9): a create sends a request that leaves Fabric entirely, and a delete breaks a live data path with a 15-minute cooldown before it can be undone.
 
 No polling. `POST` returns `201` immediately with `provisioningState: Provisioning` and carries no `x-ms-operation-id` — `GetGitOperationStatus` is not involved. Progress is observed by re-listing.
 
@@ -437,7 +437,7 @@ The same message appears for a genuine fault when a flow exceeds the **120-secon
 
 **An operation marked `x-ms-visibility: internal` is invisible in the flow designer.** It still appears in the custom connector editor, so the connector looks correct while the action simply cannot be added to a flow. The Definition tab has a Visibility dropdown on the *operation* and another on each *parameter*; they mean opposite things. Operations want `none`, and a `Content-Type` header parameter wants `internal` **plus** a default of `application/json` — internal without a default means the header is never sent. Cost an hour on flow 7.
 
-**Environment variables must be inserted from the picker, not typed.** Typing `parameters('X (ab_X)')` into the fx tab creates the reference but not the declaration in the flow's `parameters` block, and the run fails with *The workflow parameter … is not found*. Pick it from the dynamic-content **Environment variable** section, then save. If the variable is missing from the picker, close and reopen the flow from Solutions.
+**Environment variables must be inserted from the picker, not typed.** Typing `parameters('X (crbab_X)')` into the fx tab creates the reference but not the declaration in the flow's `parameters` block, and the run fails with *The workflow parameter … is not found*. Pick it from the dynamic-content **Environment variable** section, then save. If the variable is missing from the picker, close and reopen the flow from Solutions.
 
 **The Git folder must already exist in the branch.** `connect` returns `GitProviderResourceNotFound` for a missing folder — the portal's *Create and sync* prompt has no API equivalent. Names are case-sensitive. See OPEN-ISSUES §1.11.
 
@@ -465,7 +465,7 @@ The same message appears for a genuine fault when a flow exceeds the **120-secon
 
 **429 handling.** Fabric returns `Retry-After`. Honour it — at 4000 workspaces this will happen.
 
-**Two IDs for one service principal.** `ab_BrokerClientId` is the application ID and goes to the Entra token endpoint; `ab_BrokerObjectId` is the directory object ID and goes to the Fabric roleAssignments API. Swapping them fails at runtime, not at import.
+**Two IDs for one service principal.** `crbab_BrokerClientId` is the application ID and goes to the Entra token endpoint; `crbab_BrokerObjectId` is the directory object ID and goes to the Fabric roleAssignments API. Swapping them fails at runtime, not at import.
 
 **One broker identity.** All app-only calls run as `sp_fabric_powerapp`. `sp_fabric_monit` is a monitoring identity with tenant-wide read/write and must not be used by these flows.
 **There is no update API for a Git connection.** Changing branch or directory means `git/disconnect` then `git/connect` and a fresh `initializeConnection`.

@@ -16,14 +16,14 @@ Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (desig
 - **No connector connection is needed.** Built-in actions only: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` must end up `{}`.
 - The child flow **`GetFabricToken`** must already exist: `50895fca-088f-f111-8076-7ced8d76bf1b`.
 - Authentication is **service principal** (`sp_fabric_powerapp`). The delete API requires **workspace Admin**, which owners do not hold — a delegated call would `403` for every user of the app. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.
-- Environment variables are **not referenced directly by this flow** — the child flow consumes `ab_TenantId` and `ab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
+- Environment variables are **not referenced directly by this flow** — the child flow consumes `crbab_TenantId` and `crbab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
 - **No Azure permission is involved.** Deleting the Fabric-side endpoint tears down the request; nothing is required of the target resource's owner. [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.2.
 
 > ### The most destructive flow in the solution
 >
 > It takes `workspaceId` and an endpoint ID at face value. Anyone who can reach the trigger URL can delete a private endpoint in **any** workspace the broker administers. Unlike a Git disconnect — which leaves the repository untouched and can be undone by reconnecting — deleting a managed private endpoint **breaks a live data path**: Spark jobs and notebooks relying on it start failing, and it cannot be recreated for **15 minutes** (§6 of the investigation). Recreating it also produces a fresh `Pending` request that a human in another organisation must approve again.
 >
-> **Do not ship this flow before F5.9** — the `crbab_Workspaces` ownership check (OPEN-ISSUES §10.3). Add the audit row (F5.10) at the same time. The deferral that was defensible for the Git flows is not defensible here.
+> **Do not ship this flow before F5.9** — the `ubsppcoe_Workspace` ownership check (OPEN-ISSUES §10.3). Add the audit row (F5.10) at the same time. The deferral that was defensible for the Git flows is not defensible here.
 
 Actions are listed in execution order.
 

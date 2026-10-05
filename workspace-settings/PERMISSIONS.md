@@ -62,12 +62,12 @@ This is the permission set to request for the user population.
 
 | # | Needs | Where | Granted by | Why |
 |---|---|---|---|---|
-| **U1** | Dataverse security role **`Fabric Workspace Owner`** | Power Platform | System Administrator | Read on `Connector`, `Connection Reference`, `crbab_Workspaces`, `crbab_AllowedConnectionType`, `crbab_PrivateLinkTarget` |
+| **U1** | Dataverse security role **`Fabric Workspace Owner`** | Power Platform | System Administrator | Read on `Connector`, `Connection Reference`, `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType`, `ubsppcoe_PrivateLinkTarget` |
 | **U2** | Membership of the Entra group behind the Dataverse **group team** | Entra → Dataverse | Groups Administrator | The mechanism by which U1 is assigned |
 | **U3** | Share on the **canvas app** | Power Platform | Maker | Access to the application itself |
 | **U4** | Share on the **custom connector** | Power Platform | Maker | Separate from U3 — one without the other leaves the user an application they cannot use |
 | **U5** | **Run-only** access to each flow the application calls | Power Automate | Flow owner | Per flow, per environment |
-| **U6** | A row in `crbab_Workspaces` naming them primary or secondary owner | Dataverse | Provisioning automation | The authorization boundary. Without a row the application shows them nothing |
+| **U6** | A row in `ubsppcoe_Workspace` naming them primary or secondary owner | Dataverse | Provisioning automation | The authorization boundary. Without a row the application shows them nothing |
 | **U7** | **Contributor** on the Fabric workspace | Fabric | Workspace Admin / provisioning | Not for the application — for everything the application deliberately does *not* broker |
 | **U8** | Azure DevOps access to their own repository | Azure DevOps | ADO project administrator | They create their own connection; the application never holds Git credentials |
 | **U9** | Consent to the delegated scopes, on first connection | Entra | **The user themselves** | `Gateway.Read.All` and `Connection.ReadWrite.All` are user-consentable — no administrator required |
@@ -83,7 +83,7 @@ That is the point of the entire design — the application exists so these capab
 | Missing | Symptom | Why it misleads |
 |---|---|---|
 | U1 — role on `Connector` | `prvReadConnector` error | Reads like a connector sharing problem. It is not; a solution-aware connector is a Dataverse row and needs **table privileges** |
-| U1 — read on `crbab_PrivateLinkTarget` | **An empty dropdown, with no error at all** | Looks like a formula bug. Check the security role before the formula |
+| U1 — read on `ubsppcoe_PrivateLinkTarget` | **An empty dropdown, with no error at all** | Looks like a formula bug. Check the security role before the formula |
 
 ---
 
@@ -120,8 +120,8 @@ They are different identifiers for the same principal and are **not interchangea
 
 | Identifier | Value | Used for |
 |---|---|---|
-| Client (application) ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | Token acquisition — `ab_BrokerClientId` |
-| Service principal object ID | `6f70a764-908f-435b-a930-ffcb375577f3` | `principal.id` on a connection role grant — `ab_BrokerObjectId` |
+| Client (application) ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | Token acquisition — `crbab_BrokerClientId` |
+| Service principal object ID | `6f70a764-908f-435b-a930-ffcb375577f3` | `principal.id` on a connection role grant — `crbab_BrokerObjectId` |
 
 Supplying the client ID where the object ID is required produces a role assignment that grants nothing, and the subsequent connect then fails as though the connection had never been shared. Both are published as environment variables so neither is retyped from memory.
 
@@ -178,7 +178,7 @@ Two further traps:
 
 The Azure-side rights sit entirely with the **approver** — the data source administrator who accepts or rejects the connection request in the Azure portal. That person is outside this solution's control and needs no role within it.
 
-This is the single best property of the private-endpoints feature and it is worth protecting deliberately. The obvious enhancement — calling Azure's `privateLinkResources` API for authoritative sub-resource lists instead of maintaining the `crbab_PrivateLinkTarget` table — would require the broker to hold **Reader in every subscription any owner might ever target**. That means Azure onboarding across the entire estate, traded away to avoid maintaining a 28-row reference table. It was rejected for that reason and should stay rejected.
+This is the single best property of the private-endpoints feature and it is worth protecting deliberately. The obvious enhancement — calling Azure's `privateLinkResources` API for authoritative sub-resource lists instead of maintaining the `ubsppcoe_PrivateLinkTarget` table — would require the broker to hold **Reader in every subscription any owner might ever target**. That means Azure onboarding across the entire estate, traded away to avoid maintaining a 28-row reference table. It was rejected for that reason and should stay rejected.
 
 ---
 
@@ -270,7 +270,7 @@ The fastest route from a symptom to the missing permission.
 | `403 InsufficientScopes` on a delegated call | A stale `oauth2PermissionGrant` — the scope changed and consent was not revoked | §4 |
 | `AADSTS65001` at connection creation | Connector scope string does not match the app registration | §4 |
 | `prvReadConnector` | User lacks Read on the `Connector` table (U1) | §2 |
-| **Empty sub-resource dropdown, no error** | User lacks Read on `crbab_PrivateLinkTarget` (U1) | §2 |
+| **Empty sub-resource dropdown, no error** | User lacks Read on `ubsppcoe_PrivateLinkTarget` (U1) | §2 |
 | Permission errors for app users on a cleanly imported solution | Run-only users not reconfigured after import (U5) | §2, [MIGRATION.md](./MIGRATION.md) |
 | Every sign-in fails against the wrong tenant | Connector tenant ID still points at the source tenant | [MIGRATION.md](./MIGRATION.md) |
 | `WorkspaceHasNoCapacityAssigned` | No capacity on the workspace (W2) | §8 |

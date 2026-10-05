@@ -1,4 +1,4 @@
-crbab_resourcetype,crbab_subresource,crbab_displayname,crbab_sortorder
+ubsppcoe_resourcetype,ubsppcoe_subresource,ubsppcoe_displayname,ubsppcoe_sortorder
 microsoft.storage/storageaccounts,blob,Blob Storage (blob),10
 microsoft.storage/storageaccounts,dfs,Data Lake Storage Gen2 (dfs),20
 microsoft.storage/storageaccounts,file,File Storage (file),30

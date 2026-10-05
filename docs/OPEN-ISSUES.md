@@ -16,7 +16,7 @@ Last reviewed: 2026-08-11
 
 | ID | Area | Item | Why | Status |
 |---|---|---|---|---|
-| **F1.1** | GetFabricToken | Move tenant ID and client ID to environment variables; wire up the unused `ab_TenantId` | Hardcoded per-environment values need hand-editing after every import | ✅ Done 2026-08-07, verified in export · §8.3 |
+| **F1.1** | GetFabricToken | Move tenant ID and client ID to environment variables; wire up the unused `crbab_TenantId` | Hardcoded per-environment values need hand-editing after every import | ✅ Done 2026-08-07, verified in export · §8.3 |
 | **F2.2** | GetGitOperationStatus | Return `error.moreDetails` from `GET /v1/operations/{id}`, not just `errorcode` / `errormessage` | `GitSyncFailed` is a wrapper; `moreDetails` names the failing item | ✅ Done 2026-08-07, verified in export · §1.13 |
 | **F2.4** | GetGitOperationStatus | Drop the `Do_until`, rename the flow, switch the trigger to `PowerAppV2`, call `GetFabricToken` internally, add `GET /operations/{id}/result` | A read the app can call directly; `/result` is the only source of `remoteCommitHash` | ✅ Done 2026-08-07, verified in export · §6.2 |
 | **F3.1** | Flow 3 | Retire, or rebuild as `ListMyConnections` on the delegated connector | It listed the broker's connections; the picker must list the caller's | ✅ Done 2026-08-07 |
@@ -25,8 +25,8 @@ Last reviewed: 2026-08-11
 | **F5.6** | ConnectWorkspaceToGit | Delete `options` (`allowOverrideItems: true`) from `Update_from_git`. `conflictResolution` already removed | The app must not consent to overwriting the owner's items | ✅ Done 2026-08-11 · §1.10 |
 | **F5.7** | ConnectWorkspaceToGit | Add a `ConnectedSyncPending` outcome. **Only if** a refusal returns a synchronous 4xx: also make the Response reachable on failure | `Failed` is wrong when the workspace is connected; a 4xx aborts before `Respond_to_a_Power_App_or_flow` | ✅ Done 2026-08-11 · §1.10 |
 | **F5.8** | ConnectWorkspaceToGit | ~~Test whether `PATCH myGitCredentials` is redundant; delete it~~ | **Decided 2026-08-11: keep it.** Possibly redundant, but harmless and already proven in five passing tests | ➖ Done — kept by decision · §5.4 |
-| **F5.9** | ConnectWorkspaceToGit | Add the `crbab_Workspaces` ownership check; move to the Dataverse request-row trigger | PowerApp V2 cannot prove caller identity — **blocks sharing the app** | ⏸ Deferred · §1.7 |
-| **F5.10** | ConnectWorkspaceToGit | Write an audit row to `crbab_GitAuditLog` (table not yet created) | No record of who connected what | 🔴 Open · §10 |
+| **F5.9** | ConnectWorkspaceToGit | Add the `ubsppcoe_Workspace` ownership check; move to the Dataverse request-row trigger | PowerApp V2 cannot prove caller identity — **blocks sharing the app** | ⏸ Deferred · §1.7 |
+| **F5.10** | ConnectWorkspaceToGit | Write an audit row to `ubsppcoe_GitAuditLog` (table not yet created) | No record of who connected what | 🔴 Open · §10 |
 | **F5.11** | ConnectWorkspaceToGit | ~~Turn Asynchronous Pattern **Off** for `Initialize_connection`~~ | **Decided 2026-08-11: leave it On.** Initialize is fast and has never returned a real 202; letting the connector poll is simpler than handling one | ➖ Done — accepted by decision · §1.9 |
 | **5.2** | Design | ~~Decide the credential type inside the owner's connection~~ | **Decided 2026-08-11: not the app's call.** Owners create connections themselves and may use a service principal; the app only grants the broker access to one that already exists | ➖ Done — decided · §5.2 |
 | **5.3** | Design | ~~Detect expired connection credentials~~ | **Decided 2026-08-11: accepted.** Syncs fail visibly to the owner, who owns the connection and can re-authenticate | ➖ Done — accepted risk · §5.3 |
@@ -35,10 +35,10 @@ Last reviewed: 2026-08-11
 | **8.2** | ALM | Run-only settings do not survive import | Must be re-applied per flow, per environment, or users hit permission errors | 🟡 Open · §8.2 |
 | **8.4** | ALM | Write the post-import checklist | Needed before the first import into a second environment; needs a named owner | ⏸ Deferred · §8.4 |
 | **9** | Connector | Delete the two empty `{connectionId}` path stubs left by the rejected first attempt | Dead entries that will confuse the next reader; scopes and operations themselves are done | 🟡 Open · §9.2 |
-| **10** | Build | Flows, tables and screens not yet built | `crbab_GitAuditLog`, wizard, flow 4 item list | 🔴 Open · §10 |
+| **10** | Build | Flows, tables and screens not yet built | `ubsppcoe_GitAuditLog`, wizard, flow 4 item list | 🔴 Open · §10 |
 | **11** | Flow 7 | ~~`ListConnectionRoleAssignments` sends no `continuationToken`~~ | ✅ **Done 2026-08-11.** `Do_until` paging added, mirroring flow 3; connector already supported it. Single-page path re-verified | ✅ Done · FLOWS §7 |
 
-**Do first:** F5.10 and the `crbab_GitAuditLog` table, since the wizard depends on both. F5.9 authorization must land before the app is shared with anyone.
+**Do first:** F5.10 and the `ubsppcoe_GitAuditLog` table, since the wizard depends on both. F5.9 authorization must land before the app is shared with anyone.
 
 ---
 
@@ -331,9 +331,9 @@ This must land before the app is shared with anyone outside the build team. Unti
 
 What "later" has to include:
 
-1. Create the audit table (`crbab_GitAuditLog`, §10.3); have the canvas app create the row **before** calling the write flow, so `createdby` is stamped server-side, and have `ConnectWorkspaceToGit` and `DisconnectWorkspaceFromGit` read their parameters and their actor from that row.
-2. Look up `crbab_Workspaces` for the target `workspaceId`; proceed only if `createdby` matches `crbab_primary_owner` or `crbab_secondary_owner`. **Fail closed** — no row found means deny, not allow.
-3. Write the denial to `crbab_GitAuditLog` as well as the success.
+1. Create the audit table (`ubsppcoe_GitAuditLog`, §10.3); have the canvas app create the row **before** calling the write flow, so `createdby` is stamped server-side, and have `ConnectWorkspaceToGit` and `DisconnectWorkspaceFromGit` read their parameters and their actor from that row.
+2. Look up `ubsppcoe_Workspace` for the target `workspaceId`; proceed only if `createdby` matches `ubsppcoe_primary_owner` or `ubsppcoe_secondary_owner`. **Fail closed** — no row found means deny, not allow.
+3. Write the denial to `ubsppcoe_GitAuditLog` as well as the success.
 
 The canvas app filtering the workspace list is **not** authorization — it is a convenience. The check has to be server-side.
 
@@ -540,13 +540,13 @@ Every token-acquiring flow hardcodes environment-specific values:
 - the SPN client ID in the same request body
 - the Fabric API host and scope
 
-`ab_TenantId` already exists in `environmentvariabledefinitions/` and is **referenced by nothing**. It was created and never wired up.
+`crbab_TenantId` already exists in `environmentvariabledefinitions/` and is **referenced by nothing**. It was created and never wired up.
 
 Environment variable *values* can be supplied at import time, which is the supported way to vary these per environment. Without this, every import needs each flow opened and hand-edited — nine flows, every deployment, silently wrong if missed.
 
 Actions:
 
-1. Wire `ab_TenantId` into the token URI of every flow.
+1. Wire `crbab_TenantId` into the token URI of every flow.
 2. Add an environment variable for the broker client ID — after 1.6 is decided.
 3. Leave the secret as an `Initialize_variable` for now (§2), but plan the Key Vault secret variable in the same pass so the flows are only reworked once.
 
@@ -613,7 +613,7 @@ Confirm tenant consent policy allows user consent for these scopes, or arrange a
 Three commands beat portal archaeology, which is where an afternoon went on 2026-08-07:
 
 1. Read the grants — `oauth2PermissionGrants` filtered by the connector's SP object ID (`<delegated app object id>`). This is what the token will actually contain.
-2. Compare against `Connector/ab_FabricSetting_connectionparameters.json` in a fresh export. That file is what drives the authorize request; if the scope is not there, the Security tab never saved. **The export checked in under `Connector/` predates the rename to `FabricSetting` and still carries the former filename.**
+2. Compare against `Connector/crbab_FabricSetting_connectionparameters.json` in a fresh export. That file is what drives the authorize request; if the scope is not there, the Security tab never saved. **The export checked in under `Connector/` predates the rename to `FabricSetting` and still carries the former filename.**
 3. Only then look at the portal.
 
 The Entra portal's *Enterprise applications → Permissions* blade shows the same data, but revoke is a per-row `⋯` that appears on hover and only for Cloud Application Administrator — easy to conclude the option does not exist.
@@ -636,7 +636,7 @@ The Entra portal's *Enterprise applications → Permissions* blade shows the sam
 
 ### 10.2 Interactive, not queued — decided 2026-08-07
 
-The app calls the write flows **directly** and gets an answer back. An earlier design queued requests through a `crbab_GitRequest` table on a Dataverse row-created trigger; that is dropped. It bought asynchrony nobody needed, and cost the app its return value, a few seconds of trigger latency, and a second artifact to correlate when debugging.
+The app calls the write flows **directly** and gets an answer back. An earlier design queued requests through a `ubsppcoe_GitRequest` table on a Dataverse row-created trigger; that is dropped. It bought asynchrony nobody needed, and cost the app its return value, a few seconds of trigger latency, and a second artifact to correlate when debugging.
 
 The 120-second inbound limit is not the constraint it looked like, because **no flow waits for a Git sync any more**. A write flow starts the operation and returns; Fabric finishes it whether or not anyone is watching.
 
@@ -646,7 +646,7 @@ App   ConnectWorkspaceToGit.Run(auditRowId)
         |
         v
 Flow  1. Get a row (auditRowId) → _createdby_value, and every parameter
-      2. ownership check against crbab_Workspaces (F5.9) — else Outcome = Denied, stop
+      2. ownership check against ubsppcoe_Workspace (F5.9) — else Outcome = Denied, stop
       3. connect + initializeConnection probe, strategy None (§10.6)
       4. update the row: Outcome, RequiredAction, Message
         |
@@ -671,19 +671,19 @@ What still gets resolved: F5.9 (authorization), F5.10 (audit), F5.7 (`ConnectedS
 
 **`AddConnectionRoleAssignment` runs before all of this**, delegated, from the app. The broker cannot use the connection until the owner grants it, and only the owner can do that. It returns 201, never 202.
 
-### 10.3 `crbab_GitAuditLog` — the only table
+### 10.3 `ubsppcoe_GitAuditLog` — the only table
 
 | Column | Type | Notes |
 |---|---|---|
-| `crbab_WorkspaceId` | Text | Target workspace |
-| `crbab_Action` | Choice | `Connect` \| `Sync` \| `Disconnect` |
-| `crbab_ConnectionId` | Text | Owner's connection |
-| `crbab_Organization` / `Project` / `Repository` / `Branch` / `Directory` | Text | Connect parameters |
-| `crbab_InitializationStrategy` | Choice | `None` \| `PreferRemote` \| `PreferWorkspace` — set by stage 2 only |
-| `crbab_Outcome` | Choice | `Requested` \| `Denied` \| `Started` \| `NeedsChoice` \| `ConnectedSyncPending` \| `Failed` |
-| `crbab_OperationId` | Text | **Nullable** — a 200 produces none |
-| `crbab_Message` | Multiline | Shown to the owner |
-| `crbab_ErrorDetails` | Multiline | `error.moreDetails` from F2.2 |
+| `ubsppcoe_WorkspaceId` | Text | Target workspace |
+| `ubsppcoe_Action` | Choice | `Connect` \| `Sync` \| `Disconnect` |
+| `ubsppcoe_ConnectionId` | Text | Owner's connection |
+| `ubsppcoe_Organization` / `Project` / `Repository` / `Branch` / `Directory` | Text | Connect parameters |
+| `ubsppcoe_InitializationStrategy` | Choice | `None` \| `PreferRemote` \| `PreferWorkspace` — set by stage 2 only |
+| `ubsppcoe_Outcome` | Choice | `Requested` \| `Denied` \| `Started` \| `NeedsChoice` \| `ConnectedSyncPending` \| `Failed` |
+| `ubsppcoe_OperationId` | Text | **Nullable** — a 200 produces none |
+| `ubsppcoe_Message` | Multiline | Shown to the owner |
+| `ubsppcoe_ErrorDetails` | Multiline | `error.moreDetails` from F2.2 |
 
 `createdby` and `createdon` come free and are the authorization anchor (§10.2).
 
@@ -775,13 +775,13 @@ All three handoffs to stage 2 were then driven from these results: `UpdateFromGi
 
 ### 10.7 Open questions
 
-- Retention on `crbab_GitAuditLog`. It is the audit record, so the answer is probably "never", but somebody has to say so.
-- App users need **Create** on `crbab_GitAuditLog`, and **Read** on their own rows — security-role work under §6. The flow's SPN needs **Read/Write** on all rows.
+- Retention on `ubsppcoe_GitAuditLog`. It is the audit record, so the answer is probably "never", but somebody has to say so.
+- App users need **Create** on `ubsppcoe_GitAuditLog`, and **Read** on their own rows — security-role work under §6. The flow's SPN needs **Read/Write** on all rows.
 - **Consumed rows.** Whether to stamp a row as used on first read, so an audit row ID cannot be replayed into a second flow run (§10.2). Low risk, cheap to add.
 - **Concurrency.** The app writes the row once, the flow updates it once. The only real race is a double-click, and the already-connected check covers it (§10.2).
 
 **Descoped** (Contributors can already do these in the UI): `GetGitSyncStatus`, `CommitWorkspaceToGit`, `UpdateWorkspaceFromGit` as standalone flows, and `ChangeGitConnectionSettings` (use disconnect + connect). The `commitToGit` / `updateFromGit` **calls** survive as flow 8, because initialize requires one of them to move any content.
 
-**Also descoped:** `crbab_GitConnection` and `crbab_WorkspaceGitMapping` tables — Fabric owns that state and the GET APIs return it live.
+**Also descoped:** `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping` tables — Fabric owns that state and the GET APIs return it live.
 
 **Done 2026-08-07.** The old flow 3 ran as the broker SPN and returned the SPN's connections rather than the caller's. It was renamed in place to `ListMyConnections` and its HTTP action swapped for the delegated connector, keeping its GUID and its pagination logic. See FLOWS §3.

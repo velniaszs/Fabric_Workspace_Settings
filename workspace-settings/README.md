@@ -51,7 +51,7 @@ Roughly 4000 Fabric workspaces need owner-driven configuration of Git integratio
 | Cloud flows | 17 built · 3 designed, not built |
 | Dataverse tables | 2 shipped · 2 to be created |
 | Canvas app | `crbab_app5` — three tabs |
-| Custom connector | `ab_FabricSetting` — delegated calls only |
+| Custom connector | `crbab_FabricSetting` — delegated calls only |
 | Identities | 1 broker service principal · 1 delegated application |
 | Azure RBAC required | **None** |
 

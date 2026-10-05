@@ -12,7 +12,7 @@ Related: `ARCHITECTURE.md` §5 (what the connector is), `PREREQUISITES.md` (the 
 
 ## 1. Connector-level settings
 
-Schema name `ab_FabricSetting`. Create it **inside the solution** so it becomes a Dataverse row rather than a classic connector.
+Schema name `crbab_FabricSetting`. Create it **inside the solution** so it becomes a Dataverse row rather than a classic connector.
 
 ### General tab
 
