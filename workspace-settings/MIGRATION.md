@@ -42,8 +42,8 @@ Verified against the solution export on 2026-09-25.
 
 | Component | Count | Note |
 |---|---|---|
-| Cloud flows | 17 | Definitions only — connections, secrets and run-only settings do not travel |
-| Dataverse tables | 2 | `ubsppcoe_Workspace`, `ubsppcoe_AllowedConnectionType` — **schema only, no data** |
+| Cloud flows | 19 | Definitions only — connections and run-only settings do not travel |
+| Dataverse tables | 0 | **None.** The `ubsppcoe_` tables belong to the platform team's shared solution and must already exist |
 | Canvas app | 1 | `crbab_app5` |
 | Custom connector | 1 | `crbab_FabricSetting` — **including a hardcoded tenant ID** |
 | Connection references | 5 | 4 × custom connector, 1 × Office 365 Users — **arrive unbound** |
@@ -62,7 +62,7 @@ Verified against the solution export on 2026-09-25.
 | Environment variable **values** for the target tenant | 4 |
 | The broker client secret inside `GetFabricToken` | 4 |
 | The connector's tenant ID and delegated app secret | 4 |
-| The `ubsppcoe_PrivateLinkTarget` table and its 28 seed rows | 4 |
+| The 28 seed rows for `ubsppcoe_PrivateLinkTarget` | 4 |
 | The `ubsppcoe_GitAuditLog` table | 4 |
 | The `Fabric Workspace Owner` security role | 4 |
 | The Dataverse group team | 4 |
@@ -490,9 +490,8 @@ Carried forward from the engineering issue log, with their current state.
 | M3 | Connector tenant ID is hardcoded and travels with the export | Every sign-in fails in the target tenant | 🟡 Open — Step 13 is the workaround |
 | M4 | Broker secret is a flow variable, scrubbed on export | Token acquisition fails until re-entered | 🟡 Open — Step 14. Fix is Key Vault ([SECURITY.md](./SECURITY.md) §10.2) |
 | M5 | Two empty path stubs in the connector's OpenAPI — `/connections/{connectionId}` and `/connections/{connectionId}/roleAssignments` | Harmless today; may confuse future imports or validation | 🟡 Open — delete at the next connector edit |
-| M6 | `ubsppcoe_PrivateLinkTarget` and `ubsppcoe_GitAuditLog` are not in the solution | Manual creation per environment; drift between environments | 🟡 Open — Steps 15 and 16. Add both to the solution |
+| M6 | `ubsppcoe_GitAuditLog` is not in the shared solution | Manual creation per environment; drift between environments | 🟡 Open — Step 16 |
 | M7 | The solution is exported unmanaged | Production environment remains customizable | 🟡 Open — produce a managed export for production |
-| M8 | Private-endpoint flows are documented but not built | The private-endpoints tab is non-functional | 🔴 Open — three flows to build |
 
 > **Resolved since the issue log was written:** the tenant ID and broker client ID are no longer hardcoded in `GetFabricToken`. Both are now read from the `crbab_TenantId` and `crbab_BrokerClientId` environment variables, verified in the current export. Earlier notes describing them as hardcoded are superseded by this document.
 

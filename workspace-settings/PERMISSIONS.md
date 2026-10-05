@@ -20,7 +20,7 @@ It covers the workspace-settings solution only. The capacity-scoped `ItemCreatio
 
 1. [Summary — the four parties](#1-summary--the-four-parties)
 2. [The workspace owner — the end user](#2-the-workspace-owner--the-end-user)
-3. [The broker service principal](#3-the-broker-service-principal)
+3. [The broker service account](#3-the-broker-service-account)
 4. [The delegated application](#4-the-delegated-application)
 5. [Azure — nobody on our side](#5-azure--nobody-on-our-side)
 6. [Administrative roles required to perform the setup](#6-administrative-roles-required-to-perform-the-setup)
@@ -38,7 +38,7 @@ Four parties hold rights in this system, and keeping them separate is the whole 
 ```mermaid
 flowchart TB
     OWNER["<b>Workspace owner</b><br/>Fabric Contributor<br/>Dataverse read<br/>ADO access to own repo"]
-    BROKER["<b>Broker SPN</b><br/>sp_fabric_powerapp<br/>Fabric Workspace Admin<br/><i>no ADO · no Azure · no tenant scope</i>"]
+    BROKER["<b>Service account</b><br/>user account · Fabric Workspace Admin<br/><i>no ADO · no Azure · no tenant scope</i>"]
     DELEG["<b>Delegated app</b><br/>gateway_lister_app<br/>3 user-consentable scopes<br/><i>never exceeds the caller</i>"]
     APPROVER["<b>Data source admin</b><br/>Azure RBAC on the target<br/><i>outside our control</i>"]
 
@@ -50,7 +50,7 @@ flowchart TB
 | Party | Holds | Does **not** hold |
 |---|---|---|
 | **Workspace owner** | Fabric Contributor, Dataverse read, own ADO access | Fabric Workspace Admin, any Entra role, any Azure RBAC, any broker credential |
-| **Broker SPN** | Fabric Workspace Admin on managed workspaces | Any Azure DevOps right, any Azure RBAC, any Entra application permission, any tenant-scoped Fabric permission |
+| **Service account** | Fabric Workspace Admin on managed workspaces | Any Azure DevOps right, any Azure RBAC, any Entra application permission, any tenant-scoped Fabric permission |
 | **Delegated app** | Three delegated Power BI Service scopes | Any application permission; it can never exceed what the calling user already holds |
 | **Data source admin** | Azure RBAC on the private-link target | Any role in this solution |
 
@@ -87,21 +87,34 @@ That is the point of the entire design — the application exists so these capab
 
 ---
 
-## 3. The broker service principal
+## 3. The broker service account
 
-`sp_fabric_powerapp` — client ID `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc`, object ID `6f70a764-908f-435b-a930-ffcb375577f3`.
+A **user account** — email and password — signed in on the *HTTP with Microsoft Entra ID (preauthorized)* connection. **There is no service principal, no app registration and no client secret in this solution.**
+
+It is a service account rather than a named person deliberately: the application serves ~4000 workspaces, and tying that to an individual makes it one leaver away from stopping.
 
 ### What it must hold
 
 | # | Needs | Where | Granted by | Notes |
 |---|---|---|---|---|
-| **B1** | Membership of the Entra security group `fabric_power_app_grp` | Entra | Groups Administrator | The **service principal object**, not the app registration |
-| **B2** | Fabric tenant setting **"Service principals can call Fabric public APIs"**, scoped to that group | Fabric admin portal | Fabric Administrator | Paired with B1 |
-| **B3** | **Workspace Admin** on every managed workspace | Fabric | Workspace provisioning automation, via the group | Not granted by hand, per workspace |
-| **B4** | The `User` role on the owner's Azure DevOps connection | Fabric | Granted **at runtime** by `AddConnectionRoleAssignment` | Self-service, per connection, on the final wizard step |
-| **B5** | A client secret | Entra | Application Administrator | Re-entered per environment; see [SECURITY.md](./SECURITY.md) |
+| **B1** | **Workspace Admin** on every managed workspace | Fabric | Workspace provisioning automation, via a group | Not granted by hand, per workspace |
+| **B2** | The `User` role on the owner's Azure DevOps connection | Fabric | Granted **at runtime** by `AddConnectionRoleAssignment` | Self-service, per connection, on the final wizard step |
+| **B3** | A **Power Platform licence**, and the connection authorised as this account | Power Platform | Maker | A connector connection needs the account to remain licensed |
+| **B4** | **Exemption from password expiry and interactive MFA**, or a documented re-authentication process | Entra | Identity team | A rotation silently breaks every Fabric call until the connection is re-authorised |
+| **B5** | Not subject to a blocking **Conditional Access** policy, and excluded from joiner-mover-leaver reviews | Entra | Identity team | Service accounts do get disabled by lifecycle automation |
 
-**B1 and B2 are a pair and neither works alone.** Together they are the hardest prerequisite in the system to diagnose, because their absence produces a bare `401` on every call with nothing pointing at a tenant setting.
+**B1 is the only Fabric grant.** Everything else on this list is about keeping the account's sign-in alive.
+
+> **B4 and B5 are the ones that bite after go-live, not during setup.** All four of their failure modes present identically — `401` on **every** call at once, with nothing in the run history naming the connection. If the whole application fails simultaneously, suspect the account before suspecting Fabric.
+
+### What used to be required and no longer is
+
+| Removed | Why |
+|---|---|
+| Membership of `fabric_power_app_grp` | Scoped to service principals. Nothing here is one |
+| Tenant setting *Service principals can call Fabric public APIs* | Same — see §7 T1 |
+| A client secret | No token request exists to present one |
+| An app registration, client ID and tenant ID | Nothing acquires a token; the connector does it |
 
 ### What it must **not** be given
 
@@ -109,21 +122,22 @@ This list is as important as the one above, and should be treated as a standing 
 
 | Must not hold | Why |
 |---|---|
-| **Entra application permissions for Fabric** | Fabric does not grant REST access through them. A broker token legitimately shows `roles: (none)` and works correctly. Adding permissions achieves nothing and widens the identity for no benefit |
-| **Any Azure DevOps right** | Git credentials live exclusively in the owner's own connection. The broker references that connection by ID and never sees its contents |
+| **Any Entra application permission or directory role** | It is a user account with a Fabric workspace role. Directory roles widen it far beyond what any flow needs |
+| **Any Azure DevOps right** | Git credentials live exclusively in the owner's own connection. The account references that connection by ID and never sees its contents |
 | **Any Azure RBAC** | Managed private endpoints require none — see §5 |
-| **Any tenant-scoped Fabric permission** | A separate identity holding `Tenant.ReadWrite.All` exists in this tenant and was deliberately **not** used as the broker. An application exposed to 4000 workspace owners must not run on a tenant-wide identity |
+| **Any tenant-scoped Fabric permission** | Fabric Administrator, or anything in the `Tenant.*` family. An identity behind an app exposed to 4000 workspace owners must not be tenant-wide |
 
-### Client ID versus object ID
+### The object ID, and the one place it is used
 
-They are different identifiers for the same principal and are **not interchangeable**.
+`AddConnectionRoleAssignment` posts the account's **directory object ID** as `principal.id`, with `principal.type` = **`User`**, to grant it the `User` role on the owner's connection.
 
-| Identifier | Value | Used for |
-|---|---|---|
-| Client (application) ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | Token acquisition — `crbab_BrokerClientId` |
-| Service principal object ID | `6f70a764-908f-435b-a930-ffcb375577f3` | `principal.id` on a connection role grant — `crbab_BrokerObjectId` |
+| Identifier | Used for |
+|---|---|
+| **Object ID** — the account's directory object ID | `principal.id` on the connection role grant — published as `crbab_BrokerObjectId` |
 
-Supplying the client ID where the object ID is required produces a role assignment that grants nothing, and the subsequent connect then fails as though the connection had never been shared. Both are published as environment variables so neither is retyped from memory.
+> **`principal.type` is `User`, not `ServicePrincipal`.** That changed with the identity model and is easy to miss, because a wrong value does not error: the assignment is accepted, grants nothing, and the connect then fails as though the connection had never been shared. The same flow *filters* existing assignments on this object ID, so a stale value also makes it re-POST a duplicate.
+>
+> **The variable is still called `crbab_BrokerObjectId`** — "Broker" is a misnomer left from the service-principal design. Confirm the name in the environment.
 
 ---
 
@@ -188,16 +202,18 @@ One-time per tenant unless noted. None of this is carried by the solution export
 
 | Task | Role required | Frequency |
 |---|---|---|
-| Both app registrations, and their client secrets | **Application Administrator** | Per tenant |
-| The `fabric_power_app_grp` security group | **Groups Administrator** | Per tenant |
+| The `gateway_lister_app` registration and its client secret | **Application Administrator** | Per tenant |
+| **The service account** — creation, licensing, and exemption from MFA/password-expiry/JML | **Identity administrator** | Per tenant |
 | The Entra group backing the Dataverse group team | **Groups Administrator** | Per tenant |
-| Fabric tenant settings — SPN API access, Git integration | **Fabric Administrator** | Per tenant |
+| Fabric tenant setting — Git integration | **Fabric Administrator** | Per tenant |
 | Capacity assignment on managed workspaces | **Capacity Administrator** | Per workspace |
-| Workspace Admin grant to the broker's group | **Fabric Workspace Admin** / provisioning automation | Per workspace |
-| Solution import, environment variables, security role, group team | **Power Platform System Administrator** | Per environment |
+| Workspace Admin grant to the service account's group | **Fabric Workspace Admin** / provisioning automation | Per workspace |
+| Solution import, environment variable, security role, group team | **Power Platform System Administrator** | Per environment |
 | Connector and canvas app sharing, connector tenant ID | **Maker** | Per environment |
-| Run-only users, client secret re-entry | **Flow owner** | Per environment |
+| Run-only users, and **authorising the three connections as the service account** | **Flow owner** | Per environment |
 | Azure-side approval of private endpoints | **Data source administrator** (Azure RBAC) | Per endpoint |
+
+> **One app registration, not two.** The broker is a user account, so only the delegated app behind the custom connector needs registering — and only it has a secret.
 
 ---
 
@@ -205,13 +221,13 @@ One-time per tenant unless noted. None of this is carried by the solution export
 
 Fabric Admin portal → **Tenant settings**. **Fabric Administrator** role required.
 
-### T1 — Service principals can call Fabric public APIs
+### T1 — *Service principals can call Fabric public APIs* — **not required**
 
-*Developer settings → "Service principals can call Fabric public APIs" → Enabled, scoped to `fabric_power_app_grp`.*
+Earlier revisions made this the hardest prerequisite in the system. **It no longer applies.** The setting, and every Admin API setting beside it, is scoped to service principals in an allowed security group; the broker is a **user account**, so none of them governs it.
 
-**This is the single hardest prerequisite in the system to diagnose.** Without it every app-only Fabric call returns a bare `401 Unauthorized` — *"The caller is not authenticated to access this resource"* — with nothing indicating that a tenant setting is the cause.
+> **Do not enable it "to be safe".** It grants nothing this solution uses, and it widens the tenant for every service principal in whatever group it is scoped to.
 
-Paired with B1 (§3). Neither works without the other.
+The `fabric_power_app_grp` security group is likewise unnecessary.
 
 ### T2 — Git integration enabled
 
@@ -264,9 +280,9 @@ The fastest route from a symptom to the missing permission.
 
 | Symptom | Missing permission | Reference |
 |---|---|---|
-| Bare `401` on **every** Fabric call | Broker group membership (B1) **or** the Fabric tenant setting (T1) | §3, §7 |
-| `403` on a specific workspace | Broker has no Workspace Admin on that workspace (B3 / W1) | §3, §8 |
-| `403` on a specific connection | The runtime role grant (B4) did not happen, or used the **client ID** instead of the object ID | §3 |
+| `401` on **every** Fabric call at once | **The connection, not a permission.** The account's password rotated or expired, MFA or Conditional Access blocked it, or it was disabled or unlicensed. Re-authenticate it (B3–B5) | §3 |
+| `403` on a specific workspace | The account has no Workspace Admin on that workspace (B1 / W1) | §3, §8 |
+| `403` on a specific connection | The runtime role grant (B2) did not happen, or used the wrong object ID — **or sent `principal.type: ServicePrincipal` instead of `User`** | §3 |
 | `403 InsufficientScopes` on a delegated call | A stale `oauth2PermissionGrant` — the scope changed and consent was not revoked | §4 |
 | `AADSTS65001` at connection creation | Connector scope string does not match the app registration | §4 |
 | `prvReadConnector` | User lacks Read on the `Connector` table (U1) | §2 |
@@ -278,7 +294,7 @@ The fastest route from a symptom to the missing permission.
 
 ### The two-symptom rule worth memorising
 
-> **`401` means the broker cannot call Fabric at all** — a tenant setting or group membership problem.
-> **`403` means the broker can call Fabric but holds no role on that object** — a workspace or connection role problem.
+> **`401` means the connection has lapsed** — the account's credential, not a Fabric permission. It fails on *every* call at once.
+> **`403` means the account can call Fabric but holds no role on that object** — a workspace or connection role problem, scoped to one object.
 
-Telling these apart first saves the majority of diagnostic time on this solution.
+Telling these apart first saves the majority of diagnostic time on this solution. The giveaway is **breadth**: everything failing at once is the connection; one thing failing is a role.

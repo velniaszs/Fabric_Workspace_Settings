@@ -48,26 +48,27 @@ Roughly 4000 Fabric workspaces need owner-driven configuration of Git integratio
 |---|---|
 | Solution unique name | `WorkspaceSol` |
 | Version | `1.0.0.12` (exported **unmanaged**) |
-| Cloud flows | 17 built · 3 designed, not built |
-| Dataverse tables | 2 shipped · 2 to be created |
+| Cloud flows | 19 built |
+| Dataverse tables | In the platform team's shared `ubsppcoe_` solution · `GitAuditLog` to be created |
 | Canvas app | `crbab_app5` — three tabs |
 | Custom connector | `crbab_FabricSetting` — delegated calls only |
-| Identities | 1 broker service principal · 1 delegated application |
+| Identities | 1 broker service account · 1 delegated application |
 | Azure RBAC required | **None** |
 
 ---
 
 ## Current status — read before deploying
 
-The solution is **functional for the build team and not yet ready for general availability.** Three items gate release to workspace owners:
+The solution is **functional for the build team and not yet ready for general availability.** Two items gate release to workspace owners:
 
 | # | Gap | Impact |
 |---|---|---|
 | 1 | **Ownership authorization is not implemented** | Any caller who can reach a flow URL can act on any managed workspace, not only their own |
-| 2 | **No audit record of brokered actions** | Fabric attributes every action to the broker service principal; the requesting user is not recorded anywhere durable |
-| 3 | **Private-endpoint flows are not built** | The private-endpoints tab is non-functional |
+| 2 | **No audit record of brokered actions** | Fabric attributes every action to the broker service account; the requesting user is not recorded anywhere durable |
 
-Items 1 and 2 are detailed in [SECURITY.md](./SECURITY.md) §10 and should be built together — the same Dataverse table serves both.
+Both are detailed in [SECURITY.md](./SECURITY.md) §10 and should be built together — the same Dataverse table serves both.
+
+> **All three tabs are built and functional**, private endpoints included. The gates above are authorization and auditability, not missing features.
 
 ---
 

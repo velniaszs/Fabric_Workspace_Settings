@@ -72,7 +72,7 @@ flowchart TB
     end
 
     subgraph entra["Microsoft Entra ID"]
-        SPNA["<b>Broker SPN</b><br/>sp_fabric_powerapp<br/>app-only · Workspace Admin"]
+        ACCT["<b>Service account</b><br/>user account · Workspace Admin<br/><i>signed in on the connection</i>"]
         DELEG["<b>Delegated app</b><br/>gateway_lister_app<br/>runs as the signed-in user"]
     end
 
@@ -82,10 +82,10 @@ flowchart TB
     APP -->|"Run()"| FLOWS
     APP -->|read| DV
     FLOWS -->|"authorize the caller"| DV
-    FLOWS -->|"client credentials"| SPNA
+    FLOWS -->|"HTTP with Entra ID (preauthorized)"| ACCT
     FLOWS --> CONN
     CONN -->|"auth code · invoker"| DELEG
-    SPNA -->|"app-only calls"| FABRIC
+    ACCT -->|"calls as the account"| FABRIC
     DELEG -->|"per-user calls"| FABRIC
     FABRIC -.->|"via owner's connection"| ADO
 ```
@@ -95,11 +95,13 @@ flowchart TB
 | Tier | Responsibility | Holds credentials? |
 |---|---|---|
 | **Canvas app** | Presentation, workspace selection, and every decision requiring the owner's judgement | **No** |
-| **Cloud flows** | The broker. Acquire a token, authorize the caller against Dataverse, call Fabric, flatten the result into a string response | One flow only — see [SECURITY.md](./SECURITY.md) |
+| **Cloud flows** | The broker. Authorize the caller against Dataverse, call Fabric through the preauthorized connector, flatten the result into a string response | **No** — the platform holds the connection |
 | **Dataverse** | The authorization record and reference data. The only component that can answer *"does this user own this workspace?"* | No |
-| **Custom connector** | Delegated Fabric calls, and only those. Every app-only call bypasses it entirely | Yes — the delegated app's secret |
+| **Custom connector** | Delegated Fabric calls, and only those. Every brokered call bypasses it entirely | Yes — the delegated app's secret |
 
 The separation matters: the presentation tier holds nothing an attacker would want, and the tier that holds the privileged identity is never directly reachable by a user.
+
+> **No flow acquires a token, and no flow holds a secret.** Brokered Fabric calls use the **HTTP with Microsoft Entra ID (preauthorized)** connector, which attaches the bearer token for the account its connection signed in as. There is no client-credentials block, no `Authorization` header and no `accessToken` variable anywhere in the solution.
 
 ---
 
@@ -132,13 +134,15 @@ Verified against the solution export on 2026-09-25.
 
 | Component | Count | Detail |
 |---|---|---|
-| Cloud flows | 17 | See §7 |
+| Cloud flows | 19 | See §7 |
 | Canvas app | 1 | `crbab_app5` |
 | Custom connector | 1 | `crbab_FabricSetting` |
-| Connection references | 5 | 4 × `crbab_FabricSetting`, 1 × Office 365 Users |
-| Environment variables | 3 | `crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId` |
+| Connection references | 6 | 4 × `crbab_FabricSetting`, 1 × Office 365 Users, 1 × **HTTP with Microsoft Entra ID (preauthorized)** |
+| Environment variables | 1 | `crbab_BrokerObjectId` — the service account's object ID (§4) |
 
 **No Dataverse table travels with this export.** The tables are `ubsppcoe_`-prefixed and belong to the platform team's shared solution — see below.
+
+> **`crbab_TenantId` and `crbab_BrokerClientId` are gone.** Both existed only to build the client-credentials token request. With no token flow there is nothing to parameterise, and a variable that no longer has a consumer is one somebody will later wire into something.
 
 ### Components *not* carried by the export
 
@@ -146,11 +150,9 @@ These are required for full function and must exist in the target environment:
 
 | Component | Why it is absent |
 |---|---|
-| **The `ubsppcoe_` tables** — the workspace inventory and the allowed-connection-type list | **Owned by the platform team, in a separate shared solution.** This solution reads and writes them but does not define them. A target environment without that solution cannot run any of this |
-| `PrivateLinkTarget` table | Not yet built. Seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) |
+| **The `ubsppcoe_` tables** — the workspace inventory, the allowed-connection-type list and `ubsppcoe_PrivateLinkTarget` | **Owned by the platform team, in a separate shared solution.** This solution reads and writes them but does not define them. A target environment without that solution cannot run any of this. `ubsppcoe_PrivateLinkTarget` is seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) |
 | `GitAuditLog` table | Designed, not yet built — see §5 and [SECURITY.md](./SECURITY.md) |
 | Security role `Fabric Workspace Owner` | Not yet added to the solution |
-| Private-endpoint flows | Designed and documented, **not yet built** — see §7 |
 
 > **The dependency on the shared solution is the one that breaks a fresh deployment silently.** Importing `WorkspaceSol` into an environment without the `ubsppcoe_` tables succeeds — the flows import, the app imports, and every table reference fails at runtime instead. Confirm the shared solution is present *before* importing, not after.
 
@@ -160,42 +162,62 @@ These are required for full function and must exist in the target environment:
 
 Two identities, deliberately separated, because they answer two different questions.
 
-| | **Broker** — `sp_fabric_powerapp` | **Delegated app** — `gateway_lister_app` |
+| | **Broker** — the service account | **Delegated app** — `gateway_lister_app` |
 |---|---|---|
-| Client ID | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | *Per-tenant — read from the app registration* |
-| Object ID | `6f70a764-908f-435b-a930-ffcb375577f3` | — |
-| OAuth flow | App-only, client credentials | Authorization code, runs as the signed-in user |
+| Type | **A user account** — email and password | Entra app registration |
+| Client ID | — none. There is no app registration | *Per-tenant — read from the app registration* |
+| Object ID | *Per-tenant — the account's directory object ID* | — |
+| OAuth flow | **Signed in on the connection.** The connector attaches the token | Authorization code, runs as the signed-in user |
 | Effective rights | Workspace **Admin** on all managed workspaces | Whatever the calling user already holds |
 | Used for | Every privileged write, and most reads | Calls whose *answer depends on who is asking* |
-| Reached via | `GetFabricToken` child flow | The custom connector `FabricSetting`, `runtimeSource: invoker` |
+| Reached via | **HTTP with Microsoft Entra ID (preauthorized)** | The custom connector `FabricSetting`, `runtimeSource: invoker` |
 
-> The broker's **object ID** and **client ID** are different identifiers for the same principal and are **not interchangeable**. `AddConnectionRoleAssignment` passes the *object* ID as `principal.id`; supplying the client ID produces a role assignment that grants nothing, and the subsequent connect fails as though the connection had never been shared. Both are published as environment variables precisely to stop this being retyped from memory.
+> ### There is no service principal in this solution
+>
+> The broker is a **service account, not an application identity**. That one fact removes a whole prerequisite chain:
+>
+> - **No app registration, no client ID, no client secret** to create, store or rotate
+> - **No Entra application permissions** and no admin consent
+> - **No `fabric_power_app_grp` security group**, and **no *Service principals can call Fabric public APIs* tenant setting** — both are scoped to service principals, and nothing here is one
+> - Workspace Admin is granted **directly to the account**
+>
+> It is a **service account rather than a named person** deliberately: the app serves ~4000 workspaces, and tying that to an individual makes the solution one leaver away from stopping.
+
+> ### The object ID still matters, and its purpose has changed
+>
+> `AddConnectionRoleAssignment` grants a role on the owner's Azure DevOps connection to **whichever identity will later use that connection**. That identity is now the service account, so the call posts:
+>
+> | Field | Value |
+> |---|---|
+> | `principal/id` | **The service account's object ID** |
+> | `principal/type` | **`User`** — *not* `ServicePrincipal` |
+> | `role` | `User` |
+>
+> **Both of those changed with the identity model, and getting either wrong fails the same quiet way:** the role assignment is accepted, grants nothing, and the connect then fails as though the connection had never been shared. The flow also *filters* existing assignments on the same object ID, so a stale value makes it re-POST a duplicate instead of recognising its own grant.
+>
+> The value is published as an environment variable so it is never retyped from memory. **That variable is still named `crbab_BrokerObjectId`, and "Broker" is now a misnomer** — confirm the name in the environment before building against it.
 
 ### When delegation is used — and why it is unavoidable
 
 Delegation is used in exactly two structural circumstances, never as a preference:
 
-1. **The data is per-user.** `ListMyConnections` and `ListGateways` must return *the caller's* list. The broker's list is not the caller's list, and there is no API to ask "what would this user see?"
-2. **The right is per-user.** `AddConnectionRoleAssignment` grants the broker access to a connection the owner created. A service principal cannot grant itself a role on someone else's connection — only the connection's Owner can.
+1. **The data is per-user.** `ListMyConnections` and `ListGateways` must return *the caller's* list. The service account's list is not the caller's list, and there is no API to ask "what would this user see?"
+2. **The right is per-user.** `AddConnectionRoleAssignment` grants the service account access to a connection the owner created. Only the connection's Owner can grant that, so the call must run as the owner.
 
-Everything else brokers through the service principal. **Managed private endpoints are the clean illustration:** they are workspace-scoped objects with no per-user view, and their writes require Admin. A delegated create would therefore return `403` for every single user of the application. Brokering is not the preferred design there — it is the only design that works.
+Everything else brokers through the service account. **Managed private endpoints are the clean illustration:** they are workspace-scoped objects with no per-user view, and their writes require Admin. A delegated create would therefore return `403` for every single user of the application. Brokering is not the preferred design there — it is the only design that works.
 
-### Fabric access is not granted by Entra application permissions
+### Fabric access comes from a role on the account, and nothing else
 
-This is confirmed by testing and is the single most counter-intuitive fact in the system.
+A delegated connection has no `roles` claim to inspect and no application permissions to configure. The account's Fabric access requires exactly one thing: **a Fabric-side role on the target object** — workspace, gateway or connection — granted directly to the account.
 
-A broker token with an empty `roles` claim is **normal and works correctly**. Adding Fabric application permissions to the app registration achieves nothing. The broker's Fabric access requires **all three** of the following:
-
-1. Membership of the Entra security group `fabric_power_app_grp` — the **service principal object**, not the app registration
-2. The Fabric tenant setting **"Service principals can call Fabric public APIs"**, enabled and scoped to that group
-3. A Fabric-side role on the target object — workspace, gateway or connection
-
-Items 1 and 2 are a pair; neither works alone. They are a hard prerequisite for every app-only flow and are **tenant-specific**, so both must be recreated in every tenant the solution is deployed to.
+There is no tenant setting to enable and no security group to join. Both of those belong to the service-principal path, which this solution does not use.
 
 | Symptom | Meaning |
 |---|---|
-| Bare `401 Unauthorized` on every call | Item 1 or 2 is missing — the SPN cannot call Fabric at all |
-| `403 Forbidden` | Items 1 and 2 are satisfied; only the object-level role (item 3) is absent |
+| `401 Unauthorized` on **every** call at once | **The connection, not Fabric.** The account's password rotated or expired, MFA or Conditional Access blocked it, or the account was disabled or unlicensed. Re-authenticate the connection |
+| `403 Forbidden` on one object | The connection is healthy; the account lacks the **role on that object** |
+
+> **The run history never says "the connection is the problem".** A lapsed credential presents as `401` across the board, so a wholesale failure means suspect the account before suspecting Fabric.
 
 Full detail: [PERMISSIONS.md](./PERMISSIONS.md).
 
@@ -301,11 +323,9 @@ That is a correctness requirement, not tidiness. With OAP off there is no outbou
 
 ### 6.3 Private endpoints
 
-> **Designed and documented; the three flows are not yet built.** See §7.
-
 Manages the workspace's **managed private endpoints** — the outbound private-link connections Fabric uses to reach data sources that are not publicly reachable. Three operations: list, create, delete.
 
-Structurally the simplest tab: three HTTP calls against one resource, all app-only, all covered by a role the broker already holds. **No connector change, no new scope, no re-consent, no new Fabric permission, and no Azure RBAC at all** — the Azure-side rights sit entirely with the *approver* at the far end. That is what makes the feature deployable across 4000 workspaces with no Azure onboarding, and it is the property most worth protecting.
+Structurally the simplest tab: three HTTP calls against one resource, all brokered, all covered by a role the service account already holds. **No connector change, no new scope, no re-consent, no new Fabric permission, and no Azure RBAC at all** — the Azure-side rights sit entirely with the *approver* at the far end. That is what makes the feature deployable across 4000 workspaces with no Azure onboarding, and it is the property most worth protecting.
 
 **Two independent status fields, and the tab must show both.** Conflating them is the likeliest design mistake here:
 
@@ -350,29 +370,30 @@ An endpoint showing `Failed` needs no diagnosis and no support ticket — it mea
 
 All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They are edited in the maker portal and re-exported, and are **never hand-edited**.
 
-**17 flows are built.** `GetFabricToken` is a child flow and is never added to the canvas app; every other flow the application calls is added to it explicitly.
+**19 flows are built.** Every flow the application calls is added to the canvas app explicitly.
 
-### Git integration — 8 flows
+> **`GetFabricToken` is gone.** It existed only to run the client-credentials grant and hold the secret. With the preauthorized connector there is nothing left for it to do — see §4.
+
+### Git integration — 7 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
-| `GetFabricToken` | — | Child flow. The single place the broker's client-credentials block exists |
-| `GetWorkspaceGitState` | Broker | Read the current connection so the tab knows what to offer |
+| `GetWorkspaceGitState` | Service account | Read the current connection so the tab knows what to offer |
 | `ListMyConnections` | **Delegated** | The caller's own Azure DevOps connections, filtered client-side |
-| `AddConnectionRoleAssignment` | **Delegated** | Grant the broker the `User` role on the owner's connection |
-| `ConnectWorkspaceToGit` | Broker | Stage 1 — connect, then probe for the required sync direction |
-| `SyncWorkspaceWithGit` | Broker | Stage 2 — move the content |
-| `DisconnectWorkspaceFromGit` | Broker | Disconnect. Also the only route to a branch or directory change |
-| `GetGitOperationStatus` | Broker | Report the state of a long-running operation. Advances nothing |
+| `AddConnectionRoleAssignment` | **Delegated** | Grant the service account the `User` role on the owner's connection |
+| `ConnectWorkspaceToGit` | Service account | Stage 1 — connect, then probe for the required sync direction |
+| `SyncWorkspaceWithGit` | Service account | Stage 2 — move the content |
+| `DisconnectWorkspaceFromGit` | Service account | Disconnect. Also the only route to a branch or directory change |
+| `GetGitOperationStatus` | Service account | Report the state of a long-running operation. Advances nothing |
 
 ### Networking — 8 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
-| `GetOAPSetting` | Broker | Is Outbound Access Protection enabled? |
-| `GetOutboundRules` / `SetOutboundRules` | Broker | Allowed outbound connections, with ETag concurrency |
-| `GetGatewayRules` / `SetGatewayRules` | Broker | Allowed gateways |
-| `GetGitPolicy` / `SetGitPolicy` | Broker | Outbound Git permission |
+| `GetOAPSetting` | Service account | Is Outbound Access Protection enabled? |
+| `GetOutboundRules` / `SetOutboundRules` | Service account | Allowed outbound connections, with ETag concurrency |
+| `GetGatewayRules` / `SetGatewayRules` | Service account | Allowed gateways |
+| `GetGitPolicy` / `SetGitPolicy` | Service account | Outbound Git permission |
 | `ListGateways` | **Delegated** | Gateways the caller can actually see |
 
 ### Supporting — 1 flow
@@ -381,15 +402,17 @@ All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They a
 |---|---|---|
 | `GetMyEmail` | Office 365 Users | Resolve the signed-in user's email for the ownership lookup |
 
-### Designed but not built — 3 flows
+### Private endpoints — 3 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
-| `ListPrivateEndpoints` | Broker | Paged read of the workspace's endpoints |
-| `CreatePrivateEndpoint` | Broker | Request a new endpoint. Returns `201` immediately, no polling |
-| `DeletePrivateEndpoint` | Broker | Remove one |
+| `ListPrivateEndpoints` | Service account | Paged read of the workspace's endpoints |
+| `CreatePrivateEndpoint` | Service account | Request a new endpoint. Returns `201` immediately, no polling |
+| `DeletePrivateEndpoint` | Service account | Remove one |
 
-Design documentation for all three exists under [`docs/flows/nocustomcon/`](../docs/flows/nocustomcon); no implementation is present in the export. **The private-endpoints tab is non-functional until these are built.**
+**Built and tested 2026-09-02.** Build documentation is under [`docs/flows/nocustomcon/`](../docs/flows/nocustomcon).
+
+> **Those three build documents still describe the token-flow model** — a `GetFabricToken` child call and an `Authorization` header. The Fabric routes, bodies and error handling they specify are accurate; only the auth mechanism has since changed to the preauthorized connector.
 
 ---
 
@@ -468,6 +491,7 @@ Base: `https://api.fabric.microsoft.com/v1`
 | **Dataverse, not Fabric, is the authorization boundary** | Fabric holds no record that identifies a workspace *owner*; the ownership fact exists only in Dataverse |
 | **Writes authorize on `createdby`, not on a trigger parameter** | A Power Apps trigger parameter is forgeable by anyone who can reach the flow URL. A Dataverse `createdby` stamp is not |
 | **A dedicated broker identity, not the existing tenant-wide one** | `sp_fabric_monit` holds `Tenant.Read.All` / `Tenant.ReadWrite.All` and was deliberately **not** reused. An application exposed to 4000 workspace owners must not run on a tenant-wide identity |
+| **The broker is a service account reached through the preauthorized connector, not a service principal** | The connector attaches the token itself, so the solution holds no client secret, needs no app registration for the broker, and depends on no tenant setting. The cost is a user-account credential that must be kept permanently valid — see [SECURITY.md](./SECURITY.md) §4 |
 | **Owners supply their own Git connection** | Keeps Git credentials entirely outside the solution, and makes credential durability the owner's explicit choice |
 | **Connect and sync are separate flows** | Respects the 120-second Power Apps response budget, and avoids re-calling `connect` on an already-connected workspace |
 | **Never branch on the initialization strategy** | The strategy tells Fabric *how to resolve initialization*; `requiredAction` tells the application *which way to sync*. They are not the same question |

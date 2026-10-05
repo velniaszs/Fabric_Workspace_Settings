@@ -84,7 +84,7 @@ flowchart TB
     end
 
     subgraph B3["Boundary 3 — Entra ID"]
-        SPN["Broker SPN"]
+        SPN["Broker service account"]
         DEL["Delegated app"]
     end
 
@@ -123,11 +123,12 @@ With S4 not yet implemented, the only thing constraining a write is **Boundary 4
 
 ### Two identities, deliberately separated
 
-| | Broker — `sp_fabric_powerapp` | Delegated — `gateway_lister_app` |
+| | Broker — the service account | Delegated — `gateway_lister_app` |
 |---|---|---|
-| Flow | App-only, client credentials | Authorization code, runs as the user |
+| Type | **A user account**, signed in on the preauthorized connection | Entra app registration |
+| Flow | **No token request.** The connector attaches the token | Authorization code, runs as the user |
 | Privilege | Fabric Workspace Admin on managed workspaces | Never exceeds the caller |
-| Exposure | Flow runtime only | User's own session |
+| Exposure | The Power Platform connection | User's own session |
 
 ### Deliberate exclusions from the broker identity
 
@@ -136,19 +137,32 @@ These are standing constraints, not incidental facts. Each one materially limits
 | Excluded | Security rationale |
 |---|---|
 | **Tenant-scoped Fabric permissions** | An identity holding `Tenant.Read.All` / `Tenant.ReadWrite.All` already exists in this tenant (`sp_fabric_monit`) and was **deliberately not reused**. An application exposed to 4000 workspace owners must not run on a tenant-wide identity. That identity appears nowhere in this solution |
-| **Entra application permissions** | They grant no Fabric access in any case, so adding them widens the identity's apparent reach with zero functional benefit. A broker token legitimately shows `roles: (none)` |
+| **Any Entra directory role or application permission** | The account needs a Fabric workspace role and nothing else. A directory role would widen it far beyond anything a flow calls |
 | **Azure DevOps rights** | Keeps all Git credentials outside the solution boundary entirely |
 | **Azure RBAC** | Keeps the private-endpoints feature free of any Azure onboarding, and prevents the broker from becoming a path into the subscription estate |
 
-### Access is granted by three independent gates
+### Access is granted by two independent gates
 
-The broker's Fabric access requires **all three** of: group membership, the tenant setting, and an object-level role. No single misconfiguration grants access, and revoking any one of the three revokes access wholesale — the tenant setting in particular is a **single, immediate, tenant-wide kill switch** for every app-only operation.
+The account's Fabric access requires **both** of: a live, authorised connection, and an object-level Fabric role. No single misconfiguration grants access.
 
-That property is worth knowing in an incident: disabling *"Service principals can call Fabric public APIs"* stops the broker completely, in one action, without touching the solution.
+> **This is one gate fewer than the service-principal design had, and the kill switch moved.** There is no longer a tenant setting that stops every brokered call in one action. The equivalent control is now **the connection and the account itself** — disabling the account, revoking its licence, or deleting the connection stops all brokered operations immediately, without touching the solution.
+>
+> The trade is deliberate and worth stating plainly: a tenant setting is revoked by a Fabric Administrator in the admin portal, whereas disabling an account is an identity-team action. **Incident runbooks that named the tenant setting as the kill switch must be updated**, or an incident will be met with a control that no longer does anything.
+
+### The credential is a user password, and that changes its handling
+
+There is no client secret to leak from a flow definition, which removes an entire class of exposure. In its place is an account credential with a different profile:
+
+| Property | Consequence |
+|---|---|
+| It is a **password**, not an application secret | It is phishable and sprayable in a way a client secret is not. It must be strong, unique, and vaulted in the customer's privileged-credential store |
+| The connection **does not follow a password change** | Rotation breaks every brokered call until the connection is re-authorised by hand |
+| It must be **exempt from MFA and password expiry** to stay usable | That exemption is itself a security decision and should be a deliberate, documented one — not a side effect of making the app work |
+| Anyone who can **edit a flow** can use the connection | They cannot read the credential, but they can invoke it. Maker access to the environment is therefore equivalent to use of the broker identity |
 
 ### Git credentials never enter the solution
 
-The application never holds, transports, or reads Git credentials. The owner creates the Azure DevOps connection; the broker is granted the `User` role on it and references it by ID. **No API the application calls can reveal a connection's contents.**
+The application never holds, transports, or reads Git credentials. The owner creates the Azure DevOps connection; the service account is granted the `User` role on it and references it by ID. **No API the application calls can reveal a connection's contents.**
 
 Residual consideration to communicate to owners: Azure DevOps records commits as pushed by the *connection's* identity, not the requester's. Attribution of a Git commit to a human therefore depends on the audit trail in S11, not on the Git history.
 
@@ -206,37 +220,41 @@ The last two are the sharpest. A private-endpoint create is externally visible o
 
 ### Current state
 
-| Secret | Where it lives | Carried by the export? |
+| Credential | Where it lives | Carried by the export? |
 |---|---|---|
-| Broker client secret | `Initialize_variable` named `clientSecret` inside the `GetFabricToken` flow | **No** — scrubbed to `" "` on export |
+| **Service account password** | The customer's privileged-credential store. **Not in the solution** — the Power Platform connection holds the resulting authorisation, not the password | **No** |
 | Delegated app client secret | The custom connector's Security tab | **No** — must be re-entered |
 
-**Neither secret is present in this repository.** The repository has been verified clean of tracked secrets, and the export scrubbing behaviour means a committed export cannot leak the broker secret.
+**Neither credential is present in this repository**, which has been verified clean of tracked secrets.
 
-`GetFabricToken` is the **only** flow that holds a secret. Every other flow calls it as a child. That containment is deliberate and must be preserved — a client-credentials block copied into a second flow doubles the number of places a secret must be rotated and re-entered.
+> **There is no secret inside any flow.** The preauthorized connector removes the client-credentials block entirely, so no flow definition contains a credential, and there is nothing for the export scrubber to have to catch. **One secret remains in the solution — the delegated app's, on the connector** — and it is the only one.
 
 ### Required improvement — S10
 
-> **The broker secret should be held in a Key Vault-backed secret environment variable, not as a flow variable.**
+> **The delegated app's client secret should be held in a Key Vault-backed secret environment variable, not typed into the connector's Security tab.**
 
 The current arrangement has three drawbacks:
 
-1. The secret is visible to anyone who can open the flow definition in the maker portal.
-2. Rotation requires a flow edit in every environment, rather than a Key Vault update.
+1. The secret must be re-entered by hand in every environment.
+2. Rotation requires a connector edit per environment, rather than a Key Vault update.
 3. There is no access log for reads of the secret.
 
-The three existing environment variables (`crbab_TenantId`, `crbab_BrokerClientId`, `crbab_BrokerObjectId`) are all plain string variables with `secretstore` disabled — the pattern for a secret variable is not yet established in this solution.
+The solution's one environment variable (`crbab_BrokerObjectId`) is a plain string with `secretstore` disabled — the pattern for a secret variable is not yet established here.
 
 **Status: deferred, not resolved.** See §10.2.
 
-### Secret rotation
+> **The broker half of S10 is closed by the identity change**, not by a mitigation: there is no broker secret left to vault.
 
-Rotation of both client secrets is the **customer's responsibility**. The procedure must cover:
+### Credential rotation
 
-| Secret | Rotation steps |
+Rotation is the **customer's responsibility**. The two credentials rotate very differently:
+
+| Credential | Rotation steps |
 |---|---|
-| Broker | Create a new secret in Entra → update `GetFabricToken` in **every** environment → verify a token is issued → remove the old secret |
-| Delegated app | Create a new secret in Entra → update the connector's Security tab → **update connector** → verify existing connections still authenticate |
+| **Service account password** | Rotate in Entra → **re-authorise the Fabric connection in every environment** → verify a brokered call succeeds. **Until the connection is re-authorised, every brokered call returns `401`.** There is no partial failure and no warning beforehand |
+| Delegated app secret | Create a new secret in Entra → update the connector's Security tab → **update connector** → verify existing connections still authenticate |
+
+> **The account rotation is the dangerous one**, because nothing fails at rotation time — it fails at the next flow run, across the whole application at once, and the run history blames Fabric rather than the connection. Schedule re-authorisation **with** the rotation, not after someone reports an outage.
 
 > Editing the OAuth section of the connector's Security tab **blanks the client secret** and will not save without it. Have the secret available before starting.
 
@@ -246,9 +264,9 @@ Rotation of both client secrets is the **customer's responsibility**. The proced
 
 ### Current state: insufficient
 
-**There is currently no record of who performed a brokered action.** Every Fabric write is executed by the broker service principal, so:
+**There is currently no record of who performed a brokered action.** Every Fabric write is executed by the broker service account, so:
 
-- Fabric's own audit log attributes every action to `sp_fabric_powerapp`, not to the requesting user.
+- Fabric's own audit log attributes every action to the service account, not to the requesting user.
 - Azure DevOps attributes every commit to the connection's identity, not to the requester.
 - Power Automate run history retains the flow run, but is not a durable, queryable audit store, and its retention is subject to platform defaults.
 
@@ -302,7 +320,9 @@ Retention policy for the audit table has not been set and should be agreed with 
 | **T1** | A user acts on a workspace they do not own | Forged `workspaceId` on a flow call | **None at the application layer.** Limited only by the broker's workspace scope | 🔴 **High until S4 lands** |
 | **T2** | A user forges another user's identity to a flow | Forged identity parameter on a Power Apps trigger | Audit-row pattern designed; not implemented | 🔴 **High until S5 lands** |
 | **T3** | The broker credential is extracted from the canvas app | Inspecting the published app | **Mitigated by design** — no token is ever returned to the app | 🟢 Low |
-| **T4** | The broker credential is extracted from the flow definition | Maker-portal access to the environment | Partially mitigated — exports are scrubbed. The secret is still visible to environment makers | 🟡 Medium until S10 lands |
+| **T4** | The broker credential is extracted from the flow definition | Maker-portal access to the environment | **Mitigated by design** — no flow contains a credential. The preauthorized connector holds the authorisation, and a maker can *use* the connection but cannot read anything from it | 🟢 Low |
+| **T4a** | The broker account's password is phished, sprayed or reused | It is a user password, exempt from MFA and expiry so the connection stays alive | Strong unique password, vaulted in the customer's privileged-credential store; Conditional Access scoped to permit the service account only where it must run | 🟡 **Medium — the MFA exemption is the trade that creates this** |
+| **T4b** | A maker invokes the broker connection for an unintended purpose | Edit rights on any flow in the environment | Environment maker access is equivalent to use of the broker identity. Controlled by Power Platform environment roles only | 🟡 Medium |
 | **T5** | A user's Git credential is exposed | Application handling of the connection | **Mitigated by design** — the application never holds or reads it | 🟢 Low |
 | **T6** | The broker is used as a path into Azure | Azure RBAC on the broker | **Mitigated by design** — the broker holds no Azure RBAC | 🟢 Low |
 | **T7** | The broker is used to reach the whole tenant | Tenant-scoped Fabric permissions | **Mitigated by design** — deliberately not granted; the tenant-wide identity was rejected for this role | 🟢 Low |
@@ -310,6 +330,8 @@ Retention policy for the audit table has not been set and should be agreed with 
 | **T9** | A privileged action cannot be attributed | No audit store | **None** | 🔴 **High until S11 lands** |
 | **T10** | Concurrent edits silently overwrite | Two owners editing outbound rules | ETag optimistic concurrency | 🟢 Low |
 | **T11** | A private-endpoint request leaks internal resource identifiers externally | Create sends a request outside Fabric | Requires a valid Azure resource ID the user already knows. Approval is required at the far end | 🟡 Medium — amplified by T1 until S4 lands |
+
+> **T4 dropped from Medium to Low with the identity change, and T4a/T4b are what replaced it.** The risk did not disappear — it moved from *a secret sitting in a flow* to *an account whose sign-in must be kept permanently valid*. A review that only checks T4 will conclude the solution improved more than it did.
 
 ---
 
@@ -332,13 +354,23 @@ Every write flow acts on whatever `workspaceId` it receives. Any user who can re
 
 **Priority: highest.** Nothing else on this list matters if this is absent.
 
-### 10.2 🟡 The broker secret is a flow variable, not a managed secret
+### 10.2 🟡 The delegated app secret is typed into the connector, not vaulted
 
-**Requirement:** S10 · **Threat:** T4 · **Current state:** Deferred, not resolved.
+**Requirement:** S10 · **Threat:** T8 · **Current state:** Deferred, not resolved.
 
-The secret sits in an `Initialize_variable` action inside `GetFabricToken`, visible to any environment maker and requiring a flow edit to rotate.
+The connector's Security tab holds the delegated app's client secret, re-entered by hand per environment and requiring a connector edit to rotate.
 
-**To close:** create a Key Vault-backed secret environment variable, reference it from `GetFabricToken`, and remove the variable. Document the rotation procedure against Key Vault rather than against the flow.
+**To close:** establish the Key Vault-backed secret environment variable pattern in this solution and reference it from the connector. Document rotation against Key Vault rather than against the Security tab.
+
+> **The broker half of this item is closed by the identity change, not by a mitigation.** There is no broker secret any more. What replaced it is an account credential — see §4 and **A5** in §11.
+
+### 10.4 🟡 The account's MFA and password-expiry exemption
+
+**Threat:** T4a · **Current state:** Required for the solution to function.
+
+The connection cannot answer an interactive MFA prompt and does not survive a password rotation, so the account must be exempt from both for brokered calls to keep working.
+
+**To close — or rather, to accept deliberately:** have the identity owner sign off the exemption, vault the password in the privileged-credential store, and scope Conditional Access so the account is usable only from where it must run. This is a decision to be recorded, not a defect to be fixed.
 
 ### 10.3 🔴 No audit record of brokered actions
 
@@ -360,6 +392,8 @@ Risks the customer is asked to accept explicitly, because no proportionate mitig
 | **A2** | Connection durability depends on the owner's credential choice | No API can inspect a connection's contents, so nothing can be enforced. Addressed by guidance — recommend a service principal |
 | **A3** | A valid-but-wrong private-endpoint sub-resource reports complete success while the workload still fails | Fabric does not validate sub-resources. Mitigated by the constrained picker and by never defaulting the dropdown |
 | **A4** | `ListGateways` returns at most five pages | By design. A truncated list is returned that appears complete |
+| **A5** | **The broker account is exempt from MFA and password expiry** | A connector connection cannot answer an interactive prompt and does not follow a password change. The exemption is what keeps the application working, and it is accepted in exchange for strong-password and vaulting controls (§4, 10.4) |
+| **A6** | **Any environment maker can invoke the broker connection** | Power Platform has no finer control than environment roles here. The credential cannot be read, only used — so the mitigation is restricting who holds maker access, not restricting the connection |
 | **A5** | Fabric's December 1 2026 Git restriction may block Contributors | Outside the solution's control. Sensitivity labels and protection policies may also block Git operations. Monitor |
 | **A6** | Changing a connector scope requires tenant-wide re-consent | Entra behaviour. Mitigated by fixing the scope list up front at the minimum necessary |
 | **A7** | The solution is currently exported **unmanaged** | Acceptable for the build environment. **Production must use a managed export** — see [MIGRATION.md](./MIGRATION.md) |
@@ -372,13 +406,15 @@ Use before granting the solution access to a production tenant.
 
 ### Identity
 
-- [ ] The broker app registration holds **no** Fabric application permissions
+- [ ] The broker account holds **no** Entra directory role or application permission
 - [ ] The broker holds **no** Azure DevOps rights
 - [ ] The broker holds **no** Azure RBAC in any subscription
 - [ ] The broker holds **no** tenant-scoped Fabric permission
 - [ ] The tenant-wide identity (`sp_fabric_monit`) appears nowhere in the solution
 - [ ] The delegated application publishes exactly three scopes, and no more
 - [ ] `Connection.Read.All` has **not** been added alongside `Connection.ReadWrite.All`
+- [ ] The broker is a **service account, not a named person**, and has a documented owner
+- [ ] `AddConnectionRoleAssignment` sends `principal.type` = **`User`**, and the object ID is the account's
 
 ### Authorization
 
@@ -387,12 +423,14 @@ Use before granting the solution access to a production tenant.
 - [ ] Denial is **fail-closed** and does not disclose workspace existence
 - [ ] `AddConnectionRoleAssignment` remains delegated
 
-### Secrets
+### Secrets and credentials
 
 - [ ] No secret is present in the repository
-- [ ] The broker secret is held in a Key Vault-backed environment variable
-- [ ] `GetFabricToken` remains the **only** flow holding a client-credentials block
-- [ ] A rotation procedure exists for both secrets, and has been tested once
+- [ ] **No flow contains a credential** — no client-credentials block and no `Authorization` header anywhere
+- [ ] The delegated app secret is held in a Key Vault-backed environment variable
+- [ ] The broker account's password is vaulted in the privileged-credential store
+- [ ] A rotation procedure exists for the account password **and** the delegated secret, and each has been tested once
+- [ ] The account rotation procedure includes **re-authorising the connection in every environment**
 
 ### Audit
 
@@ -404,8 +442,10 @@ Use before granting the solution access to a production tenant.
 
 - [ ] The broker holds Workspace Admin on managed workspaces **only**
 - [ ] Workspace Admin is granted through the group by provisioning automation, not by hand
-- [ ] The tenant setting is scoped to `fabric_power_app_grp` and not enabled tenant-wide
-- [ ] Removing the tenant setting has been confirmed as a working kill switch
+- [ ] *Service principals can call Fabric public APIs* is **not** enabled on this solution's account — it does not apply, and must not be turned on "to be safe"
+- [ ] **The kill switch has been identified and tested.** It is disabling the account or deleting the connection — **not** a tenant setting. Confirm the incident runbook names the right one
+- [ ] The account's MFA / password-expiry exemption is signed off by the identity owner (A5)
+- [ ] Environment maker access is restricted, since a maker can invoke the broker connection (A6)
 
 ### Deployment
 
