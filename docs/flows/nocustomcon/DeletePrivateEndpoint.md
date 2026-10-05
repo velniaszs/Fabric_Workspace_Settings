@@ -6,17 +6,15 @@ Build instructions for the write that deletes a **managed private endpoint** fro
 
 > **Confirm this flow is in scope before building it.** Open question P4 in [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §8 asks whether v1 should be read + create only. Deleting is rare, irreversible for 15 minutes, and the Fabric UI can already do it for anyone with workspace Admin. Dropping this flow halves the risk surface of the feature. It is documented here so the decision is made deliberately rather than by omission.
 
-Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — §5.3, §5.4, §6), [../../FLOWS.md](../../FLOWS.md), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §10.3, F5.9, F5.10, [GetFabricToken.md](GetFabricToken.md), [ListPrivateEndpoints.md](ListPrivateEndpoints.md), [CreatePrivateEndpoint.md](CreatePrivateEndpoint.md), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md) (the status-code-derived response pattern this copies).
+Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — §5.3, §5.4, §6), [../../FLOWS.md](../../FLOWS.md), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §10.3, F5.9, F5.10, [ListPrivateEndpoints.md](ListPrivateEndpoints.md), [CreatePrivateEndpoint.md](CreatePrivateEndpoint.md), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md) (the status-code-derived response pattern this copies).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** Built-in actions only: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` must end up `{}`.
-- The child flow **`GetFabricToken`** must already exist: `50895fca-088f-f111-8076-7ced8d76bf1b`.
-- Authentication is **service principal** (`sp_fabric_powerapp`). The delete API requires **workspace Admin**, which owners do not hold — a delegated call would `403` for every user of the app. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.
-- Environment variables are **not referenced directly by this flow** — the child flow consumes `crbab_TenantId` and `crbab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - **No Azure permission is involved.** Deleting the Fabric-side endpoint tears down the request; nothing is required of the target resource's owner. [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.2.
 
 > ### The most destructive flow in the solution
@@ -52,39 +50,14 @@ Both stay **required**. An optional PowerApp V2 input is dropped from the payloa
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
+## 2. `Delete` — Invoke an HTTP request
 
 First action; `runAfter` is empty.
 
 | Field | Value |
 |---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
----
-
-## 3. `Initialize_variable` — InitializeVariable
-
-Runs after `Run_a_Child_Flow` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `@body('Run_a_Child_Flow')?['access_token']` |
-
----
-
-## 4. `Delete` — Http
-
-Runs after `Initialize_variable` on **Succeeded**.
-
-| Field | Value |
-|---|---|
 | Method | `DELETE` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/managedPrivateEndpoints/@{triggerBody()['text_1']}` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
 | `retryPolicy` | *(leave default — exponential, 4 retries)* |
@@ -95,7 +68,7 @@ Runs after `Initialize_variable` on **Succeeded**.
 
 ---
 
-## 5. Response contract
+## 3. Response contract
 
 `Respond_to_a_Power_App_or_flow` — type `Response`, kind `PowerApp`, `statusCode` 200.
 
@@ -122,7 +95,7 @@ Output names come back **lowercased** in Power Fx — bind to `outcome` and `mes
 
 ---
 
-## 6. `200` does not mean it is gone
+## 4. `200` does not mean it is gone
 
 The API answers `200` with an **empty body**. The endpoint then moves through `provisioningState: "Deleting"` and continues to appear in `ListPrivateEndpoints` until Fabric finishes.
 

@@ -4,7 +4,7 @@ Design investigation for a **Private endpoints** element on the app's networking
 
 Reference: [Create and use managed private endpoints](https://learn.microsoft.com/en-us/fabric/security/security-managed-private-endpoints-create), [Overview](https://learn.microsoft.com/en-us/fabric/security/security-managed-private-endpoints-overview), [REST API — Managed Private Endpoints](https://learn.microsoft.com/en-us/rest/api/fabric/core/managed-private-endpoints).
 
-Related: [ARCHITECTURE.md](docs/ARCHITECTURE.md) §2, §3, §5, [FLOWS.md](docs/FLOWS.md), [APP-OUTBOUND-TAB.md](docs/APP-OUTBOUND-TAB.md), [CUSTOM-CONNECTOR.md](docs/CUSTOM-CONNECTOR.md), [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §10.3.
+Related: [ARCHITECTURE.md](ARCHITECTURE.md) §2, §3, §5, [FLOWS.md](FLOWS.md), [APP-OUTBOUND-TAB.md](APP-OUTBOUND-TAB.md), [CUSTOM-CONNECTOR.md](CUSTOM-CONNECTOR.md), [OPEN-ISSUES.md](OPEN-ISSUES.md) §10.3.
 
 Status: **investigation only — nothing built.** Verified against the Microsoft Learn docs on 2026-09-02.
 
@@ -101,8 +101,8 @@ Concretely, this means **no** change to `FabricSetting`:
 
 - no new operations to add
 - no new scope (`Workspace.Read.All` / `Workspace.ReadWrite.All` are **delegated** scopes; they are irrelevant to a client-credentials token)
-- no re-consent, and no risk of the connection-recreation problem in [OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §9
-- no new connection reference to rebind after import ([OPEN-ISSUES.md](docs/OPEN-ISSUES.md) §8.1)
+- no re-consent, and no risk of the connection-recreation problem in [OPEN-ISSUES.md](OPEN-ISSUES.md) §9
+- no new connection reference to rebind after import ([OPEN-ISSUES.md](OPEN-ISSUES.md) §8.1)
 
 Each new flow's `connectionReferences` will be `{}`, matching `GetOAPSetting`, `GetOutboundRules` and `GetGatewayRules`.
 
@@ -159,9 +159,9 @@ Same skeleton as every existing networking flow: `Run_a_Child_Flow` → `GetFabr
 
 Full build instructions live in one file per flow:
 
-- [flows/nocustomcon/ListPrivateEndpoints.md](docs/flows/nocustomcon/ListPrivateEndpoints.md)
-- [flows/nocustomcon/CreatePrivateEndpoint.md](docs/flows/nocustomcon/CreatePrivateEndpoint.md)
-- [flows/nocustomcon/DeletePrivateEndpoint.md](docs/flows/nocustomcon/DeletePrivateEndpoint.md)
+- [flows/nocustomcon/ListPrivateEndpoints.md](flows/nocustomcon/ListPrivateEndpoints.md)
+- [flows/nocustomcon/CreatePrivateEndpoint.md](flows/nocustomcon/CreatePrivateEndpoint.md)
+- [flows/nocustomcon/DeletePrivateEndpoint.md](flows/nocustomcon/DeletePrivateEndpoint.md)
 
 The summaries below are the design intent; the per-flow files are the build specification and win on any detail.
 
@@ -409,7 +409,7 @@ Seed data, from Fabric's supported-sources table crossed with Azure's private-li
 
 #### Where it lives
 
-A flat Dataverse table, **`ubsppcoe_PrivateLinkTarget`**, one row per **(resource type, sub-resource)** pair — this resolves P3. Seed data is in [data/PrivateLinkTargets.csv](data/PrivateLinkTargets.csv), 28 rows, matching the tables above.
+A flat Dataverse table, **`ubsppcoe_PrivateLinkTarget`**, one row per **(resource type, sub-resource)** pair — this resolves P3. Seed data is in [data/PrivateLinkTargets.csv](../data/PrivateLinkTargets.csv), 28 rows, matching the tables above.
 
 | Column | Type | Purpose |
 |---|---|---|
@@ -450,7 +450,7 @@ Keep `targetSubresourceType` as a trigger input either way. The app decides the 
 
 > **Could the flow do the lookup instead?** No. It is a ~20-row table with five one-to-many rows, and expressing that as nested `if()` in a Logic Apps expression would be unreadable. The app needs the mapping anyway to render the dropdown, so a second copy in the flow is just something to drift.
 
-> **Could we omit the field and let Fabric infer?** It is optional in the API, so possibly — for 1:1 types. Untested, and it cannot work for storage. Worth establishing (test 3 in [flows/nocustomcon/CreatePrivateEndpoint.md](docs/flows/nocustomcon/CreatePrivateEndpoint.md)) because it would let the app omit the field rather than guess when it meets a type it does not recognise.
+> **Could we omit the field and let Fabric infer?** It is optional in the API, so possibly — for 1:1 types. Untested, and it cannot work for storage. Worth establishing (test 3 in [flows/nocustomcon/CreatePrivateEndpoint.md](flows/nocustomcon/CreatePrivateEndpoint.md)) because it would let the app omit the field rather than guess when it meets a type it does not recognise.
 
 This makes P3 more pressing: the mapping is no longer just a picker's contents, it is validation logic. A Dataverse table keyed on `provider/type` with the valid sub-resources per type can be maintained without republishing the app, which matters because Fabric's supported-source list grows.
 
@@ -498,7 +498,7 @@ Second, **do not be misled by the overview page**, which ends *"take them into a
 
 ## 7. Where it goes in the app
 
-Its **own tab**, on the tab bar beside Git and Outbound — decided 2026-09-02. Build guide: [APP-PRIVATE-ENDPOINTS-TAB.md](docs/APP-PRIVATE-ENDPOINTS-TAB.md).
+Its **own tab**, on the tab bar beside Git and Outbound — decided 2026-09-02. Build guide: [APP-PRIVATE-ENDPOINTS-TAB.md](APP-PRIVATE-ENDPOINTS-TAB.md).
 
 > **Do not gate it on `gblFlowResult.oapenabled`.** Managed private endpoints are independent of Outbound Access Protection — they are inbound-to-datasource plumbing, not an outbound rule. The Fabric UI puts both under *Network security*, which makes the two easy to confuse. Every control in `RulesContainer` and `GatewaysContainer` lives under `networking/communicationPolicy/outbound/*`; nothing here does. Gating on OAP would hide a working feature on every workspace with OAP off.
 
@@ -512,7 +512,7 @@ Minimum UI:
 - **Delete** — typed-name confirmation
 - **Empty and error states** — "none yet" reads very differently from "the call failed"
 
-Apply the load-flash lesson from [APP-OUTBOUND-TAB.md](docs/APP-OUTBOUND-TAB.md): a blank collection is falsy, so an unguarded "no private endpoints" label will flash on every workspace that has some. Gate on a `gblMpeLoaded` flag.
+Apply the load-flash lesson from [APP-OUTBOUND-TAB.md](APP-OUTBOUND-TAB.md): a blank collection is falsy, so an unguarded "no private endpoints" label will flash on every workspace that has some. Gate on a `gblMpeLoaded` flag.
 
 ---
 

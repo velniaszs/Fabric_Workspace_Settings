@@ -13,7 +13,7 @@ Related: `../FLOWS.md` §7 (design rationale), `../CUSTOM-CONNECTOR.md` (the con
 - Create the flow **inside the solution**, so it binds to a connection reference rather than a raw connection.
 - The custom connector `FabricSetting` must already exist with operations `ListConnectionRoleAssignments` and `AddConnectionRoleAssignment`.
 - The connector connection is **delegated** — it runs as the signed-in user. Sharing must be *Provided by run-only user*.
-- Environment variable `crbab_BrokerObjectId` must exist. Current default: `6f70a764-908f-435b-a930-ffcb375577f3`.
+- Environment variable `crbab_BrokerObjectId` must exist, holding the **`workspace provisioning` service account's directory object ID**. **"Broker" in the name is a leftover from the service-principal design** — the value is a user account's object ID, not a service principal's.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
 
@@ -133,8 +133,12 @@ Add **Filter array** immediately after the loop.
 |---|---|
 | `fabricConnectionId` | `@triggerBody()['text']` |
 | `body/principal/id` | `@parameters('BrokerObjectId (crbab_BrokerObjectId)')` |
-| `body/principal/type` | `ServicePrincipal` |
+| `body/principal/type` | `User` |
 | `body/role` | `User` |
+
+> **`principal.type` is `User`, not `ServicePrincipal`.** It changed when the broker became a service account, and the two `User` values above mean different things: the **type** is the kind of principal being granted, the **role** is the Fabric connection role it receives.
+>
+> **A wrong `type` does not error.** Fabric accepts the assignment, it grants nothing, and the subsequent connect fails as though the connection had never been shared. §4's filter reads the same object ID, so a stale value also makes this branch re-POST a grant that already exists.
 
 Then **Respond to a Power App or flow**, running after `AddConnectionRoleAssignment` succeeds:
 

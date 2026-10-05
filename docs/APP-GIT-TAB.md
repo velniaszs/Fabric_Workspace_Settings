@@ -547,7 +547,7 @@ Two `DisplayFields` render as two stacked lines per row — the connection name 
 
 `SelectMultiple` defaults to true on a classic combo box, and `Selected` returns the first item either way — but a multi-select control invites the owner to pick two connections and then silently ignores one.
 
-See [docs/APP-GIT-CONNECT-FORM.md](docs/APP-GIT-CONNECT-FORM.md) for why the form must also be reset on entry.
+See [docs/APP-GIT-CONNECT-FORM.md](APP-GIT-CONNECT-FORM.md) for why the form must also be reset on entry.
 
 Org, project and repo are **derived and read-only** — the owner never pastes a URL. Disabling the button when `repo` is blank is what stops an unparsed URL reaching Fabric.
 

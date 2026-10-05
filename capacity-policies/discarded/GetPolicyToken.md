@@ -4,7 +4,7 @@
 
 > **It was never built, so nothing needs undoing.** This file is kept so existing links resolve and so the decision is recorded where someone would look for it. **The build steps that were here have been removed** rather than left to be followed by accident.
 
-Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5, [GetFabricToken.md](../../docs/flows/nocustomcon/GetFabricToken.md) — the workspace-settings equivalent, which **is** built and **is** unaffected by this decision.
+Related: [CAPACITY-POLICY-FLOWS.md](../docs/CAPACITY-POLICY-FLOWS.md) §5. **The workspace-settings solution reached the same conclusion afterwards** — its `GetFabricToken` child flow has since been retired too, and both solutions now call Fabric through the *HTTP with Microsoft Entra ID (preauthorized)* connector.
 
 ---
 

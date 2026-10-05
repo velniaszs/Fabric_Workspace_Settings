@@ -11,22 +11,9 @@ Related: [../../FLOWS.md](../../FLOWS.md) §6 (design rationale), [../../PREREQU
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Condition`, `Respond to a Power App or flow`.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. `GetFabricToken` runs the client-credentials grant as the broker SPN; both Fabric calls here carry that bearer token in a hand-written header.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - The broker SPN must hold **workspace Admin** on the target workspace. `git/disconnect` is an Admin-only operation. A `403` here means the broker lost its role, not that a scope is missing.
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken` as an `Initialize variable`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
-Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
-
 ---
 
 ## 1. Trigger — Power Apps (V2)
@@ -51,45 +38,16 @@ The input is already **required** in the export, and must stay that way. An opti
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
+## 2. `Check_existing` — Invoke an HTTP request
 
 First action; `runAfter` is empty.
 
 | Field | Value |
 |---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 3. `Initialize_variable` — Initialize variable
-
-Runs after `Run_a_Child_Flow` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `@body('Run_a_Child_Flow')?['access_token']` |
-
-The action keeps the designer's default name, `Initialize_variable`. Only the variable is named.
-
----
-
-## 4. `Check_existing` — HTTP
-
-Runs after `Initialize_variable` on **Succeeded**.
-
-| Field | Value |
-|---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connection` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Body | none |
-| Authentication block | none — no `authentication` property; the bearer token is supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 No `Accept` header on this one, unlike the equivalent call in `GetWorkspaceGitState` and `ConnectWorkspaceToGit`.
 
@@ -99,7 +57,7 @@ A disconnected workspace returns **200 with `gitConnectionState: NotConnected`**
 
 ---
 
-## 5. `Condition` — If
+## 3. `Condition` — If
 
 Runs after `Check_existing` on **Succeeded** only.
 
@@ -137,9 +95,8 @@ Both are literals — no expression, so nothing to stringify. This is what makes
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/disconnect` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Body | none — the export has no `body` property, and no `Content-Type` header |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Synchronous. Returns `200`; there is no `202`, no `x-ms-operation-id` and nothing to poll. Disconnecting leaves the Azure DevOps folder and its contents untouched.
 
@@ -156,7 +113,7 @@ Note the comparison is `equals(..., 200)` exactly, not `less(..., 300)`. Any oth
 
 ---
 
-## 6. Response contract
+## 4. Response contract
 
 Two Respond actions, one per branch. They declare **identical** output names and types, which is required — the app binds one signature.
 
@@ -171,7 +128,7 @@ Output names come back **lowercased** in Power Fx. Here both are already lowerca
 
 ---
 
-## 7. After building
+## 5. After building
 
 - Add the flow to the canvas app (left rail → Power Automate → **+ Add flow**). Watch for a suffixed duplicate such as `DisconnectWorkspaceFromGit_1` from adding it twice.
 - If you change the trigger input later, **remove and re-add the flow in the app** — Power Apps caches the signature at bind time.

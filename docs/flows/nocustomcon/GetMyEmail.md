@@ -25,7 +25,7 @@ Related: [../../FLOWS.md](../../FLOWS.md) (flow inventory — this flow is not l
   That reference is present in `customizations.xml`. It arrives unbound on import and must be bound per environment — PREREQUISITES E2.
 
 - The connection is **delegated**, not service principal. `runtimeSource: invoker` means the action executes as the signed-in caller, which is the entire point: the flow returns *your* profile, not the broker's. Sharing must be *Provided by run-only user* (PREREQUISITES E5).
-- **No environment variables are used.** `crbab_TenantId`, `crbab_BrokerClientId` and `crbab_BrokerObjectId` are all irrelevant here — there is no token acquisition, no `GetFabricToken` child call and no Fabric endpoint. Defaults, for reference only: `9e929790-272d-4977-a2ab-301443c11ece`, `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc`, `6f70a764-908f-435b-a930-ffcb375577f3`.
+- **No environment variables are used.** `crbab_BrokerObjectId` is irrelevant here — there is no Fabric endpoint, no token acquisition and no connection role grant. This flow calls Office 365 Users only.
 - **This flow is not an authorization check.** It reports who the caller claims to be to the *app*, which is not a boundary — the app is the thing being trusted. The real check is the Dataverse lookup described in ARCHITECTURE §3 and tracked in OPEN-ISSUES §1.7 / §10.3, and it is not implemented anywhere. Do not build ownership logic on this flow's output.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.

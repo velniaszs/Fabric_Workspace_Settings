@@ -11,18 +11,8 @@ Related: [../../FLOWS.md](../../FLOWS.md) §4 (design rationale), [../../PREREQU
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Condition`, `Respond to a Power App or flow`.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. The token comes from `GetFabricToken`, which runs the client-credentials grant as the broker SPN and returns `access_token`. Every Fabric call in this flow carries that bearer token.
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** is not an environment variable — it is an `Initialize variable` inside `GetFabricToken`, scrubbed on export and re-entered per environment (PREREQUISITES E4). Never commit it.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - The broker SPN must be a member of the Fabric API security group and the tenant setting must be on, or every call here returns a bare `401`.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
@@ -61,35 +51,7 @@ The only flow of the four that copies the trigger key into a named variable up f
 
 ---
 
-## 3. `Run_a_Child_Flow` — Workflow
-
-Runs after `Initialize_workspaceid` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 4. `Initialize_access_token` — Initialize variable
-
-Runs after `Run_a_Child_Flow` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `@body('Run_a_Child_Flow')?['access_token']` |
-
-Holds a bearer token with tenant-wide Fabric rights. It is deliberately never a trigger input and never returned to the app.
-
----
-
-## 5. Response variables
+## 3. Response variables
 
 Four more **Initialize variable** actions, each chained on **Succeeded** from the previous one, in this exact order:
 
@@ -106,7 +68,7 @@ Seeding the three JSON-bearing variables as **strings** — not objects — is w
 
 ---
 
-## 6. `Get_git_connection` — HTTP
+## 4. `Get_git_connection` — Invoke an HTTP request
 
 Runs after `Initialize_errorMessage` on **Succeeded**.
 
@@ -114,10 +76,9 @@ Runs after `Initialize_errorMessage` on **Succeeded**.
 |---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{variables('workspaceId')}/git/connection` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
-| Authentication block | none — no `authentication` property; the bearer token is supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 There is **no** `Retry Policy` override and **no** `operationOptions` on this action.
 
@@ -125,7 +86,7 @@ A disconnected workspace returns **200 with `gitConnectionState: NotConnected`**
 
 ---
 
-## 7. `Condition` — If
+## 5. `Condition` — If
 
 Runs after `Get_git_connection` on **Succeeded or Failed**. The `Failed` branch is what keeps a Fabric error from ending the run with no response.
 
@@ -202,7 +163,7 @@ Two **Set variable** actions, chained on **Succeeded**:
 
 ---
 
-## 8. Response contract
+## 6. Response contract
 
 `Respond_to_a_Power_App_or_flow` — type `Response`, kind `PowerApp`, `statusCode` 200. Runs after `Condition` on **Succeeded** only.
 
@@ -224,7 +185,7 @@ Output names come back **lowercased** in Power Fx. The `title` is cosmetic; bind
 
 ---
 
-## 9. After building
+## 7. After building
 
 - Add the flow to the canvas app (left rail → Power Automate → **+ Add flow**). Watch for a suffixed duplicate such as `GetWorkspaceGitState_1` from adding it twice.
 - If you change the trigger input later, **remove and re-add the flow in the app** — Power Apps caches the signature at bind time.
@@ -234,7 +195,7 @@ Output names come back **lowercased** in Power Fx. The `title` is cosmetic; bind
 
 ---
 
-## 10. Known drift from the exported definition
+## 8. Known drift from the exported definition
 
 - **`isConnected` is still in the export, and still typed `boolean`.** `FLOWS.md` §4 states: "**`isConnected` removed 2026-08-12 — non-string Respond fields are a trap.** … Both affected fields were derived values, so both were deleted rather than retyped: `isConnected` here and `count` in flow 3." The exported `Respond_to_a_Power_App_or_flow` still declares
 

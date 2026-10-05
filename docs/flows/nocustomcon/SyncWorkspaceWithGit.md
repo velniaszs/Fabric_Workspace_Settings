@@ -11,24 +11,9 @@ Related: [../../FLOWS.md](../../FLOWS.md) §8 (design rationale), [../../PREREQU
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `Set variable`, `HTTP`, `Condition`, `Switch`, `Respond to a Power App or flow`.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. `GetFabricToken` runs the client-credentials grant as the broker SPN; every Fabric call here carries that bearer token in a hand-written header.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - The workspace must **already be connected**. This flow never calls `git/connect`; calling it on an unconnected workspace fails at `git/status`. That separation is why this is a flow of its own rather than a branch inside `ConnectWorkspaceToGit`.
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken` as an `Initialize variable`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
-Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
-
-> **JSON key order is not execution order in this export.** `Initialize_variable_outcome`, `Initialize_variable_message`, `Initialize_variable_allowOverride`, `Set_action_final` and `Respond_to_a_Power_App_or_flow` are all keyed *after* `act_on_action` yet several of them run before it. Follow `runAfter`.
-
 > **Ordering is load-bearing.** `Get_git_status` must stay after `Condition_needs_strategy`: status requires an initialized connection, so on a `NeedsChoice` workspace it only works once initialize has run.
 
 ---
@@ -65,27 +50,12 @@ Every reference to `text_4` and `text_2` uses the safe `?[...]` form wrapped in 
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
-
-First action; `runAfter` is empty.
-
-| Field | Value |
-|---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 3. Variables
+## 2. Variables
 
 Six **Initialize variable** actions, each chained on **Succeeded** from the previous one, in this exact order:
 
 | Order | Action name | Variable | Type | Initial value |
 |---|---|---|---|---|
-| 1 | `Initialize_variable_accessToken` | `accessToken` | String | `@body('Run_a_Child_Flow')?['access_token']` |
 | 2 | `Initialize_variable_action` | `action` | String | *(no value key)* |
 | 3 | `Initialize_variable_operationId` | `operationId` | String | *(no value key)* |
 | 4 | `Initialize_variable_outcome` | `outcome` | String | `Failed` |
@@ -96,11 +66,11 @@ Six **Initialize variable** actions, each chained on **Succeeded** from the prev
 
 `outcome` is seeded `Failed`, so any path reaching the Respond without setting it explicitly reports failure rather than a blank.
 
-`accessToken` holds a bearer token with tenant-wide Fabric rights. It is deliberately never a trigger input and never returned to the app.
+The connector attaches the bearer token to each request. No token is ever held in a variable, returned to the app, or visible in the run history.
 
 ---
 
-## 4. `Condition_needs_strategy` — If
+## 3. `Condition_needs_strategy` — If
 
 Runs after `Initialize_variable_allowOverride` on **Succeeded**.
 
@@ -125,11 +95,10 @@ True when the owner supplied a strategy. **There is no `else` key in the export*
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/initializeConnection` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
 | Body | `{ "initializationStrategy": "@{triggerBody()['text_2']}" }` |
 | `operationOptions` | *(absent — Asynchronous Pattern stays **On**)* |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Asynchronous Pattern is deliberately left On here, unlike the two sync calls in §6. `initializeConnection` does not move data — it records a direction — so it resolves inline, and the normal `200` path yields `requiredAction` directly.
 
@@ -137,7 +106,7 @@ Asynchronous Pattern is deliberately left On here, unlike the two sync calls in 
 
 ---
 
-## 5. `Get_git_status` — HTTP
+## 4. `Get_git_status` — Invoke an HTTP request
 
 Runs after `Condition_needs_strategy` on **Succeeded or Failed**.
 
@@ -145,10 +114,9 @@ Runs after `Condition_needs_strategy` on **Succeeded or Failed**.
 |---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/status` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 The **Failed** leg is required. A `409` from initialize is the expected result of any re-run and must not stop the flow.
 
@@ -156,7 +124,7 @@ Supplies `workspaceHead`, `remoteCommitHash` and `changes` to everything downstr
 
 ---
 
-## 6. `Set_action_final` — Set variable
+## 5. `Set_action_final` — Set variable
 
 Runs after `Get_git_status` on **Succeeded or Failed**.
 
@@ -189,7 +157,7 @@ The **Failed** leg on `Get_git_status` matters: status fails when initialize fai
 
 ---
 
-## 7. `act_on_action` — Switch
+## 6. `act_on_action` — Switch
 
 Runs after `Set_action_final` on **Succeeded**.
 
@@ -210,10 +178,9 @@ Four actions in a chain.
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/commitToGit` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
 | `operationOptions` | `DisableAsyncPattern` |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Body — a single expression, not a JSON object:
 
@@ -269,10 +236,9 @@ Four actions in a chain, mirroring 7.1.
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/updateFromGit` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
 | `operationOptions` | `DisableAsyncPattern` |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Body:
 

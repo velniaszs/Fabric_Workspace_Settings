@@ -4,17 +4,15 @@ Build instructions for the write that creates a **managed private endpoint** in 
 
 > **Built and tested 2026-09-02 — not yet verified against an export.** Every other file in this folder is *verified against* an exported definition in `Workflows/`. This one was written as a specification and the flow was built from it. Re-export the solution and reconcile this document against the JSON before trusting the action names and `runAfter` details.
 
-Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — §2.2, §3.2 and §5.5 in particular), [../../FLOWS.md](../../FLOWS.md), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §10.3, F5.9, F5.10, [GetFabricToken.md](GetFabricToken.md), [ListPrivateEndpoints.md](ListPrivateEndpoints.md), [DeletePrivateEndpoint.md](DeletePrivateEndpoint.md), [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the outcome-variable pattern this deliberately does *not* copy — see Step 6), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md) (the status-code-derived response pattern it uses instead).
+Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — §2.2, §3.2 and §5.5 in particular), [../../FLOWS.md](../../FLOWS.md), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §10.3, F5.9, F5.10, [ListPrivateEndpoints.md](ListPrivateEndpoints.md), [DeletePrivateEndpoint.md](DeletePrivateEndpoint.md), [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the outcome-variable pattern this deliberately does *not* copy — see Step 6), [DisconnectWorkspaceFromGit.md](DisconnectWorkspaceFromGit.md) (the status-code-derived response pattern it uses instead).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** Built-in actions only: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Respond to a Power App or flow`. `connectionReferences` must end up `{}`.
-- The child flow **`GetFabricToken`** must already exist: `50895fca-088f-f111-8076-7ced8d76bf1b`.
-- Authentication is **service principal** (`sp_fabric_powerapp`). The create API requires **workspace Admin**, which the owners running the app do not have and will not be granted — a delegated call here would `403` for every user. Brokering is not a preference, it is the only design that works. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.
-- Environment variables are **not referenced directly by this flow** — the child flow consumes `crbab_TenantId` and `crbab_BrokerClientId`. The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4).
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - **No Azure permission is required to run this**, by anyone. The endpoint is provisioned in a Microsoft-managed VNet and what reaches the customer's resource is an inert `Pending` request. The Azure rights sit entirely with the *approver* — [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.2.
 
 > ### This flow must not ship without an authorization check
@@ -51,7 +49,7 @@ This matters and it bites. Where a table below says *bare `@expr`*, check it —
 3. Name it `CreatePrivateEndpoint`.
 4. For the trigger, search **Power Apps** and choose **Power Apps (V2)**.
 
-> **It must be built inside the solution.** A flow created from *My flows* is not solution-aware: it cannot see `GetFabricToken` in the child-flow picker, and it will not travel with the export.
+> **It must be built inside the solution.** A flow created from *My flows* is not solution-aware: it cannot bind to connection references — including the *HTTP with Microsoft Entra ID (preauthorized)* connection this flow needs — and it will not travel with the export.
 
 > **Choose Power Apps (V2), not the older *PowerApps* trigger.** Only V2 lets you declare named inputs. The old one takes whatever the app passes, positionally and untyped, and there is no way to add the five inputs this flow needs.
 
@@ -77,64 +75,24 @@ Note the one deliberate inconsistency: `requestMessage` is read with `?['text_4'
 
 ---
 
+## Step 3 — The `Create` call
 
-## Step 3 — Add the child-flow call
-
-1. **+ New step** → search **Run a Child Flow** → choose it (it is a built-in action, under *Workflows* / *Flows* depending on designer version — there is only one result).
-2. In the **Child Flow** dropdown, select **GetFabricToken**.
-3. Rename the action to `Run_a_Child_Flow` if it is not already called that.
-
-There are no parameters to fill. `GetFabricToken` takes no inputs and returns `access_token`.
-
-**If `GetFabricToken` is not in the dropdown**, one of these is true:
-
-| Cause | Fix |
-|---|---|
-| This flow was not created inside the solution | Recreate it in **WorkspaceSol**. Child flows are only visible to solution-aware parents |
-| `GetFabricToken`'s trigger is not *Manually trigger a flow* | It must be. A flow with a *Power Apps (V2)* trigger **cannot** be called as a child flow — that constraint is why `GetGitOperationStatus` had to stop being one |
-| `GetFabricToken` is turned off | Turn it on |
-
-The parent's own trigger is irrelevant to this — a parent may have any trigger. Only the child is constrained.
-
-> Why a child flow at all: it is the only place the broker's client secret lives. Every other flow in the solution calls it rather than repeating the client-credentials block. Do **not** add an inline token `HTTP` action here — that pattern was deliberately removed from all eight networking flows on 2026-08-07 (OPEN-ISSUES §1.6).
-
----
-
-## Step 4 — Store the token
-
-**+ New step** → search **Initialize variable** → add it. Rename it `Initialize_variable` (the designer's default name, kept to match the other networking flows).
-
-| Field | What to enter |
-|---|---|
-| Name | `accessToken` |
-| Type | `String` |
-| Value | expression: `body('Run_a_Child_Flow')?['access_token']` |
-
-Enter the Value through the **fx / Expression** tab, not by typing into the box.
-
-`accessToken` holds a bearer token for the broker. It is deliberately never a trigger input and never returned to the app.
-
----
-
-## Step 5 — The `Create` call
-
-**+ New step** → search **HTTP** → choose the built-in **HTTP** action. Not *HTTP with Microsoft Entra ID*, not *HTTP Request* — the plain one. **Rename it `Create` immediately**; every expression in Step 6 says `body('Create')` or `outputs('Create')`.
+**+ New step** → search **HTTP with Microsoft Entra ID (preauthorized)** → choose the action **Invoke an HTTP request**. Not the plain *HTTP* action. **Rename it `Create` immediately**; every expression in Step 4 says `body('Create')` or `outputs('Create')`.
 
 | Field | What to enter |
 |---|---|
 | Method | `POST` |
-| URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/managedPrivateEndpoints` |
-| Headers | two rows — see below |
-| Body | the JSON below |
+| URL of the request | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/managedPrivateEndpoints` |
+| Headers | one row — see below |
+| Body of the request | the JSON below |
 
-Headers are a key/value grid; add two rows:
+Headers are a key/value grid; add one row:
 
 | Key | Value |
 |---|---|
-| `Authorization` | `Bearer @{variables('accessToken')}` — note the space after `Bearer` |
 | `Content-Type` | `application/json` |
 
-**Leave the *Authentication* section of the action alone.** The bearer token is supplied by hand in the header. Filling in the action's own authentication block as well produces two competing credentials.
+> **Do not add an `Authorization` header.** The connector attaches the bearer token itself; a hand-written one is either ignored or produces two competing credentials.
 
 Body:
 
@@ -171,7 +129,7 @@ On the retry policy: a `POST` retried after a response was lost in transit will 
 
 ---
 
-## Step 6 — Respond to the app
+## Step 4 — Respond to the app
 
 1. Below `Create`, **+ New step** → search **Respond to a Power App or flow** → add it.
 2. ⋯ → **Configure run after** → tick **both** *is successful* and *has failed*.
@@ -224,7 +182,7 @@ Output names come back **lowercased** in Power Fx — you type `Outcome`, the ap
 
 ---
 
-## Step 7 — Save and check
+## Step 5 — Save and check
 
 1. **Save**.
 2. **Peek code** on `Create` and on the Respond. Confirm the expressions are live, not quoted text — and that the Respond's `runAfter` on `Create` lists both `Succeeded` and `Failed`.

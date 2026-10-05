@@ -4,7 +4,7 @@ All flows live in `Workflows/` as unpacked solution JSON. Do not hand-edit these
 
 Flow numbering (1–8) refers to the Git-integration build order. The eight `*Rules` / `*Policy` / `*Setting` flows predate it and serve the networking screens of the app.
 
-> **No flow that authenticates as a service principal works until the tenant prerequisites are in place.** See [docs/PREREQUISITES.md](docs/PREREQUISITES.md) — A3 and B1 in particular. Symptom when missing: a bare `401` on every Fabric call.
+> **No flow that authenticates as a service principal works until the tenant prerequisites are in place.** See [docs/PREREQUISITES.md](PREREQUISITES.md) — A3 and B1 in particular. Symptom when missing: a bare `401` on every Fabric call.
 
 ---
 
@@ -358,7 +358,7 @@ Verified paths, 2026-08-11: in-sync no-op; `UpdateFromGit` with `allowOverrideIt
 
 ## Changes required to the built flows
 
-Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md) — one register for the whole project, not a second list. The flow numbers there match the Status table above.
+Tracked as **F\<flow\>.\<n\>** in the *Issues* table in [docs/OPEN-ISSUES.md](OPEN-ISSUES.md) — one register for the whole project, not a second list. The flow numbers there match the Status table above.
 
 ---
 
@@ -392,13 +392,13 @@ The backtick `cont` initialisation and the stale `shared_webcontents` connection
 
 ## Managed private endpoints
 
-Three networking flows for the app's Private endpoints tab. **Built and tested 2026-09-02.** All app-only via `GetFabricToken`, all `connectionReferences: {}` — **no custom connector, no delegated call, no new permissions**. Design rationale in [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md); the tab that calls them in [docs/APP-PRIVATE-ENDPOINTS-TAB.md](docs/APP-PRIVATE-ENDPOINTS-TAB.md).
+Three networking flows for the app's Private endpoints tab. **Built and tested 2026-09-02.** All app-only via `GetFabricToken`, all `connectionReferences: {}` — **no custom connector, no delegated call, no new permissions**. Design rationale in [docs/APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md); the tab that calls them in [docs/APP-PRIVATE-ENDPOINTS-TAB.md](APP-PRIVATE-ENDPOINTS-TAB.md).
 
 | Flow | Inputs | Endpoint (under `/v1/workspaces/{id}/managedPrivateEndpoints`) | Returns | Build instructions |
 |---|---|---|---|---|
-| ListPrivateEndpoints | `workspaceId` | `GET` (root), paged on `continuationUri` | `EndpointsJson`, `ErrorMessage` | [flows/nocustomcon/ListPrivateEndpoints.md](docs/flows/nocustomcon/ListPrivateEndpoints.md) |
-| CreatePrivateEndpoint | `workspaceId`, `name`, `targetPrivateLinkResourceId`, `targetSubresourceType`, `requestMessage` | `POST` | `Outcome`, `EndpointId`, `ProvisioningState`, `Message` | [flows/nocustomcon/CreatePrivateEndpoint.md](docs/flows/nocustomcon/CreatePrivateEndpoint.md) |
-| DeletePrivateEndpoint | `workspaceId`, `managedPrivateEndpointId` | `DELETE /{mpeId}` | `Outcome`, `Message` | [flows/nocustomcon/DeletePrivateEndpoint.md](docs/flows/nocustomcon/DeletePrivateEndpoint.md) |
+| ListPrivateEndpoints | `workspaceId` | `GET` (root), paged on `continuationUri` | `EndpointsJson`, `ErrorMessage` | [flows/nocustomcon/ListPrivateEndpoints.md](flows/nocustomcon/ListPrivateEndpoints.md) |
+| CreatePrivateEndpoint | `workspaceId`, `name`, `targetPrivateLinkResourceId`, `targetSubresourceType`, `requestMessage` | `POST` | `Outcome`, `EndpointId`, `ProvisioningState`, `Message` | [flows/nocustomcon/CreatePrivateEndpoint.md](flows/nocustomcon/CreatePrivateEndpoint.md) |
+| DeletePrivateEndpoint | `workspaceId`, `managedPrivateEndpointId` | `DELETE /{mpeId}` | `Outcome`, `Message` | [flows/nocustomcon/DeletePrivateEndpoint.md](flows/nocustomcon/DeletePrivateEndpoint.md) |
 
 The two writes require **workspace Admin**, which owners do not hold — brokering is the only design that works, not a preference. Neither write may ship before the `ubsppcoe_Workspace` ownership check (F5.9): a create sends a request that leaves Fabric entirely, and a delete breaks a live data path with a 15-minute cooldown before it can be undone.
 

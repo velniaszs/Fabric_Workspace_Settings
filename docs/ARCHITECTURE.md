@@ -1,6 +1,6 @@
 # Architecture & Handoff
 
-Read this first. It carries the design decisions, identities, and open issues needed to resume work. Per-flow detail lives in [docs/FLOWS.md](docs/FLOWS.md).
+Read this first. It carries the design decisions, identities, and open issues needed to resume work. Per-flow detail lives in [docs/FLOWS.md](FLOWS.md).
 
 ---
 
@@ -125,7 +125,7 @@ Read flows may stay on PowerApp V2 with no row at all.
 
 `ubsppcoe_Workspace` is populated externally — out of scope here.
 
-**Planned tables:** `ubsppcoe_GitAuditLog` (who did what, when, outcome), the request table backing the write pattern in §3, and `ubsppcoe_PrivateLinkTarget` (resource type → valid private-link sub-resources, seeded from `data/PrivateLinkTargets.csv` — see [docs/APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.6). Create via maker portal, never by editing `customizations.xml`.
+**Planned tables:** `ubsppcoe_GitAuditLog` (who did what, when, outcome), the request table backing the write pattern in §3, and `ubsppcoe_PrivateLinkTarget` (resource type → valid private-link sub-resources, seeded from `data/PrivateLinkTargets.csv` — see [docs/APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md) §5.6). Create via maker portal, never by editing `customizations.xml`.
 
 **Dropped:** `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping`. Fabric owns that state and the GET APIs return it live — caching it only creates a second source of truth to reconcile.
 
@@ -314,7 +314,7 @@ The trailing slash on the repo URL matters.
 
 ## 10. Open issues
 
-Maintained separately in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md) — bugs, security, blocking prerequisites, undecided design points, ALM, and the untested end-to-end scenario.
+Maintained separately in [docs/OPEN-ISSUES.md](OPEN-ISSUES.md) — bugs, security, blocking prerequisites, undecided design points, ALM, and the untested end-to-end scenario.
 
 The two that gate everything else:
 

@@ -2,7 +2,7 @@
 
 Everything that must be configured **by hand**, outside the solution, before the app works. None of it is carried by the solution export, so all of it must be repeated in every tenant and every Power Platform environment.
 
-Companion to [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FLOWS.md](docs/FLOWS.md) and [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md).
+Companion to [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/FLOWS.md](FLOWS.md) and [docs/OPEN-ISSUES.md](OPEN-ISSUES.md).
 
 Last reviewed: 2026-08-07
 

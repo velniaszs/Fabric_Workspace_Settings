@@ -1,10 +1,10 @@
 # Open Issues
 
-Living list of project items. Companion to [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/FLOWS.md](docs/FLOWS.md) and [docs/PREREQUISITES.md](docs/PREREQUISITES.md).
+Living list of project items. Companion to [docs/ARCHITECTURE.md](ARCHITECTURE.md), [docs/FLOWS.md](FLOWS.md) and [docs/PREREQUISITES.md](PREREQUISITES.md).
 
 Two tables, split by whether anything still has to be done. **Open** is the work list. **Closed** is everything settled — kept because the reasoning is worth not relitigating.
 
-Flow work is `F<flow>.<n>`, where the flow number matches the Status table in [docs/FLOWS.md](docs/FLOWS.md) — `FN` = the pre-existing networking flows, `FA` = applies to every flow. Everything else keeps its section number. The § at the end of each row is where the detail lives.
+Flow work is `F<flow>.<n>`, where the flow number matches the Status table in [docs/FLOWS.md](FLOWS.md) — `FN` = the pre-existing networking flows, `FA` = applies to every flow. Everything else keeps its section number. The § at the end of each row is where the detail lives.
 
 Legend: 🔴 open, needs action · 🟡 open, non-blocking · ⏸ deliberately deferred · ✅ done · ➖ decided/accepted · ℹ reference
 

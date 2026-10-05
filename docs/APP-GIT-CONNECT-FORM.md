@@ -2,7 +2,7 @@
 
 Three defects in the `GitNotConnected` wizard, raised 2026-08-12. Step-by-step fix.
 
-The canonical build instructions in [docs/APP-GIT-TAB.md](docs/APP-GIT-TAB.md) (steps 2d, 3b, 3c) have already been updated to match, so a rebuild from scratch produces the fixed version. This file is for patching the app that exists now.
+The canonical build instructions in [docs/APP-GIT-TAB.md](APP-GIT-TAB.md) (steps 2d, 3b, 3c) have already been updated to match, so a rebuild from scratch produces the fixed version. This file is for patching the app that exists now.
 
 ---
 
@@ -51,7 +51,7 @@ If `DefaultSelectedItems` holds anything, clear it. A value there re-applies a s
 
 An earlier version of this fix added a computed `label` field to `colGitConns`. It is not needed — `displayName` and `path` are already collected, and the combo box can display both directly. If you added `label`, it is harmless; drop it next time you edit `BtnGit.OnSelect` and `IcoGitRefresh.OnSelect`.
 
-The blocks in [docs/APP-GIT-TAB.md](docs/APP-GIT-TAB.md) step 3b are the current version and do **not** contain `label`.
+The blocks in [docs/APP-GIT-TAB.md](APP-GIT-TAB.md) step 3b are the current version and do **not** contain `label`.
 
 ### 3. Reset the form on entry
 
@@ -87,4 +87,4 @@ Test 2 is the one that matters. Test 1 can pass on cached state alone.
 
 ## Not fixed here
 
-`TxtGitDir` still defaults to `/`, and a root-level connect is **untested** — it is the leading suspect for the unexplained `400 UnknownError` from `initializeConnection` recorded in [docs/OPEN-ISSUES.md](docs/OPEN-ISSUES.md). Every successful connect so far has used a named folder. Changing that default is a separate decision, not part of this fix.
+`TxtGitDir` still defaults to `/`, and a root-level connect is **untested** — it is the leading suspect for the unexplained `400 UnknownError` from `initializeConnection` recorded in [docs/OPEN-ISSUES.md](OPEN-ISSUES.md). Every successful connect so far has used a named folder. Changing that default is a separate decision, not part of this fix.

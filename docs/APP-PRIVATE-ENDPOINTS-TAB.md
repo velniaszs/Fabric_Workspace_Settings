@@ -4,7 +4,7 @@ Build guide for a new **Private endpoints** tab in `crbab_app5` (`CanvasApps/crb
 
 Everything here is built in the maker portal. **Never hand-edit the `.msapp`.**
 
-Design rationale lives in [APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) — read §2.1, §5.2 and §5.6 before building the create panel. Flow build specs are in [flows/nocustomcon/](docs/flows/nocustomcon/).
+Design rationale lives in [APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md) — read §2.1, §5.2 and §5.6 before building the create panel. Flow build specs are in [flows/nocustomcon/](flows/nocustomcon/).
 
 ---
 
@@ -35,7 +35,7 @@ Steps 1–5 are the build, in order. Everything before Step 1 is reference — r
 | Steps 1–5 | **do this** |
 | Test matrix | do this, after step 5 |
 
-Control types (classic vs modern, which template the app already uses) are in [APP-GIT-TAB.md](docs/APP-GIT-TAB.md) *Control types*. Match them or this tab will look wrong beside the others.
+Control types (classic vs modern, which template the app already uses) are in [APP-GIT-TAB.md](APP-GIT-TAB.md) *Control types*. Match them or this tab will look wrong beside the others.
 
 ---
 
@@ -56,7 +56,7 @@ Inputs are **positional** in Power Fx, in the order shown. All outputs are strin
 
 `GetFabricToken` is a child flow and is **not** added to the app.
 
-> **`outcome: Created` means the request was accepted, not that the endpoint works.** Fabric does not validate the sub-resource against the target resource at create time — a mismatch is accepted and fails during provisioning. Always re-list after creating; never assume the new row is healthy. See [APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.2.
+> **`outcome: Created` means the request was accepted, not that the endpoint works.** Fabric does not validate the sub-resource against the target resource at create time — a mismatch is accepted and fails during provisioning. Always re-list after creating; never assume the new row is healthy. See [APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md) §5.2.
 
 ---
 
@@ -135,7 +135,7 @@ PrivateEndpointsContent        Visible: varActiveTab = "PrivateEndpoints"
 └── PeDeleteConfirm            Visible: !IsBlank(varPeDeleteId)
 ```
 
-`LblPeEmpty` is gated on `gblPeLoaded`, not just on the row count. A blank collection is falsy, so without the flag the "no private endpoints" message flashes on every workspace that *does* have some — the same defect documented in [APP-OUTBOUND-TAB.md](docs/APP-OUTBOUND-TAB.md).
+`LblPeEmpty` is gated on `gblPeLoaded`, not just on the row count. A blank collection is falsy, so without the flag the "no private endpoints" message flashes on every workspace that *does* have some — the same defect documented in [APP-OUTBOUND-TAB.md](APP-OUTBOUND-TAB.md).
 
 > **Do not gate any of this on `gblFlowResult.oapenabled`.** Managed private endpoints are independent of Outbound Access Protection. The Fabric UI puts both under *Network security*, which makes them easy to confuse, but everything on the Outbound tab lives under `networking/communicationPolicy/outbound/*` and nothing here does. Gating on OAP would hide a working feature on every workspace with OAP off.
 
@@ -143,7 +143,7 @@ PrivateEndpointsContent        Visible: varActiveTab = "PrivateEndpoints"
 
 ## Step 1 — the Dataverse table
 
-The create panel needs a lookup of resource type → valid sub-resources. Seed data is in [data/PrivateLinkTargets.csv](data/PrivateLinkTargets.csv) (28 rows). Rationale and the full mapping are in [APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §5.6.
+The create panel needs a lookup of resource type → valid sub-resources. Seed data is in [data/PrivateLinkTargets.csv](../data/PrivateLinkTargets.csv) (28 rows). Rationale and the full mapping are in [APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md) §5.6.
 
 ### 1a. Create the table
 
@@ -331,7 +331,7 @@ Per row:
 
 Set the resource label's `Tooltip` to `ThisItem.resourceId` so the full ID is available without widening the column.
 
-**Two status fields, both shown, never merged.** `provisioning` is Fabric's; `connStatus` belongs to the data source admin in the Azure portal. `Succeeded` + `Pending` is the **normal** state for minutes to days after creation and must not render as an error ([APP-PRIVATE-ENDPOINTS.md](docs/APP-PRIVATE-ENDPOINTS.md) §2.1).
+**Two status fields, both shown, never merged.** `provisioning` is Fabric's; `connStatus` belongs to the data source admin in the Azure portal. `Succeeded` + `Pending` is the **normal** state for minutes to days after creation and must not render as an error ([APP-PRIVATE-ENDPOINTS.md](APP-PRIVATE-ENDPOINTS.md) §2.1).
 
 Colour the activation label:
 

@@ -4,31 +4,18 @@ Build instructions for the write that replaces a workspace's outbound **gateway*
 
 Verified against `Workflows/SetGatewayRules-F82666CB-4D8A-F111-AB0F-7C1E528D41FB.json` on 2026-08-17.
 
-Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [GetGatewayRules.md](GetGatewayRules.md) (the matching read), [../ListGateways.md](../ListGateways.md) (the delegated flow that names the gateways), [SetGitPolicy.md](SetGitPolicy.md) (the same shape on the Git endpoint).
+Related: [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [../../APP-OUTBOUND-TAB.md](../../APP-OUTBOUND-TAB.md) (how the app calls it), [GetGatewayRules.md](GetGatewayRules.md) (the matching read), [../ListGateways.md](../ListGateways.md) (the delegated flow that names the gateways), [SetGitPolicy.md](SetGitPolicy.md) (the same shape on the Git endpoint).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, two × `Respond to a Power App or flow`. `connectionReferences` in the export is `{}`. The custom connector is not involved — do not add it.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. The inline `clientSecret` → token `HTTP` → `Parse_JSON` block that this flow used to carry was deleted on 2026-08-07 and replaced by the child-flow call (OPEN-ISSUES §1.6, FN.1). It previously ran as `sp_fabric_monit`, which holds `Tenant.Read.All` / `Tenant.ReadWrite.All`; it now runs as `sp_fabric_powerapp`. Do not reintroduce an inline token block.
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
-- This is a **write**, and the broker needs a role on the target workspace to make it. A `403` means the broker lost that role; a `401` means PREREQUISITES A3 or B1 is missing.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
+- This is a **write**, and the `workspace provisioning` account needs a role on the target workspace to make it. A `403` means the broker lost that role; a `401` means the *HTTP with Microsoft Entra ID (preauthorized)* connection has lapsed — and it then fails on every workspace at once, not just this one.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
-
-> **JSON key order is not execution order in this export.** `Run_a_Child_Flow` is the **last** key in `actions` and the **first** action to run. Follow `runAfter`.
 
 ---
 
@@ -57,48 +44,17 @@ Both are required and must stay required. An optional PowerApp V2 input is **dro
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
+## 2. `HTTP_2` — Invoke an HTTP request
 
 First action; `runAfter` is empty.
 
 | Field | Value |
 |---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 3. `Initialize_variable` — InitializeVariable
-
-Runs after `Run_a_Child_Flow` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `@body('Run_a_Child_Flow')?['access_token']` |
-
-Note the bare `@expr` form, not `@{ }`. The action name is the designer default `Initialize_variable` — it was not renamed when the token block was replaced.
-
-`accessToken` holds a bearer token with tenant-wide Fabric rights for the broker. It is deliberately never a trigger input and never returned to the app.
-
----
-
-## 4. `HTTP_2` — Http
-
-Runs after `Initialize_variable` on **Succeeded**.
-
-| Field | Value |
-|---|---|
 | Method | `PUT` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/networking/communicationPolicy/outbound/gateways` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
 | `retryPolicy` | *(absent — default exponential, 4 retries)* |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Body — the trigger input passed straight through, as a bare expression, **not** wrapped in `@{ }` and not rebuilt:
 
@@ -116,7 +72,7 @@ The action keeps its designer-generated name `HTTP_2` from before the FN.1 rewri
 
 ---
 
-## 5. `RespondSuccess` — Response
+## 3. `RespondSuccess` — Response
 
 Runs after `HTTP_2` on **Succeeded**. Parallel sibling of §6.
 
@@ -131,7 +87,7 @@ Both values are **literals**, not derived. Nothing is read from `HTTP_2`.
 
 ---
 
-## 6. `RespondError` — Response
+## 4. `RespondError` — Response
 
 Runs after `HTTP_2` on **Failed**. Parallel sibling of §5.
 

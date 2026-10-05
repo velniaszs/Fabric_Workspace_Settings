@@ -4,31 +4,18 @@ Build instructions for the single-shot, read-only flow that reports the state of
 
 Verified against `Workflows/GetGitOperationStatus-5AFCD720-158F-F111-8076-7CED8D76BF1B.json` on 2026-08-17.
 
-Related: [../../FLOWS.md](../../FLOWS.md) §2 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.13, §6.1, §6.2, §10.5, [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md) and [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the flows that produce the operation IDs).
+Related: [../../FLOWS.md](../../FLOWS.md) §2 (design rationale), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.13, §6.1, §6.2, §10.5, [SyncWorkspaceWithGit.md](SyncWorkspaceWithGit.md) and [ConnectWorkspaceToGit.md](ConnectWorkspaceToGit.md) (the flows that produce the operation IDs).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `HTTP`, `Condition`, `Set variable`, `Respond to a Power App or flow`. `connectionReferences` in the export is `{}`.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. `GetFabricToken` runs the client-credentials grant as the broker SPN; both Fabric calls here carry that bearer token in a hand-written header.
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - **There is no loop.** One `GET`, no `Delay`, no `Do_until`. The looping ancestor `PollFabricOperation` was renamed and rewritten in place on 2026-08-07, which is why the flow GUID and its connection references survive the rename — and why the canvas app still binds to the old name (see *After building*).
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
-
-> **JSON key order is not execution order in this export.** `Respond_to_a_Power_App_or_flow` is the **first** key in `actions` and the **last** action to run. Follow `runAfter`.
 
 ---
 
@@ -52,27 +39,11 @@ The input is required, and must stay required. An optional PowerApp V2 input is 
 
 Note the flow reads `@triggerBody()['text']` in the **unsafe** form, without `?[...]`. That is correct precisely because the input is required.
 
-`accessToken` is deliberately **not** a trigger input. Passing one would put an SPN credential with tenant-wide Fabric rights inside the canvas app, recoverable by anyone who can open it.
+No token is passed in or out of this flow. The connector holds the credential, so there is nothing a caller could supply or read.
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
-
-First action; `runAfter` is empty.
-
-| Field | Value |
-|---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
-Unlike most callers, this flow does **not** copy the token into an `accessToken` variable. Both HTTP actions read `body('Run_a_Child_Flow')?['access_token']` directly.
-
----
-
-## 3. Variables
+## 2. Variables
 
 Two **Initialize variable** actions, chained on **Succeeded**:
 
@@ -81,7 +52,7 @@ Two **Initialize variable** actions, chained on **Succeeded**:
 | 1 | `Initialize_variable_requiredAction` | `requiredAction` | String | *(no `value` key — starts empty)* |
 | 2 | `Initialize_variable_remoteCommitHash` | `remoteCommitHash` | String | *(no `value` key — starts empty)* |
 
-`Initialize_variable_requiredAction` runs after `Run_a_Child_Flow` on **Succeeded**; `Initialize_variable_remoteCommitHash` runs after it on **Succeeded**.
+`Initialize_variable_requiredAction` is the first action, with an empty `runAfter`; `Initialize_variable_remoteCommitHash` runs after it on **Succeeded**.
 
 Both are declared with **no `value` property** rather than an empty string. That is deliberate — the same shape as the fixed `cont` in `ListGateways`, which once initialised to backticks and sent them on the wire.
 
@@ -89,7 +60,7 @@ They are initialised here, outside the `Condition`, because the Respond reads th
 
 ---
 
-## 4. `Get_operation_state` — HTTP
+## 3. `Get_operation_state` — Invoke an HTTP request
 
 Runs after `Initialize_variable_remoteCommitHash` on **Succeeded**.
 
@@ -97,10 +68,9 @@ Runs after `Initialize_variable_remoteCommitHash` on **Succeeded**.
 |---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/operations/@{triggerBody()['text']}` |
-| Header `Authorization` | `Bearer @{body('Run_a_Child_Flow')?['access_token']}` |
 | Header `Accept` | `application/json` |
 | Body | none |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Retry policy, set **explicitly** rather than left on the default:
 
@@ -118,7 +88,7 @@ Returns **state only**: `status`, `percentComplete`, `error`. The payload of the
 
 ---
 
-## 5. `Condition` — If
+## 4. `Condition` — If
 
 Runs after `Get_operation_state` on **Succeeded**, **Failed** *and* **TimedOut**.
 
@@ -147,11 +117,10 @@ Three actions in a chain.
 |---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/operations/@{triggerBody()['text']}/result` |
-| Header `Authorization` | `Bearer @{body('Run_a_Child_Flow')?['access_token']}` |
 | Header `Accept` | `application/json` |
 | Body | none |
 | `retryPolicy` | *(absent — default exponential, 4 retries)* |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 **Why `/result` is here.** `GET /v1/operations/{id}` returns state; the payload comes from this separate call. For `commitToGit` and `updateFromGit` it 404s and is ignored — success or failure is the whole answer. It exists for the one case stage 1 cannot answer synchronously: when `initializeConnection` returns **202** the body is empty, and `/result` is the only source of `requiredAction` and `remoteCommitHash`. `remoteCommitHash` is a required field of `updateFromGit`, so without this call a 202 on initialize is a dead end.
 

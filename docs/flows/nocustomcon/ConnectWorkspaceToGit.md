@@ -11,26 +11,11 @@ Related: [../../FLOWS.md](../../FLOWS.md) §5 (design rationale), [../../PREREQU
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Compose`, `Run a Child Flow`, `Initialize variable`, `Set variable`, `HTTP`, `Condition`, `Respond to a Power App or flow`.
-- The child flow **`GetFabricToken`** must already exist. It is referenced by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal**, not delegated. `GetFabricToken` runs the client-credentials grant as the broker SPN; all four Fabric calls carry that bearer token in a hand-written header.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
 - The broker SPN must hold **workspace Admin** on the target workspace — `git/connect`, `git/myGitCredentials` and `git/initializeConnection` are all Admin-only.
 - The `connectionId` passed in must already carry a role assignment for the broker. That is what `AddConnectionRoleAssignment` (delegated) is for, and it runs on the wizard step immediately before this one.
 - The `directoryName` must already exist in the repo, with at least a placeholder file — Git cannot store an empty directory, and a first-time connect against a missing folder returns `GitProviderResourceNotFound` (PREREQUISITES D1, OPEN-ISSUES §1.11).
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken` as an `Initialize variable`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
-Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
-
-> **JSON key order is not execution order in this export.** `Initialize_requiredAction` is the *last* key in the `actions` object but runs sixth, and `Check_existing` is keyed before `Is_not_connected` yet depends on it. Follow `runAfter`.
-
 ---
 
 ## 1. Trigger — Power Apps (V2)
@@ -85,27 +70,12 @@ Nothing downstream reads `outputs('Compose')`. It exists so the run history show
 
 ---
 
-## 3. `Run_a_Child_Flow` — Workflow
-
-Runs after `Compose` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 4. Variables
+## 3. Variables
 
 Five **Initialize variable** actions, each chained on **Succeeded** from the previous one, in this exact order:
 
 | Order | Action name | Variable | Type | Initial value |
 |---|---|---|---|---|
-| 1 | `Initialize_accessToken` | `accessToken` | String | `@body('Run_a_Child_Flow')?['access_token']` |
 | 2 | `Initialize_outcome` | `outcome` | String | `Failed` |
 | 3 | `Initialize_message` | `message` | String | *(no value key)* |
 | 4 | `Initialize_operationId` | `operationId` | String | *(no value key)* |
@@ -113,11 +83,11 @@ Five **Initialize variable** actions, each chained on **Succeeded** from the pre
 
 `outcome` is seeded `Failed` on purpose: every path that reaches the Respond without having set it explicitly is, by definition, a path that did not succeed.
 
-`accessToken` holds a bearer token with tenant-wide Fabric rights. It is deliberately never a trigger input and never returned to the app.
+The connector attaches the bearer token to each request. No token is ever held in a variable, returned to the app, or visible in the run history.
 
 ---
 
-## 5. `Check_existing` — HTTP
+## 4. `Check_existing` — Invoke an HTTP request
 
 Runs after `Initialize_requiredAction` on **Succeeded**.
 
@@ -125,10 +95,9 @@ Runs after `Initialize_requiredAction` on **Succeeded**.
 |---|---|
 | Method | `GET` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connection` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
-| Authentication block | none — no `authentication` property; the bearer token is supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 The flow reads the connection state **inside its own run** rather than trusting a value the app passed in.
 
@@ -136,7 +105,7 @@ A disconnected workspace returns **200 with `gitConnectionState: NotConnected`**
 
 ---
 
-## 6. `Is_not_connected` — If
+## 5. `Is_not_connected` — If
 
 Runs after `Check_existing` on **Succeeded** only.
 
@@ -167,9 +136,8 @@ Seven actions. The main chain is `Connect` → `Set_credentials` → `Initialize
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/connect` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Body:
 
@@ -200,9 +168,8 @@ Runs after `Connect` on **Succeeded**.
 |---|---|
 | Method | `PATCH` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/myGitCredentials` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 Body:
 
@@ -223,7 +190,6 @@ Runs after `Set_credentials` on **Succeeded**.
 |---|---|
 | Method | `POST` |
 | URI | `https://api.fabric.microsoft.com/v1/workspaces/@{triggerBody()['text']}/git/initializeConnection` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Content-Type` | `application/json` |
 | Body | `{ "initializationStrategy": "None" }` |
 | `operationOptions` | *(absent — Asynchronous Pattern stays **On**)* |
@@ -317,7 +283,7 @@ Nothing is written and nothing is re-pointed. `operationId` stays empty and `req
 
 ---
 
-## 7. `Respond_to_a_Power_App_or_flow` — Response
+## 6. `Respond_to_a_Power_App_or_flow` — Response
 
 Runs after `Is_not_connected` on **Succeeded or Failed**. Type `Response`, kind `PowerApp`, `statusCode` 200.
 
@@ -362,4 +328,4 @@ Output names come back **lowercased** in Power Fx — bind to `outcome`, `messag
 
 ## Known drift from the exported definition
 
-- `FLOWS.md` §5 opens its **As built** list with "1. **Token** — child call to `GetFabricToken`, then variables `accessToken`, `outcome` (seeded `Failed`), `message`, `operationId`, `requiredAction` (seeded `None`)." The export's first action is not the child call: `Run_a_Child_Flow` has `"runAfter": { "Compose": [ "Succeeded" ] }`, and `Compose` — an action `FLOWS.md` does not mention anywhere — has `"runAfter": {}`. Rebuilding from §5 alone produces a flow that works but whose run history lacks the named echo of the seven positional trigger keys.
+- `FLOWS.md` §5 opens its **As built** list with "1. **Token** — child call to `GetFabricToken`, then variables `accessToken`, `outcome` (seeded `Failed`), `message`, `operationId`, `requiredAction` (seeded `None`)." **Both halves of that are now wrong.** There is no token step at all — Fabric is reached through the preauthorized connector — and even in the token-flow export the first action was not the child call: `Run_a_Child_Flow` had `"runAfter": { "Compose": [ "Succeeded" ] }`, and `Compose` — an action `FLOWS.md` does not mention anywhere — had `"runAfter": {}`. The variables `outcome`, `message`, `operationId` and `requiredAction` are still seeded as described; only the token half disappears. Rebuilding from §5 alone produces a flow whose run history lacks the named echo of the seven positional trigger keys.

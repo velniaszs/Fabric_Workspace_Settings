@@ -4,28 +4,17 @@ Build instructions for the read that returns a workspace's **managed private end
 
 > **Built and tested 2026-09-02 — not yet verified against an export.** Every other file in this folder is *verified against* an exported definition in `Workflows/`. This one was written as a specification and the flow was built from it. Re-export the solution and reconcile this document against the JSON before trusting the action names and `runAfter` details.
 
-Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — read §2 and §3 first), [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1, A3, B1, E4), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [GetFabricToken.md](GetFabricToken.md) (the child flow it calls), [CreatePrivateEndpoint.md](CreatePrivateEndpoint.md), [DeletePrivateEndpoint.md](DeletePrivateEndpoint.md), [GetOutboundRules.md](GetOutboundRules.md) (the closest existing read), [ListMyConnections.md](../ListMyConnections.md) (the paging idiom this borrows).
+Related: [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) (design investigation — read §2 and §3 first), [../../FLOWS.md](../../FLOWS.md) (Networking flows table), [../../PREREQUISITES.md](../../PREREQUISITES.md) (A1), [../../OPEN-ISSUES.md](../../OPEN-ISSUES.md) §1.6, §10.3, [CreatePrivateEndpoint.md](CreatePrivateEndpoint.md), [DeletePrivateEndpoint.md](DeletePrivateEndpoint.md), [GetOutboundRules.md](GetOutboundRules.md) (the closest existing read), [ListMyConnections.md](../ListMyConnections.md) (the paging idiom this borrows).
 
 ---
 
 ## 0. Before you start
 
 - Create the flow **inside the solution**, so it binds to connection references rather than raw connections.
-- **No connector connection is needed.** The flow uses only built-in actions: `Run a Child Flow`, `Initialize variable`, `Do until`, `HTTP`, `Compose`, `Set variable`, `Respond to a Power App or flow`. `connectionReferences` must end up `{}`. The custom connector is not involved — do not add it. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3 for why there is no delegated path here.
+- **Needs the *HTTP with Microsoft Entra ID (preauthorized)* connection**, signed in as the `workspace provisioning` service account. Create it once with **Base Resource URL** and **Microsoft Entra ID Resource URI** both set to `https://api.fabric.microsoft.com`. It appears in `connectionReferences` on export.
 - The finished flow is **one** `Respond`, not two. If you are mid-build from an earlier revision of this document and have `Respond_success` / `Respond_failed`, delete both and rebuild §8 — the two-Respond shape required a blank output value, which the designer rejects.
-- The child flow **`GetFabricToken`** must already exist. Reference it by GUID: `50895fca-088f-f111-8076-7ced8d76bf1b` → `Workflows/GetFabricToken-50895FCA-088F-F111-8076-7CED8D76BF1B.json`.
-- Authentication is **service principal** (`sp_fabric_powerapp`), not delegated. Do not add an inline token block — that pattern was removed from all eight networking flows on 2026-08-07 (OPEN-ISSUES §1.6, FN.1).
-- Environment variables are **not referenced directly by this flow**. They are consumed by the child flow:
-
-  | Variable | Default in the solution | Used by |
-  |---|---|---|
-  | `crbab_TenantId` | `9e929790-272d-4977-a2ab-301443c11ece` | `GetFabricToken` (token endpoint) |
-  | `crbab_BrokerClientId` | `a385fde9-1d6a-4e7f-8336-dc7feba5a4bc` | `GetFabricToken` (client id) |
-  | `crbab_BrokerObjectId` | `6f70a764-908f-435b-a930-ffcb375577f3` | *not used by this flow* |
-
-  The broker **client secret** lives inside `GetFabricToken`, is scrubbed on export, and must be re-entered per environment (PREREQUISITES E4). Never commit it.
-
-- The API requires **Viewer or higher** on the workspace. The broker holds Admin, so this is comfortably covered. A `403` means the broker lost its role on that workspace; a `401` means PREREQUISITES A3 or B1 is missing. Fabric's error body is generic for both — read the status code, not the message.
+- **There is no token flow and no secret.** The connector attaches the bearer token itself, so there is no `GetFabricToken` child call, no `accessToken` variable and **no `Authorization` header**. Never add one — the connector supplies it, and a hand-written header is either ignored or breaks the call.
+- The API requires **Viewer or higher** on the workspace. The `workspace provisioning` account holds Admin, so this is comfortably covered. A `403` means the broker lost its role on that workspace; a `401` means the *HTTP with Microsoft Entra ID (preauthorized)* connection has lapsed — and it then fails on every workspace at once, not just this one. Fabric's error body is generic for both — read the status code, not the message.
 - **No Azure permission is involved in reading**, or in anything else this feature does. See [../../APP-PRIVATE-ENDPOINTS.md](../../APP-PRIVATE-ENDPOINTS.md) §3.2.
 
 Actions are listed in execution order. Build them in that order — inserting an action later re-parents its successor and silently creates a parallel branch.
@@ -52,39 +41,9 @@ The underlying key is `text`; `workspaceId` is only the display title. Keep it r
 
 ---
 
-## 2. `Run_a_Child_Flow` — Workflow
+## 2. `Initialize_endpoints` — InitializeVariable
 
 First action; `runAfter` is empty.
-
-| Field | Value |
-|---|---|
-| Type | `Workflow` |
-| `host.workflowReferenceName` | `50895fca-088f-f111-8076-7ced8d76bf1b` |
-| Inputs | none |
-
-That GUID is `GetFabricToken`. It takes no parameters and returns `access_token`.
-
----
-
-## 3. `Initialize_variable` — InitializeVariable
-
-Runs after `Run_a_Child_Flow` on **Succeeded**.
-
-| Field | Value |
-|---|---|
-| Name | `accessToken` |
-| Type | String |
-| Value | `@body('Run_a_Child_Flow')?['access_token']` |
-
-Bare `@expr` form, not `@{ }`. Keep the action name `Initialize_variable` to match the other networking flows.
-
-`accessToken` holds a bearer token for the broker. It is deliberately never a trigger input and never returned to the app.
-
----
-
-## 4. `Initialize_endpoints` — InitializeVariable
-
-Runs after `Initialize_variable` on **Succeeded**.
 
 | Field | Value |
 |---|---|
@@ -94,7 +53,7 @@ Runs after `Initialize_variable` on **Succeeded**.
 
 ---
 
-## 5. `Initialize_nextUri` — InitializeVariable
+## 3. `Initialize_nextUri` — InitializeVariable
 
 Runs after `Initialize_endpoints` on **Succeeded**.
 
@@ -110,7 +69,7 @@ Runs after `Initialize_endpoints` on **Succeeded**.
 
 ---
 
-## 6. `Initialize_isDone` — InitializeVariable
+## 4. `Initialize_isDone` — InitializeVariable
 
 Runs after `Initialize_nextUri` on **Succeeded**.
 
@@ -122,7 +81,7 @@ Runs after `Initialize_nextUri` on **Succeeded**.
 
 ---
 
-## 7. `Do_until` — paged read
+## 5. `Do_until` — paged read
 
 Runs after `Initialize_isDone` on **Succeeded**.
 
@@ -144,11 +103,10 @@ Inside the loop, in this exact order:
 |---|---|
 | Method | `GET` |
 | URI | `@{variables('nextUri')}` |
-| Header `Authorization` | `Bearer @{variables('accessToken')}` |
 | Header `Accept` | `application/json` |
 | Body | none |
 | `retryPolicy` | *(leave default — exponential, 4 retries)* |
-| Authentication block | none — bearer token supplied by hand in the header |
+| Authentication | **None to configure.** The connector attaches the bearer token |
 
 **Headers are not copied when you duplicate an action.** A missing `Authorization` comes back as `401` with the same generic `RequestFailed` body Fabric uses for semantic rejections — check the header on every new HTTP action before chasing anything else.
 
@@ -201,7 +159,7 @@ The order is load-bearing: merge, store the array, store the URI, then set the f
 
 ---
 
-## 8. Response contract
+## 6. Response contract
 
 **One** `Respond to a Power App or flow` action — type `Response`, kind `PowerApp`, `statusCode` 200.
 
@@ -229,7 +187,7 @@ Output names come back **lowercased** in Power Fx — you type `EndpointsJson`, 
 
 ---
 
-## 9. What the app does with the result
+## 7. What the app does with the result
 
 `ParseJSON(ListPrivateEndpoints.Run(gblWsId).endpointsjson)` into a collection. Each row carries:
 
