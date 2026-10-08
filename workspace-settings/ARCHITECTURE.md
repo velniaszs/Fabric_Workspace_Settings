@@ -1,8 +1,8 @@
-# Fabric Workspace Settings — Architecture
+# Fabric Workspace Settings - Architecture
 
 ## Scope of this document
 
-This document describes the architecture of the **Fabric Workspace Settings** solution — a Power Platform application that lets Fabric workspace owners configure **Git integration**, **outbound access**, and **managed private endpoints** for the workspaces they own, without holding the Fabric *Workspace Admin* role.
+This document describes the architecture of the **Fabric Workspace Settings** solution - a Power Platform application that lets Fabric workspace owners configure **Git integration**, **outbound access**, and **managed private endpoints** for the workspaces they own, without holding the Fabric *Workspace Admin* role.
 
 **Companion documents**
 
@@ -12,7 +12,7 @@ This document describes the architecture of the **Fabric Workspace Settings** so
 | **Security** | Security requirements, controls, trust boundaries and residual risk |
 | **Migration** | Everything that must be done to stand the solution up in a new tenant or environment |
 
-Build-level detail — per-flow logic, connector definition, canvas app construction — lives in the separate engineering documentation set.
+Build-level detail - per-flow logic, connector definition, canvas app construction - lives in the separate engineering documentation set.
 
 ---
 
@@ -23,10 +23,10 @@ Build-level detail — per-flow logic, connector definition, canvas app construc
 3. [Component inventory](#3-component-inventory)
 4. [Identity model](#4-identity-model)
 5. [Authorization boundary](#5-authorization-boundary)
-6. [Functional architecture — the three tabs](#6-functional-architecture--the-three-tabs)
+6. [Functional architecture - the three tabs](#6-functional-architecture---the-three-tabs)
 7. [Flow inventory](#7-flow-inventory)
 8. [Data model](#8-data-model)
-9. [Integration surface — Fabric REST API](#9-integration-surface--fabric-rest-api)
+9. [Integration surface - Fabric REST API](#9-integration-surface---fabric-rest-api)
 10. [Design decisions and their rationale](#10-design-decisions-and-their-rationale)
 11. [Architectural constraints and known limitations](#11-architectural-constraints-and-known-limitations)
 
@@ -36,7 +36,7 @@ Build-level detail — per-flow logic, connector definition, canvas app construc
 
 The estate contains roughly **4000 Fabric workspaces**. Their owners need to configure Git integration, outbound access rules and managed private endpoints for the workspaces they own.
 
-Every one of those operations requires the Fabric **Workspace Admin** role. Workspace owners hold **Contributor** and will not be granted Admin — doing so would let each of them reconfigure any workspace they can reach, across the whole estate.
+Every one of those operations requires the Fabric **Workspace Admin** role. Workspace owners hold **Contributor** and will not be granted Admin - doing so would let each of them reconfigure any workspace they can reach, across the whole estate.
 
 The requirement is therefore to deliver a *specific, bounded set of administrative capabilities* to a large population of non-administrators, without widening their standing privilege.
 
@@ -46,7 +46,7 @@ The answer is a **broker**: a Power Platform application that performs the privi
 
 > **Broker only what genuinely requires Admin. Leave everything else in the Fabric UI, where the owner already has rights.**
 
-This is not a stylistic preference — it directly reduces attack surface and maintenance cost. Applying it to Git integration removed four planned flows and two planned tables, because the Fabric permission model already lets a Contributor commit, update from Git, view connection details and read Git status unaided. Only **connect**, **disconnect** and **change connection settings** require Admin, so only those are brokered.
+This is not a stylistic preference - it directly reduces attack surface and maintenance cost. Applying it to Git integration removed four planned flows and two planned tables, because the Fabric permission model already lets a Contributor commit, update from Git, view connection details and read Git status unaided. Only **connect**, **disconnect** and **change connection settings** require Admin, so only those are brokered.
 
 ---
 
@@ -61,14 +61,14 @@ Three groups of settings, each a separate tab in the application, chosen because
 | Capability | What the owner can do |
 |---|---|
 | **Git integration** | Connect a workspace to an Azure DevOps repository, disconnect it, and change the branch or directory it is bound to |
-| **Outbound access** | Read and maintain the workspace's outbound communication policy — allowed connections, allowed gateways, and whether Git traffic is permitted outbound. The OAP switch itself is shown read-only (§6.2) |
+| **Outbound access** | Read and maintain the workspace's outbound communication policy - allowed connections, allowed gateways, and whether Git traffic is permitted outbound. The OAP switch itself is shown read-only (§6.2) |
 | **Managed private endpoints** | List, create and delete the private-link connections the workspace uses to reach data sources that are not publicly reachable |
 
-Everything else an owner needs — committing, updating from Git, reading Git status, inspecting a connection — stays in the Fabric portal, where a Contributor already has the rights to do it. The application deliberately does not reimplement it (§1).
+Everything else an owner needs - committing, updating from Git, reading Git status, inspecting a connection - stays in the Fabric portal, where a Contributor already has the rights to do it. The application deliberately does not reimplement it (§1).
 
 ### How it works, in short
 
-**The owner never calls Fabric, and the application never holds a credential.** The canvas app collects the owner's intent and calls a cloud flow. The flow is the broker: it first asks **Dataverse** whether this caller is a recorded owner of the workspace named in the request, and stops there if the answer is no. Only then does it call the **Fabric REST API** — through the *HTTP with Microsoft Entra ID (preauthorized)* connector, whose connection is signed in as a **service account holding Workspace Admin** on the managed workspaces. The flow flattens Fabric's reply into a string response the application can read, and returns it.
+**The owner never calls Fabric, and the application never holds a credential.** The canvas app collects the owner's intent and calls a cloud flow. The flow is the broker: it first asks **Dataverse** whether this caller is a recorded owner of the workspace named in the request, and stops there if the answer is no. Only then does it call the **Fabric REST API** - through the *HTTP with Microsoft Entra ID (preauthorized)* connector, whose connection is signed in as a **service account holding Workspace Admin** on the managed workspaces. The flow flattens Fabric's reply into a string response the application can read, and returns it.
 
 A small number of calls cannot work that way, because their answer depends on *who is asking*. Those take a second path, out through a **custom connector** that runs as the signed-in user rather than as the broker (§4).
 
@@ -78,7 +78,7 @@ flowchart TB
         APP["<b>Canvas app</b> crbab_app5<br/>Git · Outbound · Private endpoints"]
     end
 
-    subgraph pp["Power Platform — solution WorkspaceSol"]
+    subgraph pp["Power Platform - solution WorkspaceSol"]
         DV[("<b>Dataverse</b><br/>ubsppcoe_Workspace<br/>ubsppcoe_AllowedConnectionType")]
         FLOWS["<b>Cloud flows</b><br/><i>the broker tier</i>"]
         CONN["<b>Custom connector</b><br/>crbab_FabricSetting<br/><i>delegated calls only</i>"]
@@ -103,15 +103,15 @@ flowchart TB
     FABRIC -.->|"via owner's connection"| ADO
 ```
 
-### Walking the diagram — one request, end to end
+### Walking the diagram - one request, end to end
 
 1. **The owner opens the application and picks a workspace.** The picker reads `ubsppcoe_Workspace` from Dataverse directly, under the owner's own identity, so the list contains only workspaces they are recorded against. `gblWsId` is set here and gates every tab (§6).
-2. **The owner acts on a setting, and the application calls a flow.** For a read, that is a plain `Run()`. For a write, the application first writes a request row to Dataverse as the signed-in user and passes the flow nothing but that row's ID — identity then arrives at the flow as an unforgeable `createdby` stamp rather than as a parameter anyone could type (§5).
+2. **The owner acts on a setting, and the application calls a flow.** For a read, that is a plain `Run()`. For a write, the application first writes a request row to Dataverse as the signed-in user and passes the flow nothing but that row's ID - identity then arrives at the flow as an unforgeable `createdby` stamp rather than as a parameter anyone could type (§5).
 3. **The flow authorizes the caller.** It resolves the requesting user, looks them up against the primary and secondary owner of the target workspace in `ubsppcoe_Workspace`, and **fails closed** if they are not there. This is the solution's only authorization decision, and every write passes through it.
 4. **The flow calls Fabric as the broker.** The preauthorized connector attaches the bearer token of the service account its connection signed in as. The flow itself runs no client-credentials grant, builds no `Authorization` header and stores no token.
 5. **Or, for the three per-user calls, it calls Fabric as the owner.** `ListMyConnections`, `ListGateways` and `AddConnectionRoleAssignment` go out through the `crbab_FabricSetting` custom connector, which runs with `runtimeSource: invoker` and therefore carries the signed-in user's rights. These are the only calls that leave the Power Platform under anything other than the broker identity.
 6. **Fabric performs the operation.** Where Git is involved, Fabric reaches the owner's Azure DevOps repository through *the owner's own* Azure DevOps connection, which the broker has been granted the `User` role on but can never read the contents of. No Git credential exists anywhere in the solution (§4).
-7. **The flow records the outcome and answers.** Writes stamp the result back onto the Dataverse request row, giving an audit trail of who changed what and whether it worked. The response to the application is a flat set of string fields, and the application refreshes its view by re-reading live state from Fabric — no Fabric state is ever cached locally (§8).
+7. **The flow records the outcome and answers.** Writes stamp the result back onto the Dataverse request row, giving an audit trail of who changed what and whether it worked. The response to the application is a flat set of string fields, and the application refreshes its view by re-reading live state from Fabric - no Fabric state is ever cached locally (§8).
 
 Long-running Fabric operations break this pattern in one place only: Git sync returns `202` with an operation ID, so the application polls a dedicated status flow rather than holding a single run open past the 120-second budget a Power Apps call allows (§6.1).
 
@@ -120,9 +120,9 @@ Long-running Fabric operations break this pattern in one place only: Git sync re
 | Tier | Responsibility | Holds credentials? |
 |---|---|---|
 | **Canvas app** | Presentation, workspace selection, and every decision requiring the owner's judgement | **No** |
-| **Cloud flows** | The broker. Authorize the caller against Dataverse, call Fabric through the preauthorized connector, flatten the result into a string response | **No** — the platform holds the connection |
+| **Cloud flows** | The broker. Authorize the caller against Dataverse, call Fabric through the preauthorized connector, flatten the result into a string response | **No** - the platform holds the connection |
 | **Dataverse** | The authorization record and reference data. The only component that can answer *"does this user own this workspace?"* | No |
-| **Custom connector** | Delegated Fabric calls, and only those. Every brokered call bypasses it entirely | Yes — the delegated app's secret |
+| **Custom connector** | Delegated Fabric calls, and only those. Every brokered call bypasses it entirely | Yes - the delegated app's secret |
 
 The separation matters: the presentation tier holds nothing an attacker would want, and the tier that holds the privileged identity is never directly reachable by a user.
 
@@ -156,11 +156,11 @@ Stating the boundary is as useful as stating the scope, because each of these wa
 
 Two identities, deliberately separated, because they answer two different questions.
 
-| | **Broker** — the service account | **Delegated app** — `SVC_PROD_AT43156_FABRIC_POLICY` |
+| | **Broker** - the service account | **Delegated app** - `SVC_PROD_AT43156_FABRIC_POLICY` |
 |---|---|---|
-| Type | **A user account** — email and password | **A service principal** — Entra app registration with a client secret |
-| Client ID | — none. There is no app registration | *Per-tenant — read from the app registration* |
-| Object ID | *Per-tenant — the account's directory object ID* | — |
+| Type | **A user account** - email and password | **A service principal** - Entra app registration with a client secret |
+| Client ID | - none. There is no app registration | *Per-tenant - read from the app registration* |
+| Object ID | *Per-tenant - the account's directory object ID* | - |
 | OAuth flow | **Signed in on the connection.** The connector attaches the token | Authorization code, runs as the signed-in user |
 | Effective rights | Workspace **Admin** on all managed workspaces | Whatever the calling user already holds |
 | Used for | Every privileged write, and most reads | Calls whose *answer depends on who is asking* |
@@ -170,24 +170,24 @@ Two identities, deliberately separated, because they answer two different questi
 >
 > **`SVC_PROD_AT43156_FABRIC_POLICY` backs the custom connector `FabricSetting`, and nothing else.** It is the registration whose client ID, client secret and scope list sit on the connector's Security tab.
 >
-> **It never acts on its own behalf.** The connector runs with `runtimeSource: invoker`, so every call made through it carries the **signed-in user's** rights, acquired by authorization code at connection time. The service principal is the *vehicle* for that delegation, not an identity with privileges of its own — which is why it holds **no application permissions and no Fabric role**.
+> **It never acts on its own behalf.** The connector runs with `runtimeSource: invoker`, so every call made through it carries the **signed-in user's** rights, acquired by authorization code at connection time. The service principal is the *vehicle* for that delegation, not an identity with privileges of its own - which is why it holds **no application permissions and no Fabric role**.
 >
-> **Do not confuse it with the broker.** The broker is a user account reached through the preauthorized connector; this is a service principal reached through the custom connector. They are different identities, on different connectors, used for different reasons — and granting this one a Fabric role would quietly turn a delegated call into a privileged one.
+> **Do not confuse it with the broker.** The broker is a user account reached through the preauthorized connector; this is a service principal reached through the custom connector. They are different identities, on different connectors, used for different reasons - and granting this one a Fabric role would quietly turn a delegated call into a privileged one.
 >
 > Its three delegated scopes and the consent behaviour are in the **Permissions** document, §4.
 
-### When delegation is used — and why it is unavoidable
+### When delegation is used - and why it is unavoidable
 
 Delegation is used in exactly two structural circumstances, never as a preference:
 
 1. **The data is per-user.** `ListMyConnections` and `ListGateways` must return *the caller's* list. The service account's list is not the caller's list, and there is no API to ask "what would this user see?"
 2. **The right is per-user.** `AddConnectionRoleAssignment` grants the service account access to a connection the owner created. Only the connection's Owner can grant that, so the call must run as the owner.
 
-Everything else brokers through the service account. **Managed private endpoints are the clean illustration:** they are workspace-scoped objects with no per-user view, and their writes require Admin. A delegated create would therefore return `403` for every single user of the application. Brokering is not the preferred design there — it is the only design that works.
+Everything else brokers through the service account. **Managed private endpoints are the clean illustration:** they are workspace-scoped objects with no per-user view, and their writes require Admin. A delegated create would therefore return `403` for every single user of the application. Brokering is not the preferred design there - it is the only design that works.
 
 ### Fabric access comes from a role on the account, and nothing else
 
-A delegated connection has no `roles` claim to inspect and no application permissions to configure. The account's Fabric access requires exactly one thing: **a Fabric-side role on the target object** — workspace, gateway or connection — granted directly to the account.
+A delegated connection has no `roles` claim to inspect and no application permissions to configure. The account's Fabric access requires exactly one thing: **a Fabric-side role on the target object** - workspace, gateway or connection - granted directly to the account.
 
 There is no tenant setting to enable and no security group to join. Both of those belong to the service-principal path, which this solution does not use.
 
@@ -202,9 +202,9 @@ Full detail: the **Permissions** document.
 
 ### Git credentials belong to the owner
 
-The application **never holds Git credentials**. Owners create their own *Azure DevOps — Source Control* connection in Fabric; the broker is granted the `User` role on it at runtime and references it by ID, without ever seeing what is inside it. No API the application calls can even reveal the connection's contents.
+The application **never holds Git credentials**. Owners create their own *Azure DevOps - Source Control* connection in Fabric; the broker is granted the `User` role on it at runtime and references it by ID, without ever seeing what is inside it. No API the application calls can even reveal the connection's contents.
 
-A dedicated Git service principal was considered and dropped — it existed only to supply credentials for owners who could not reach Azure DevOps, which is not the case here.
+A dedicated Git service principal was considered and dropped - it existed only to supply credentials for owners who could not reach Azure DevOps, which is not the case here.
 
 **Consequence to communicate to owners:** Azure DevOps records the commit as pushed by *the connection's identity*, not by the requester. A connection built on a service principal outlives the person who created it; one built on a personal account does not. Which to use is the owner's decision; a service principal is the recommendation, and nothing in the system enforces it.
 
@@ -230,8 +230,8 @@ sequenceDiagram
     participant X as Fabric
 
     U->>D: 1. Write request row (as the signed-in user)
-    Note over D: Dataverse stamps createdby — unforgeable
-    U->>F: 2. Run(rowId) — and nothing else
+    Note over D: Dataverse stamps createdby - unforgeable
+    U->>F: 2. Run(rowId) - and nothing else
     F->>D: 3. Read the row
     F->>D: 4. Authorize createdby against ubsppcoe_Workspace
     F->>X: 5. Act as the broker
@@ -246,9 +246,9 @@ Two deliberate exceptions:
 - **Read flows** may use a plain Power Apps trigger with no row at all.
 - **`AddConnectionRoleAssignment` is self-authorizing.** The Fabric API only permits a caller to grant roles on a connection they already control, so the boundary is enforced by the API itself.
 
-## 6. Functional architecture — the three tabs
+## 6. Functional architecture - the three tabs
 
-The canvas app presents a workspace picker followed by three independent tabs. `gblWsId` is set before anything else and gates every tab — no workspace, no tab. Each tab owns its load block, its error banner and its collections.
+The canvas app presents a workspace picker followed by three independent tabs. `gblWsId` is set before anything else and gates every tab - no workspace, no tab. Each tab owns its load block, its error banner and its collections.
 
 ```mermaid
 flowchart LR
@@ -259,13 +259,13 @@ flowchart LR
 
 ### 6.1 Git integration
 
-Brokers exactly two operations — **connect** and **disconnect** — because those are the only Git actions a Contributor cannot already perform in the Fabric UI. There is no update API for a Git connection, so **changing a branch or directory is disconnect + reconnect**, which the same two flows cover.
+Brokers exactly two operations - **connect** and **disconnect** - because those are the only Git actions a Contributor cannot already perform in the Fabric UI. There is no update API for a Git connection, so **changing a branch or directory is disconnect + reconnect**, which the same two flows cover.
 
 The connect path is a wizard whose shape follows from one insight: *the owner cannot sensibly choose an initialization strategy before anyone knows whether both sides hold content.* The application therefore connects first, asks Fabric what it wants done, and raises the question only if Fabric declines to decide.
 
 ```mermaid
 flowchart TB
-    A["1. Pick workspace<br/><i>owned rows only</i>"] --> B["2. Pick connection<br/><i>delegated — the caller's own</i>"]
+    A["1. Pick workspace<br/><i>owned rows only</i>"] --> B["2. Pick connection<br/><i>delegated - the caller's own</i>"]
     B --> C["3. Confirm org / project / repo<br/><i>derived from the connection path</i>"]
     C --> D["4. Grant the broker on the connection"]
     D --> E["Connect + probe<br/><i>ConnectWorkspaceToGit</i>"]
@@ -280,35 +280,35 @@ Three structural choices worth carrying:
 
 - **The role grant happens on the final step**, immediately before the write, so an abandoned wizard leaves no stray role assignments behind.
 - **Connect and sync are two flows, not one.** By the time content moves the workspace is already connected, so calling `connect` again would fail. The split also keeps each run inside the 120-second response budget a Power Apps call allows.
-- **Organization, project and repository are derived**, never pasted — they come from `connectionDetails.path` on the connection the owner selected.
+- **Organization, project and repository are derived**, never pasted - they come from `connectionDetails.path` on the connection the owner selected.
 
 ### 6.2 Outbound access
 
-Reads and writes the workspace's outbound communication policy: allowed connections, allowed gateways, and whether Git integration is permitted outbound. The **Outbound Access Protection (OAP) switch itself is read-only** — see below.
+Reads and writes the workspace's outbound communication policy: allowed connections, allowed gateways, and whether Git integration is permitted outbound. The **Outbound Access Protection (OAP) switch itself is read-only** - see below.
 
-Everything on this tab lives under `networking/communicationPolicy/outbound/*` — these are Outbound Access Protection's own settings. **When OAP is off they are inert**, so the tab shows nothing but the OAP state and an explanation.
+Everything on this tab lives under `networking/communicationPolicy/outbound/*` - these are Outbound Access Protection's own settings. **When OAP is off they are inert**, so the tab shows nothing but the OAP state and an explanation.
 
 That is a correctness requirement, not tidiness. With OAP off there is no outbound restriction at all, so a greyed-out *Allow Git integration* toggle and an empty *Allowed gateways* list would each tell the owner the exact opposite of the truth about their workspace's posture. **Hide, do not disable.**
 
-`GetOutboundRules` returns an **ETag** that `SetOutboundRules` must echo — optimistic concurrency, so two owners editing simultaneously cannot silently overwrite each other.
+`GetOutboundRules` returns an **ETag** that `SetOutboundRules` must echo - optimistic concurrency, so two owners editing simultaneously cannot silently overwrite each other.
 
-#### The OAP setting itself is read-only — by design
+#### The OAP setting itself is read-only - by design
 
 The tab **displays** whether Outbound Access Protection is enabled on the workspace, and never offers to change it. This is visible in the flow inventory (§7): `GetOAPSetting` reads the state, and there is deliberately no `SetOAPSetting` to pair with it. Every other setting on the tab has both.
 
 That asymmetry is a governance decision, not a gap in the implementation:
 
-- **OAP is set once, during workspace creation.** It is decided by the process that provisions the workspace and by whoever approved that request — it is a property of the posture the workspace was created with, not a runtime preference.
+- **OAP is set once, during workspace creation.** It is decided by the process that provisions the workspace and by whoever approved that request - it is a property of the posture the workspace was created with, not a runtime preference.
 - **A workspace owner must not be able to turn it off.** Disabling OAP lifts every outbound restriction on the workspace in a single action: the allow-lists this tab maintains stop applying entirely, and the workspace can once again reach anything. Handing that switch to 4000 owners would give away in one click exactly the control the rest of the solution is built to hold (§1).
-- **Enabling it is equally out of scope.** An owner switching OAP on for a workspace whose data flows were never designed around an allow-list would break those flows immediately, and could not undo it — because reverting means turning OAP off, which they also cannot do.
+- **Enabling it is equally out of scope.** An owner switching OAP on for a workspace whose data flows were never designed around an allow-list would break those flows immediately, and could not undo it - because reverting means turning OAP off, which they also cannot do.
 
 What the owner *may* do is work inside the posture they were given: maintain the allow-lists and the Git toggle that OAP enforces. Changing the posture itself is a request to the workspace-provisioning process, and stays outside this application.
 
 ### 6.3 Private endpoints
 
-Manages the workspace's **managed private endpoints** — the outbound private-link connections Fabric uses to reach data sources that are not publicly reachable. Three operations: list, create, delete.
+Manages the workspace's **managed private endpoints** - the outbound private-link connections Fabric uses to reach data sources that are not publicly reachable. Three operations: list, create, delete.
 
-Structurally the simplest tab: three HTTP calls against one resource, all brokered, all covered by a role the service account already holds. **No connector change, no new scope, no re-consent, no new Fabric permission, and no Azure RBAC at all** — the Azure-side rights sit entirely with the *approver* at the far end. That is what makes the feature deployable across 4000 workspaces with no Azure onboarding, and it is the property most worth protecting.
+Structurally the simplest tab: three HTTP calls against one resource, all brokered, all covered by a role the service account already holds. **No connector change, no new scope, no re-consent, no new Fabric permission, and no Azure RBAC at all** - the Azure-side rights sit entirely with the *approver* at the far end. That is what makes the feature deployable across 4000 workspaces with no Azure onboarding, and it is the property most worth protecting.
 
 **Two independent status fields, and the tab must show both.** Conflating them is the likeliest design mistake here:
 
@@ -321,7 +321,7 @@ Structurally the simplest tab: three HTTP calls against one resource, all broker
 
 #### Choosing the sub-resource
 
-A private endpoint targets a resource *and a sub-resource* — Azure's private-link group ID. One storage account requires **separate endpoints for `blob` and `dfs`**, each approved separately.
+A private endpoint targets a resource *and a sub-resource* - Azure's private-link group ID. One storage account requires **separate endpoints for `blob` and `dfs`**, each approved separately.
 
 The sub-resource is a property of the resource *type*, not the resource, so the application parses the type out of the resource ID and filters a Dataverse lookup table on it:
 
@@ -334,18 +334,18 @@ flowchart LR
     C -->|0 rows| F["Free text<br/><i>let Fabric decide</i>"]
 ```
 
-Around fifteen types resolve 1:1. Five are genuinely ambiguous — storage, Cosmos DB, Synapse, Purview and Databricks — where the resource ID cannot distinguish the options and only the owner knows which their workload needs.
+Around fifteen types resolve 1:1. Five are genuinely ambiguous - storage, Cosmos DB, Synapse, Purview and Databricks - where the resource ID cannot distinguish the options and only the owner knows which their workload needs.
 
 **There is deliberately no default on that dropdown**, because of the sharper of the two failure modes:
 
 | Failure | What happens |
 |---|---|
-| Sub-resource **invalid** for the type | Fabric accepts the `POST` with `201` — it does not validate — then provisioning fails. The row shows `Failed`; the owner deletes and recreates. Visible and self-correcting |
-| Sub-resource **valid but not the one needed** | Provisions to `Succeeded`, gets approved, `connectionState` reads `Approved` — **and the workload still fails**, because its traffic goes to a hostname this endpoint does not cover. Every signal the application can see says success |
+| Sub-resource **invalid** for the type | Fabric accepts the `POST` with `201` - it does not validate - then provisioning fails. The row shows `Failed`; the owner deletes and recreates. Visible and self-correcting |
+| Sub-resource **valid but not the one needed** | Provisions to `Succeeded`, gets approved, `connectionState` reads `Approved` - **and the workload still fails**, because its traffic goes to a hostname this endpoint does not cover. Every signal the application can see says success |
 
 The second is why the picker constrains rather than guesses, and why the application always re-lists after a create: `outcome: Created` means the request was accepted, not that the endpoint works.
 
-An endpoint showing `Failed` needs no diagnosis and no support ticket — it means the sub-resource was wrong. Delete it and create the right one.
+An endpoint showing `Failed` needs no diagnosis and no support ticket - it means the sub-resource was wrong. Delete it and create the right one.
 
 ---
 
@@ -355,19 +355,19 @@ All flows live in the solution's `Workflows` folder as unpacked solution JSON. T
 
 **19 flows are built.** Every flow the application calls is added to the canvas app explicitly.
 
-### Git integration — 7 flows
+### Git integration - 7 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
 | `GetWorkspaceGitState` | Service account | Read the current connection so the tab knows what to offer |
 | `ListMyConnections` | **Delegated** | The caller's own Azure DevOps connections, filtered client-side |
 | `AddConnectionRoleAssignment` | **Delegated** | Grant the service account the `User` role on the owner's connection |
-| `ConnectWorkspaceToGit` | Service account | Stage 1 — connect, then probe for the required sync direction |
-| `SyncWorkspaceWithGit` | Service account | Stage 2 — move the content |
+| `ConnectWorkspaceToGit` | Service account | Stage 1 - connect, then probe for the required sync direction |
+| `SyncWorkspaceWithGit` | Service account | Stage 2 - move the content |
 | `DisconnectWorkspaceFromGit` | Service account | Disconnect. Also the only route to a branch or directory change |
 | `GetGitOperationStatus` | Service account | Report the state of a long-running operation. Advances nothing |
 
-### Networking — 8 flows
+### Networking - 8 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
@@ -378,7 +378,7 @@ All flows live in the solution's `Workflows` folder as unpacked solution JSON. T
 | `ListGateways` | **Delegated** | Gateways the caller can actually see |
 
 
-### Private endpoints — 3 flows
+### Private endpoints - 3 flows
 
 | Flow | Identity | Purpose |
 |---|---|---|
@@ -388,7 +388,7 @@ All flows live in the solution's `Workflows` folder as unpacked solution JSON. T
 
 **Built and tested 2026-09-02.** Build documentation for these three flows lives in the engineering documentation set.
 
-> **Those three build documents still describe the token-flow model** — a `GetFabricToken` child call and an `Authorization` header. The Fabric routes, bodies and error handling they specify are accurate; only the auth mechanism has since changed to the preauthorized connector.
+> **Those three build documents still describe the token-flow model** - a `GetFabricToken` child call and an `Authorization` header. The Fabric routes, bodies and error handling they specify are accurate; only the auth mechanism has since changed to the preauthorized connector.
 
 ---
 
@@ -399,9 +399,9 @@ All flows live in the solution's `Workflows` folder as unpacked solution JSON. T
 | `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally |
 | `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab |
 | `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from the solution's `PrivateLinkTargets.csv` seed file. **Seed rows are per environment** |
-| `ubsppcoe_Log` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow |
+| `ubsppcoe_Log` | Who did what, when and with what outcome - and the row that carries unforgeable identity into a write flow |
 
-**None of these tables is in `WorkspaceSol`.** They carry the `ubsppcoe_` prefix and belong to the platform team's shared solution, so none travels with this solution's export — see §3. `ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
+**None of these tables is in `WorkspaceSol`.** They carry the `ubsppcoe_` prefix and belong to the platform team's shared solution, so none travels with this solution's export - see §3. `ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
 
 ### Two rules that hold across all tables
 
@@ -410,13 +410,13 @@ All flows live in the solution's `Workflows` folder as unpacked solution JSON. T
 
 ### Why `ubsppcoe_PrivateLinkTarget` is flat
 
-It is a flat type → sub-resource table rather than a parent/child model on purpose. The picker is a filter on one table, and supporting a newly added Azure source is **one row** — addable by anyone with Dataverse access, with no application republish. That matters because Fabric's supported-source list grows faster than a shipped list would realistically be maintained.
+It is a flat type → sub-resource table rather than a parent/child model on purpose. The picker is a filter on one table, and supporting a newly added Azure source is **one row** - addable by anyone with Dataverse access, with no application republish. That matters because Fabric's supported-source list grows faster than a shipped list would realistically be maintained.
 
-There is also no API that could replace it. Fabric publishes nothing. Azure's `privateLinkResources` call is authoritative but requires Reader RBAC on every target resource — which would mean onboarding the broker into every subscription any owner might target, and would destroy the single best property of the feature (§6.3).
+There is also no API that could replace it. Fabric publishes nothing. Azure's `privateLinkResources` call is authoritative but requires Reader RBAC on every target resource - which would mean onboarding the broker into every subscription any owner might target, and would destroy the single best property of the feature (§6.3).
 
 ---
 
-## 9. Integration surface — Fabric REST API
+## 9. Integration surface - Fabric REST API
 
 Base: `https://api.fabric.microsoft.com/v1`
 
@@ -424,10 +424,10 @@ Base: `https://api.fabric.microsoft.com/v1`
 
 | Endpoint | Behaviour |
 |---|---|
-| `GET /workspaces/{id}/git/connection` | Returns `200` + `NotConnected` when disconnected — **not** `404` |
+| `GET /workspaces/{id}/git/connection` | Returns `200` + `NotConnected` when disconnected - **not** `404` |
 | `POST .../git/connect` | Synchronous |
 | `PATCH .../git/myGitCredentials` | Per-identity; the broker must set `ConfiguredConnection` |
-| `POST .../git/initializeConnection` | Returns `requiredAction`, `workspaceHead`, `remoteCommitHash` — **or `202` with an empty body** |
+| `POST .../git/initializeConnection` | Returns `requiredAction`, `workspaceHead`, `remoteCommitHash` - **or `202` with an empty body** |
 | `GET .../git/status` | May return `202` on a cold workspace |
 | `POST .../git/commitToGit` | `202` + `x-ms-operation-id` |
 | `POST .../git/updateFromGit` | `202` + `x-ms-operation-id` |
@@ -439,7 +439,7 @@ Base: `https://api.fabric.microsoft.com/v1`
 - `gitConnectionState`: `NotConnected` · `Connected` · `ConnectedAndInitialized`
 - `requiredAction`: `CommitToGit` · `UpdateFromGit` · `None`
 
-**Sync request bodies — what is actually required**
+**Sync request bodies - what is actually required**
 
 | API | Required | Optional |
 |---|---|---|
@@ -467,14 +467,14 @@ Base: `https://api.fabric.microsoft.com/v1`
 | **Dataverse, not Fabric, is the authorization boundary** | Fabric holds no record that identifies a workspace *owner*; the ownership fact exists only in Dataverse |
 | **Writes authorize on `createdby`, not on a trigger parameter** | A Power Apps trigger parameter is forgeable by anyone who can reach the flow URL. A Dataverse `createdby` stamp is not |
 | **A dedicated broker identity, not the existing tenant-wide one** | An application exposed to 4000 workspace owners must not run with more permissions than it is needed to have|
-| **The broker is a service account reached through the preauthorized connector, not a service principal** | The connector attaches the token itself, so the solution holds no client secret, needs no app registration for the broker, and depends on no tenant setting. The cost is a user-account credential that must be kept permanently valid — see the **Security** document, §4 |
+| **The broker is a service account reached through the preauthorized connector, not a service principal** | The connector attaches the token itself, so the solution holds no client secret, needs no app registration for the broker, and depends on no tenant setting. The cost is a user-account credential that must be kept permanently valid - see the **Security** document, §4 |
 | **Owners supply their own Git connection** | Keeps Git credentials entirely outside the solution, and makes credential durability the owner's explicit choice |
 | **The OAP switch is displayed but never written** | Outbound Access Protection is set during workspace creation and defines the workspace's posture. An owner able to disable it could lift every outbound restriction in one action, which would defeat the allow-lists the tab exists to maintain (§6.2) |
 | **Connect and sync are separate flows** | Respects the 120-second Power Apps response budget, and avoids re-calling `connect` on an already-connected workspace |
 | **Never branch on the initialization strategy** | The strategy tells Fabric *how to resolve initialization*; `requiredAction` tells the application *which way to sync*. They are not the same question |
 | **No local cache of Fabric state** | Avoids a second source of truth that must be reconciled. The GET APIs are live and authoritative |
 | **No Azure RBAC anywhere in the design** | Keeps managed private endpoints deployable across 4000 workspaces with zero Azure onboarding |
-| **Treat "already exists" as success** | A duplicate role grant returns `409`; a re-initialized connection returns `409`. The end state is the one that was wanted — failing the run would show the user an error describing exactly the state they asked for |
+| **Treat "already exists" as success** | A duplicate role grant returns `409`; a re-initialized connection returns `409`. The end state is the one that was wanted - failing the run would show the user an error describing exactly the state they asked for |
 
 ---
 
@@ -494,7 +494,7 @@ Base: `https://api.fabric.microsoft.com/v1`
 
 ### Power Platform conventions that the implementation depends on
 
-These are not preferences — each was established after a real defect, and departing from them reintroduces it.
+These are not preferences - each was established after a real defect, and departing from them reintroduces it.
 
 | Convention | Why |
 |---|---|
@@ -508,7 +508,7 @@ These are not preferences — each was established after a real defect, and depa
 
 ### Naming inconsistency to be aware of
 
-`GetGitOperationStatus` was renamed in place from `PollFabricOperation`, which preserved its GUID and connection references. **The canvas app must still call it as `PollFabricOperation.Run(...)`** — a rename changes the display name only, while the identifier Power Fx binds to is fixed when the flow is created. Using the new name yields *"'Run' is an unknown or unsupported function in namespace 'GetGitOperationStatus'"*. This is the solution's only such mismatch.
+`GetGitOperationStatus` was renamed in place from `PollFabricOperation`, which preserved its GUID and connection references. **The canvas app must still call it as `PollFabricOperation.Run(...)`** - a rename changes the display name only, while the identifier Power Fx binds to is fixed when the flow is created. Using the new name yields *"'Run' is an unknown or unsupported function in namespace 'GetGitOperationStatus'"*. This is the solution's only such mismatch.
 
 ---
 
@@ -521,7 +521,7 @@ These are not preferences — each was established after a real defect, and depa
 | Deployment to a new tenant or environment | **Migration** |
 | Per-flow behaviour and verified test paths | **Flows** (engineering documentation) |
 | Custom connector configuration | **Custom connector** (engineering documentation) |
-| Canvas app build guides | **App — Git tab**, **App — Outbound tab**, **App — Private endpoints tab** (engineering documentation) |
+| Canvas app build guides | **App - Git tab**, **App - Outbound tab**, **App - Private endpoints tab** (engineering documentation) |
 | Open defects and undecided points | **Open issues** (engineering documentation) |
 
 
