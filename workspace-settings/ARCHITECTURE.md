@@ -1,10 +1,5 @@
 # Fabric Workspace Settings — Architecture
 
-**Solution:** `WorkspaceSol` · **Version:** 1.0.0.12 · **Platform:** Microsoft Power Platform + Microsoft Fabric REST API
-**Document version:** 1.0 · **Date:** 2026-09-25 · **Status:** For customer review
-
----
-
 ## Scope of this document
 
 This document describes the architecture of the **Fabric Workspace Settings** solution — a Power Platform application that lets Fabric workspace owners configure **Git integration**, **outbound access**, and **managed private endpoints** for the workspaces they own, without holding the Fabric *Workspace Admin* role.
@@ -13,11 +8,11 @@ This document describes the architecture of the **Fabric Workspace Settings** so
 
 | Document | Answers |
 |---|---|
-| [PERMISSIONS.md](./PERMISSIONS.md) | Which rights every party must hold, and who grants them |
-| [SECURITY.md](./SECURITY.md) | Security requirements, controls, trust boundaries and residual risk |
-| [MIGRATION.md](./MIGRATION.md) | Everything that must be done to stand the solution up in a new tenant or environment |
+| **Permissions** | Which rights every party must hold, and who grants them |
+| **Security** | Security requirements, controls, trust boundaries and residual risk |
+| **Migration** | Everything that must be done to stand the solution up in a new tenant or environment |
 
-Build-level detail — per-flow logic, connector definition, canvas app construction — lives in the engineering documentation under [`docs/`](../docs).
+Build-level detail — per-flow logic, connector definition, canvas app construction — lives in the separate engineering documentation set.
 
 ---
 
@@ -57,6 +52,26 @@ This is not a stylistic preference — it directly reduces attack surface and ma
 
 ## 2. Solution overview
 
+**Fabric Workspace Settings is a single canvas application, backed by a set of Power Automate cloud flows, that performs a bounded list of Workspace Admin operations on behalf of workspace owners who hold only Contributor.** It is published once and used by the owners of roughly 4000 workspaces. Nothing about it is per-workspace: the same application, the same flows and the same broker identity serve the whole estate, and the only thing that varies between one owner and the next is what the ownership table in Dataverse says they may act on.
+
+### What it delivers to the owner
+
+Three groups of settings, each a separate tab in the application, chosen because each one requires Admin and is therefore unreachable for the owner today:
+
+| Capability | What the owner can do |
+|---|---|
+| **Git integration** | Connect a workspace to an Azure DevOps repository, disconnect it, and change the branch or directory it is bound to |
+| **Outbound access** | Read and maintain the workspace's outbound communication policy — allowed connections, allowed gateways, and whether Git traffic is permitted outbound. The OAP switch itself is shown read-only (§6.2) |
+| **Managed private endpoints** | List, create and delete the private-link connections the workspace uses to reach data sources that are not publicly reachable |
+
+Everything else an owner needs — committing, updating from Git, reading Git status, inspecting a connection — stays in the Fabric portal, where a Contributor already has the rights to do it. The application deliberately does not reimplement it (§1).
+
+### How it works, in short
+
+**The owner never calls Fabric, and the application never holds a credential.** The canvas app collects the owner's intent and calls a cloud flow. The flow is the broker: it first asks **Dataverse** whether this caller is a recorded owner of the workspace named in the request, and stops there if the answer is no. Only then does it call the **Fabric REST API** — through the *HTTP with Microsoft Entra ID (preauthorized)* connector, whose connection is signed in as a **service account holding Workspace Admin** on the managed workspaces. The flow flattens Fabric's reply into a string response the application can read, and returns it.
+
+A small number of calls cannot work that way, because their answer depends on *who is asking*. Those take a second path, out through a **custom connector** that runs as the signed-in user rather than as the broker (§4).
+
 ```mermaid
 flowchart TB
     subgraph client["Workspace owner's browser"]
@@ -88,6 +103,18 @@ flowchart TB
     FABRIC -.->|"via owner's connection"| ADO
 ```
 
+### Walking the diagram — one request, end to end
+
+1. **The owner opens the application and picks a workspace.** The picker reads `ubsppcoe_Workspace` from Dataverse directly, under the owner's own identity, so the list contains only workspaces they are recorded against. `gblWsId` is set here and gates every tab (§6).
+2. **The owner acts on a setting, and the application calls a flow.** For a read, that is a plain `Run()`. For a write, the application first writes a request row to Dataverse as the signed-in user and passes the flow nothing but that row's ID — identity then arrives at the flow as an unforgeable `createdby` stamp rather than as a parameter anyone could type (§5).
+3. **The flow authorizes the caller.** It resolves the requesting user, looks them up against the primary and secondary owner of the target workspace in `ubsppcoe_Workspace`, and **fails closed** if they are not there. This is the solution's only authorization decision, and every write passes through it.
+4. **The flow calls Fabric as the broker.** The preauthorized connector attaches the bearer token of the service account its connection signed in as. The flow itself runs no client-credentials grant, builds no `Authorization` header and stores no token.
+5. **Or, for the three per-user calls, it calls Fabric as the owner.** `ListMyConnections`, `ListGateways` and `AddConnectionRoleAssignment` go out through the `crbab_FabricSetting` custom connector, which runs with `runtimeSource: invoker` and therefore carries the signed-in user's rights. These are the only calls that leave the Power Platform under anything other than the broker identity.
+6. **Fabric performs the operation.** Where Git is involved, Fabric reaches the owner's Azure DevOps repository through *the owner's own* Azure DevOps connection, which the broker has been granted the `User` role on but can never read the contents of. No Git credential exists anywhere in the solution (§4).
+7. **The flow records the outcome and answers.** Writes stamp the result back onto the Dataverse request row, giving an audit trail of who changed what and whether it worked. The response to the application is a flat set of string fields, and the application refreshes its view by re-reading live state from Fabric — no Fabric state is ever cached locally (§8).
+
+Long-running Fabric operations break this pattern in one place only: Git sync returns `202` with an operation ID, so the application polls a dedicated status flow rather than holding a single run open past the 120-second budget a Power Apps call allows (§6.1).
+
 ### Four tiers, one responsibility each
 
 | Tier | Responsibility | Holds credentials? |
@@ -101,20 +128,23 @@ The separation matters: the presentation tier holds nothing an attacker would wa
 
 > **No flow acquires a token, and no flow holds a secret.** Brokered Fabric calls use the **HTTP with Microsoft Entra ID (preauthorized)** connector, which attaches the bearer token for the account its connection signed in as. There is no client-credentials block, no `Authorization` header and no `accessToken` variable anywhere in the solution.
 
+### What the solution is deliberately not responsible for
+
+Stating the boundary is as useful as stating the scope, because each of these was a considered decision rather than an omission:
+
+| Not in scope | Who owns it instead |
+|---|---|
+| **Holding Git credentials** | The owner, through their own Azure DevOps connection in Fabric |
+| **Populating the ownership table** | External workspace-provisioning automation writes `ubsppcoe_Workspace`; the solution only reads it |
+| **Defining the Dataverse tables** | The platform team's shared `ubsppcoe_` solution (§3) |
+| **Creating workspaces or granting Fabric roles** | Existing estate provisioning and administration |
+| **Storing any copy of Fabric state** | Fabric. Every read is live against the REST API (§8) |
+| **Approving a private endpoint** | The data source's administrator, in the Azure portal (§6.3) |
+| **Any Azure RBAC** | Nothing in the design requires it, and that is what makes the private-endpoint feature deployable across 4000 workspaces with no Azure onboarding |
+
 ---
 
 ## 3. Component inventory
-
-### Solution manifest
-
-| Property | Value |
-|---|---|
-| Unique name | `WorkspaceSol` |
-| Version | `1.0.0.12` |
-| Managed | No — exported **unmanaged** |
-| Publisher | `Crf5954`, customization prefix `crbab` |
-| Prefix — this solution's components | `crbab` — flows, canvas app, custom connector, environment variables, connection references |
-| Prefix — tables | **`ubsppcoe`** — and the tables are **not in this solution** |
 
 > ### Two prefixes, two solutions, and the tables are not ours
 >
@@ -144,7 +174,7 @@ Two identities, deliberately separated, because they answer two different questi
 >
 > **Do not confuse it with the broker.** The broker is a user account reached through the preauthorized connector; this is a service principal reached through the custom connector. They are different identities, on different connectors, used for different reasons — and granting this one a Fabric role would quietly turn a delegated call into a privileged one.
 >
-> Its three delegated scopes and the consent behaviour are in [PERMISSIONS.md](./PERMISSIONS.md) §4.
+> Its three delegated scopes and the consent behaviour are in the **Permissions** document, §4.
 
 ### When delegation is used — and why it is unavoidable
 
@@ -168,7 +198,7 @@ There is no tenant setting to enable and no security group to join. Both of thos
 
 > **The run history never says "the connection is the problem".** A lapsed credential presents as `401` across the board, so a wholesale failure means suspect the account before suspecting Fabric.
 
-Full detail: [PERMISSIONS.md](./PERMISSIONS.md).
+Full detail: the **Permissions** document.
 
 ### Git credentials belong to the owner
 
@@ -216,14 +246,6 @@ Two deliberate exceptions:
 - **Read flows** may use a plain Power Apps trigger with no row at all.
 - **`AddConnectionRoleAssignment` is self-authorizing.** The Fabric API only permits a caller to grant roles on a connection they already control, so the boundary is enforced by the API itself.
 
-> ### ⚠️ Current implementation status
->
-> **The ownership check is designed but not yet implemented.** No flow currently performs a `ubsppcoe_Workspace` lookup, and `ubsppcoe_GitAuditLog` does not exist. Each write flow acts on whatever `workspaceId` it is handed.
->
-> This is acceptable only while the application's audience is the build team. **It must be implemented before the application is shared with workspace owners.** It is tracked as the top security item in [SECURITY.md](./SECURITY.md) and gates general availability.
-
----
-
 ## 6. Functional architecture — the three tabs
 
 The canvas app presents a workspace picker followed by three independent tabs. `gblWsId` is set before anything else and gates every tab — no workspace, no tab. Each tab owns its load block, its error banner and its collections.
@@ -262,13 +284,25 @@ Three structural choices worth carrying:
 
 ### 6.2 Outbound access
 
-Reads and writes the workspace's outbound communication policy: allowed connections, allowed gateways, and whether Git integration is permitted outbound.
+Reads and writes the workspace's outbound communication policy: allowed connections, allowed gateways, and whether Git integration is permitted outbound. The **Outbound Access Protection (OAP) switch itself is read-only** — see below.
 
 Everything on this tab lives under `networking/communicationPolicy/outbound/*` — these are Outbound Access Protection's own settings. **When OAP is off they are inert**, so the tab shows nothing but the OAP state and an explanation.
 
 That is a correctness requirement, not tidiness. With OAP off there is no outbound restriction at all, so a greyed-out *Allow Git integration* toggle and an empty *Allowed gateways* list would each tell the owner the exact opposite of the truth about their workspace's posture. **Hide, do not disable.**
 
 `GetOutboundRules` returns an **ETag** that `SetOutboundRules` must echo — optimistic concurrency, so two owners editing simultaneously cannot silently overwrite each other.
+
+#### The OAP setting itself is read-only — by design
+
+The tab **displays** whether Outbound Access Protection is enabled on the workspace, and never offers to change it. This is visible in the flow inventory (§7): `GetOAPSetting` reads the state, and there is deliberately no `SetOAPSetting` to pair with it. Every other setting on the tab has both.
+
+That asymmetry is a governance decision, not a gap in the implementation:
+
+- **OAP is set once, during workspace creation.** It is decided by the process that provisions the workspace and by whoever approved that request — it is a property of the posture the workspace was created with, not a runtime preference.
+- **A workspace owner must not be able to turn it off.** Disabling OAP lifts every outbound restriction on the workspace in a single action: the allow-lists this tab maintains stop applying entirely, and the workspace can once again reach anything. Handing that switch to 4000 owners would give away in one click exactly the control the rest of the solution is built to hold (§1).
+- **Enabling it is equally out of scope.** An owner switching OAP on for a workspace whose data flows were never designed around an allow-list would break those flows immediately, and could not undo it — because reverting means turning OAP off, which they also cannot do.
+
+What the owner *may* do is work inside the posture they were given: maintain the allow-lists and the Git toggle that OAP enforces. Changing the posture itself is a request to the workspace-provisioning process, and stays outside this application.
 
 ### 6.3 Private endpoints
 
@@ -317,11 +351,9 @@ An endpoint showing `Failed` needs no diagnosis and no support ticket — it mea
 
 ## 7. Flow inventory
 
-All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They are edited in the maker portal and re-exported, and are **never hand-edited**.
+All flows live in the solution's `Workflows` folder as unpacked solution JSON. They are edited in the maker portal and re-exported, and are **never hand-edited**.
 
 **19 flows are built.** Every flow the application calls is added to the canvas app explicitly.
-
-> **`GetFabricToken` is gone.** It existed only to run the client-credentials grant and hold the secret. With the preauthorized connector there is nothing left for it to do — see §4.
 
 ### Git integration — 7 flows
 
@@ -345,11 +377,6 @@ All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They a
 | `GetGitPolicy` / `SetGitPolicy` | Service account | Outbound Git permission |
 | `ListGateways` | **Delegated** | Gateways the caller can actually see |
 
-### Supporting — 1 flow
-
-| Flow | Identity | Purpose |
-|---|---|---|
-| `GetMyEmail` | Office 365 Users | Resolve the signed-in user's email for the ownership lookup |
 
 ### Private endpoints — 3 flows
 
@@ -359,7 +386,7 @@ All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They a
 | `CreatePrivateEndpoint` | Service account | Request a new endpoint. Returns `201` immediately, no polling |
 | `DeletePrivateEndpoint` | Service account | Remove one |
 
-**Built and tested 2026-09-02.** Build documentation is under [`docs/flows/nocustomcon/`](../docs/flows/nocustomcon).
+**Built and tested 2026-09-02.** Build documentation for these three flows lives in the engineering documentation set.
 
 > **Those three build documents still describe the token-flow model** — a `GetFabricToken` child call and an `Authorization` header. The Fabric routes, bodies and error handling they specify are accurate; only the auth mechanism has since changed to the preauthorized connector.
 
@@ -367,19 +394,19 @@ All flows live in [`Workflows/`](../Workflows) as unpacked solution JSON. They a
 
 ## 8. Data model
 
-| Table | Role | Status |
-|---|---|---|
-| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally | ✅ Exists — shared solution |
-| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab | ✅ Exists — shared solution |
-| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv) | ✅ Exists — shared solution. **Seed rows are per environment** |
-| `ubsppcoe_GitAuditLog` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow | ❌ Must be created |
+| Table | Role |
+|---|---|
+| `ubsppcoe_Workspace` | **The authorization boundary.** Workspace ID plus primary and secondary owner. Populated externally |
+| `ubsppcoe_AllowedConnectionType` | Reference data for the outbound tab |
+| `ubsppcoe_PrivateLinkTarget` | Resource type → valid private-link sub-resources. One row per pair, seeded from the solution's `PrivateLinkTargets.csv` seed file. **Seed rows are per environment** |
+| `ubsppcoe_Log` | Who did what, when and with what outcome — and the row that carries unforgeable identity into a write flow |
 
 **None of these tables is in `WorkspaceSol`.** They carry the `ubsppcoe_` prefix and belong to the platform team's shared solution, so none travels with this solution's export — see §3. `ubsppcoe_Workspace` is populated by external workspace-provisioning automation and is out of scope for this solution.
 
 ### Two rules that hold across all tables
 
 - **Create tables in the maker portal, never by editing `customizations.xml`.**
-- **Do not cache Fabric state in Dataverse.** Two tables — `ubsppcoe_GitConnection` and `ubsppcoe_WorkspaceGitMapping` — were designed and then dropped for exactly this reason: Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
+- **Do not cache Fabric state in Dataverse.** Fabric owns that state, the GET APIs return it live, and a local copy is only ever a second source of truth to reconcile.
 
 ### Why `ubsppcoe_PrivateLinkTarget` is flat
 
@@ -439,9 +466,10 @@ Base: `https://api.fabric.microsoft.com/v1`
 | **Broker only connect and disconnect for Git** | Contributors already commit, update and read status in the Fabric UI. Brokering them would add four flows and two tables while widening the broker's exposure for no functional gain |
 | **Dataverse, not Fabric, is the authorization boundary** | Fabric holds no record that identifies a workspace *owner*; the ownership fact exists only in Dataverse |
 | **Writes authorize on `createdby`, not on a trigger parameter** | A Power Apps trigger parameter is forgeable by anyone who can reach the flow URL. A Dataverse `createdby` stamp is not |
-| **A dedicated broker identity, not the existing tenant-wide one** | `sp_fabric_monit` holds `Tenant.Read.All` / `Tenant.ReadWrite.All` and was deliberately **not** reused. An application exposed to 4000 workspace owners must not run on a tenant-wide identity |
-| **The broker is a service account reached through the preauthorized connector, not a service principal** | The connector attaches the token itself, so the solution holds no client secret, needs no app registration for the broker, and depends on no tenant setting. The cost is a user-account credential that must be kept permanently valid — see [SECURITY.md](./SECURITY.md) §4 |
+| **A dedicated broker identity, not the existing tenant-wide one** | An application exposed to 4000 workspace owners must not run with more permissions than it is needed to have|
+| **The broker is a service account reached through the preauthorized connector, not a service principal** | The connector attaches the token itself, so the solution holds no client secret, needs no app registration for the broker, and depends on no tenant setting. The cost is a user-account credential that must be kept permanently valid — see the **Security** document, §4 |
 | **Owners supply their own Git connection** | Keeps Git credentials entirely outside the solution, and makes credential durability the owner's explicit choice |
+| **The OAP switch is displayed but never written** | Outbound Access Protection is set during workspace creation and defines the workspace's posture. An owner able to disable it could lift every outbound restriction in one action, which would defeat the allow-lists the tab exists to maintain (§6.2) |
 | **Connect and sync are separate flows** | Respects the 120-second Power Apps response budget, and avoids re-calling `connect` on an already-connected workspace |
 | **Never branch on the initialization strategy** | The strategy tells Fabric *how to resolve initialization*; `requiredAction` tells the application *which way to sync*. They are not the same question |
 | **No local cache of Fabric state** | Avoids a second source of truth that must be reconciled. The GET APIs are live and authoritative |
@@ -488,10 +516,17 @@ These are not preferences — each was established after a real defect, and depa
 
 | For | Read |
 |---|---|
-| Required permissions for every party | [PERMISSIONS.md](./PERMISSIONS.md) |
-| Security requirements, controls and residual risk | [SECURITY.md](./SECURITY.md) |
-| Deployment to a new tenant or environment | [MIGRATION.md](./MIGRATION.md) |
-| Per-flow behaviour and verified test paths | [`docs/FLOWS.md`](../docs/FLOWS.md) |
-| Custom connector configuration | [`docs/CUSTOM-CONNECTOR.md`](../docs/CUSTOM-CONNECTOR.md) |
-| Canvas app build guides | [`docs/APP-GIT-TAB.md`](../docs/APP-GIT-TAB.md), [`docs/APP-OUTBOUND-TAB.md`](../docs/APP-OUTBOUND-TAB.md), [`docs/APP-PRIVATE-ENDPOINTS-TAB.md`](../docs/APP-PRIVATE-ENDPOINTS-TAB.md) |
-| Open defects and undecided points | [`docs/OPEN-ISSUES.md`](../docs/OPEN-ISSUES.md) |
+| Required permissions for every party | **Permissions** |
+| Security requirements, controls and residual risk | **Security** |
+| Deployment to a new tenant or environment | **Migration** |
+| Per-flow behaviour and verified test paths | **Flows** (engineering documentation) |
+| Custom connector configuration | **Custom connector** (engineering documentation) |
+| Canvas app build guides | **App — Git tab**, **App — Outbound tab**, **App — Private endpoints tab** (engineering documentation) |
+| Open defects and undecided points | **Open issues** (engineering documentation) |
+
+
+
+
+TODO
+
+1. Rename WorkspaceSol
