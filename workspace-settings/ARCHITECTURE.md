@@ -166,7 +166,7 @@ Two identities, deliberately separated, because they answer two different questi
 | Used for | Every privileged write, and most reads | Calls whose *answer depends on who is asking* |
 | Reached via | **HTTP with Microsoft Entra ID (preauthorized)** | The custom connector `FabricSetting`, `runtimeSource: invoker` |
 
-> ### The one service principal in the solution, and what it is *not*
+> ### Why the custom connector's app registration has no Fabric role
 >
 > **`SVC_PROD_AT43156_FABRIC_POLICY` backs the custom connector `FabricSetting`, and nothing else.** It is the registration whose client ID, client secret and scope list sit on the connector's Security tab.
 >
