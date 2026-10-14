@@ -127,9 +127,9 @@ The platform team's tables and the columns this solution depends on (the names t
 | `ubsppcoe_Node` | `ubsppcoe_nodeid` (row key), `ubsppcoe_nodeuniqueid` (**Fabric capacity GUID**), `ubsppcoe_statecode` (Choice, `2` = Deleted) |
 | `Logging` | *Log Category*, *Log Source Name*, *Log Source URL* |
 
-The security role for the service account (the *Architecture* document, section 6.3):
+The security role for the service account (the *Architecture* document, section 6.3). These are Dataverse **row** privileges: *Create* means inserting a new row - for `Logging`, writing a log entry - not creating the table. The service account never creates or changes a table.
 
-| Table | Read | Create | Write | Delete |
+| Table | Read rows | Create rows | Write (update) rows | Delete rows |
 |---|---|---|---|---|
 | `ubsppcoe_Workspace`, `ubsppcoe_Node` | Yes | - | **Never** | **Never** |
 | `Capacity Policies` | Yes | Yes | Yes | - |

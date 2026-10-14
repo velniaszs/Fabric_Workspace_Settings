@@ -483,9 +483,9 @@ What the account deliberately does **not** need:
 
 ### 6.3 Dataverse permissions
 
-**All privileges are at Organization depth**, because the rows belong to other people - User or Business Unit depth would hide them.
+**All privileges are at Organization depth**, because the rows belong to other people - User or Business Unit depth would hide them. They are Dataverse **row** privileges: *Create* means inserting a new row - for `Logging`, writing a log entry - not creating the table. The service account never creates or changes a table.
 
-| Table | Read | Create | Write | Delete |
+| Table | Read rows | Create rows | Write (update) rows | Delete rows |
 |---|---|---|---|---|
 | `ubsppcoe_Node` | Yes | - | **Never** | **Never** |
 | `ubsppcoe_Workspace` | Yes | - | **Never** | **Never** |
