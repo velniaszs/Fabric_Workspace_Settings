@@ -89,8 +89,6 @@ Both permissions are granted directly to the account; there is no service princi
 | T3 | `Policy Exceptions` | Exists. Seeding happens in Phase 2 |
 | T4 | Holder workspace in Fabric | **No policy sets left over from testing** - a leftover set causes a name collision in Phase 1 |
 
-`Policy Drift` is not part of the solution and must not exist.
-
 ### 2.4 Environment variables
 
 All seven need a **Current Value**, not only a Default Value. A missing one fails at runtime with *The workflow parameter ... is not found*, once per capacity, all the way through a run.
@@ -169,7 +167,7 @@ Work through every row of section 2.
 
 **Run:** nothing. This is a data import into `Policy Exceptions`, and it **must happen before Phase 3**. Rule 3 is derived from nothing else.
 
-1. **Prepare the exceptions list** as a CSV import file (see the *Deployment guide* section 3, Step 4). Its headers are the Dataverse logical names. **Delete its three `EXAMPLE` rows first.**
+1. **Prepare the exceptions list** as a CSV import file (see the *Deployment guide* section 3, Step 4). Its headers are the Dataverse logical names.
 2. **Add the holder workspace row first** if section 2.5 E2 says the holder sits on a governed capacity:
 
    | Column | Value |
@@ -189,7 +187,7 @@ Work through every row of section 2.
 
 | | |
 |---|---|
-| **Go** | Row count matches the source list (plus the holder row), all `Active = Yes`, no `EXAMPLE` rows, holder workspace has its `ubsppcoe_Workspace` row |
+| **Go** | Row count matches the source list (plus the holder row), all `Active = Yes`, holder workspace has its `ubsppcoe_Workspace` row |
 | **No-go** | Any exception whose workspace is not in `ubsppcoe_Workspace`, or whose Node disagrees with the source exceptions list and nobody has decided |
 | **Rollback** | Correct or remove the imported rows. Nothing has read them yet |
 
@@ -244,7 +242,7 @@ The first number is not stamped anywhere; it needs a query against `ubsppcoe_Wor
 
 | | |
 |---|---|
-| **Go** | Denial figures per capacity **written down and agreed** by the accountable owner (**To confirm:** who signs - the sources say only that a large denial needs a decision above this project), and the activation date announced |
+| **Go** | Denial figures per capacity **written down and agreed** by the accountable owner (**To confirm:** who signs off - a large denial needs a decision above this project), and the activation date announced |
 | **No-go** | No written agreement, or any blocker row |
 | **Rollback** | None needed - nothing has changed |
 
@@ -372,7 +370,7 @@ Use 4.2 for each affected capacity, then find the cause (see the *Error handling
 | 3 | 1 | `Compose_eligible_count` matches the expected estate | Run history | |
 | 4 | 1 | First tranche: no rules, not activated, `Node` populated, `Status = Inactive` | Portal, table | |
 | 5 | 1 | `Failed` empty; `noNode` list handed to the platform team | Report mail | |
-| 6 | 2 | `Policy Exceptions` seeded, holder row first, all `Active = Yes`, no `EXAMPLE` rows | Table | |
+| 6 | 2 | `Policy Exceptions` seeded, holder row first, all `Active = Yes` | Table | |
 | 7 | 3 | Every row has `ubsppcoe_lastrebuild`, `ubsppcoe_lasterror` empty; rule 3 seen where expected | Table, portal | |
 | 8 | 4 | Per-capacity denial figures written down and **agreed** | Sign-off record | |
 | 9 | 5 | `Report` dry-run count matches Phase 4 | Dry-run mail | |

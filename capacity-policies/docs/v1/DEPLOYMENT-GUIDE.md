@@ -13,7 +13,6 @@ It stops where the cutover starts. Bringing an existing estate under policy is c
 1. What gets deployed
    - 1.1 Where each component lives
    - 1.2 What travels with the solution and what does not
-   - 1.3 What is deliberately not deployed
 2. Prerequisites
    - 2.1 Identity - the service account
    - 2.2 Fabric
@@ -71,15 +70,6 @@ The flows are:
 | | The platform team's tables and their data |
 
 **The two that catch people are environment variable values and connections.** A solution imports cleanly with neither, and the flows then fail at runtime - or, worse, run as the wrong person. See section 6.
-
-### 1.3 What is deliberately not deployed
-
-| Excluded | Why |
-|---|---|
-| `SyncCapacityPolicySets` | Discarded. No flow in this solution runs on a schedule |
-| `ubsppcoe_PolicyDrift`, `ubsppcoe_ScanState` | Dropped - no writer. **Do not create `Policy Drift`** |
-| `GetPolicyToken` | Retired. There is no token flow |
-| The `crbab_` workspace-settings solution | A different system that shares the tenant |
 
 ---
 

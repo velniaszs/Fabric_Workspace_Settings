@@ -193,7 +193,7 @@
         <ul>
           <li><b>Connections</b><span>Signed in as <i>workspace provisioning</i></span></li>
           <li><b>Variable Current Values</b><span><code>PolicyMailRecipients</code> differs on purpose</span></li>
-          <li><b>Table data</b><span><code>PolicyItemTypes.csv</code>, <code>PolicyExceptions.csv</code></span></li>
+          <li><b>Table data</b><span>The seed list of item types and the exceptions list</span></li>
           <li><b>Fabric</b><span>Holder workspace, Contributor on it, Capacity Admin</span></li>
         </ul>
       </div>
@@ -202,12 +202,12 @@
     <h3>Deployment order</h3>
     <div class="steps">
       <div class="step pre"><div class="n">1</div><div><div class="t">Prerequisites</div><div class="d">Service account, holder workspace and Fabric roles, <code>ubsppcoe</code> publisher, DLP, platform tables with exact names.</div></div></div>
-      <div class="step sol"><div class="n">5</div><div><div class="t">Import UBS Workspace Provisioning</div><div class="d">Or rebuild every flow from its spec. Confirm every flow is Off afterwards.</div></div></div>
+      <div class="step sol"><div class="n">5</div><div><div class="t">Import UBS Workspace Provisioning</div><div class="d">Then confirm every flow is Off.</div></div></div>
       <div class="step tbl"><div class="n">2</div><div><div class="t">Create the three tables</div><div class="d">Primary column set before saving, <code>active</code> default No, nothing Required. Publish all customizations.</div></div></div>
       <div class="step env"><div class="n">6</div><div><div class="t">Create the three connections</div><div class="d">As the service account. Smoke-test <code>GET /v1/capacities</code> - a short list means the wrong account.</div></div></div>
-      <div class="step tbl"><div class="n">3</div><div><div class="t">Seed Policy Item Types</div><div class="d">14 rows from <code>PolicyItemTypes.csv</code>, all Active = Yes.</div></div></div>
+      <div class="step tbl"><div class="n">3</div><div><div class="t">Seed Policy Item Types</div><div class="d">14 rows from the seed list, all Active = Yes.</div></div></div>
       <div class="step env"><div class="n">7</div><div><div class="t">Set Current Values</div><div class="d">All seven variables. <code>PolicyApiBeta</code> = No until public preview.</div></div></div>
-      <div class="step tbl"><div class="n">4</div><div><div class="t">Seed Policy Exceptions</div><div class="d">Delete the EXAMPLE rows. Holder workspace first. Before any rebuild.</div></div></div>
+      <div class="step tbl"><div class="n">4</div><div><div class="t">Seed Policy Exceptions</div><div class="d">Holder workspace first. Before any rebuild.</div></div></div>
       <div class="step sol"><div class="n">8</div><div><div class="t">Trigger Scope = Organization</div><div class="d">On all five Dataverse triggers, or they never fire - silently.</div></div></div>
     </div>
 

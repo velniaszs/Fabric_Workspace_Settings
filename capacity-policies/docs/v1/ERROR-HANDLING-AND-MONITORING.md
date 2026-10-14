@@ -227,7 +227,7 @@ Each flow's "three things to know" in the *Architecture* document, sections 4 an
 
 ## 5. Routine monitoring checklist
 
-**No owner or cadence has been agreed for most of these.** Frequencies are given only where the sources state one; every other cell is marked **To confirm**, and those are the gaps the receiving team must close.
+**No owner or cadence has been agreed for most of these.** Frequencies are given only where one has been agreed; every other cell is marked **To confirm**, and those are the gaps the receiving team must close.
 
 | # | Check | How | How often | Owner |
 |---|---|---|---|---|
