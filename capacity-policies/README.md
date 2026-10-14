@@ -28,7 +28,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 
 **Membership is derived, never stored.** A workspace is whitelisted because `ubsppcoe_oapenabled` is true on its row and its `Node` lookup points at the capacity. No flow here writes either column — both belong to the platform team.
 
-**One identity, one connector.** Every Fabric call goes through the **HTTP with Microsoft Entra ID (preauthorized)** connector, signed in as the `workspace provisioning` service account. The connector attaches the bearer token itself, so there is no token flow, no client secret and no `Authorization` header anywhere in the solution — and no service principal either. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §4.
+**One identity, one connector.** Every Fabric call goes through the **HTTP with Microsoft Entra ID (preauthorized)** connector, signed in as the `workspace provisioning` service account. The connector attaches the bearer token itself, so there is no token flow, no client secret and no `Authorization` header anywhere in the solution — and no service principal either. See [docs/v1/ARCHITECTURE-v2.md](docs/v1/ARCHITECTURE-v2.md) §6.
 
 ---
 
@@ -36,7 +36,7 @@ Workspaces are chunked **49 per rule**; the service ceiling is **50 rules per po
 
 | If you are… | Read |
 |---|---|
-| New to this | This file, then [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| New to this | This file, then [docs/v1/ARCHITECTURE-v2.md](docs/v1/ARCHITECTURE-v2.md) |
 | Going deeper on behaviour | [docs/CAPACITY-POLICY-FLOWS.md](docs/CAPACITY-POLICY-FLOWS.md) §1–§4 |
 | Responding to a change in the estate | [docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](docs/CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) |
 | Running the one-off cutover | [docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md](docs/CAPACITY-POLICY-MIGRATION-RUNBOOK.md) |

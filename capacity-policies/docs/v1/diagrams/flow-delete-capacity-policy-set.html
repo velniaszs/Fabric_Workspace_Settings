@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Fabric Pol - DeleteCapacityPolicySet</title>
+<!--
+  Compact, A4-portrait friendly rendering of the flow as it looks in the Power Automate designer.
+  The flow is described by the FLOW array in the script; edit that, then re-render to PNG.
+  Node types: card, cond, scope, collapsed, end.
+-->
+<style>
+  :root {
+    --canvas: #f5f5f5;
+    --dot: #dedede;
+    --card-border: #d1d1d1;
+    --ink: #242424;
+    --muted: #616161;
+    --wire: #8a8a8a;
+    --c-dataverse: #0e7a5f;
+    --c-http: #2b579a;
+    --c-var: #770bd6;
+    --c-data: #8c3693;
+    --c-control: #484f58;
+    --c-child: #d83b01;
+    --card-w: 252px;
+    --leaf-w: 196px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, sans-serif;
+    color: var(--ink);
+    background: #fff;
+  }
+  .frame { display: inline-block; border: 1px solid #e0e0e0; }
+
+  .cmdbar, .footer { width: 0; min-width: 100%; }
+  .cmdbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+  }
+  .cmdbar .back { font-size: 15px; color: var(--muted); }
+  .cmdbar .name { font-size: 14px; font-weight: 600; }
+  .cmdbar .chip {
+    font-size: 10.5px;
+    color: var(--muted);
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    padding: 1px 7px;
+    background: #fafafa;
+  }
+  .footer {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    padding: 7px 14px;
+    border-top: 1px solid #e0e0e0;
+    background: #fff;
+  }
+  .footer span { display: inline-flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--muted); }
+  .footer i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+  .footer .dash { width: 16px; height: 0; border-top: 2px dashed #c19c00; border-radius: 0; }
+
+  .canvas {
+    background-color: var(--canvas);
+    background-image: radial-gradient(var(--dot) 1px, transparent 1px);
+    background-size: 16px 16px;
+    padding: 20px 18px 22px;
+    display: flex;
+    justify-content: center;
+  }
+
+  .seq { display: flex; flex-direction: column; align-items: center; }
+
+  .card {
+    width: var(--card-w);
+    background: #fff;
+    border: 1px solid var(--card-border);
+    border-radius: 7px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    padding: 6px 8px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    position: relative;
+  }
+  .card.leaf { width: var(--leaf-w); }
+  .card.trigger { border-color: #8a8a8a; }
+  .card.stack {
+    box-shadow:
+      0 1px 2px rgba(0,0,0,.08),
+      3px 3px 0 -1px #fff, 3px 3px 0 0 var(--card-border),
+      6px 6px 0 -1px #fff, 6px 6px 0 0 var(--card-border);
+    margin-right: 6px;
+    margin-bottom: 6px;
+  }
+  .card.collapsed { border-style: solid; border-width: 1px 1px 3px; margin-bottom: 9px; }
+  .card.collapsed.catch { border-color: #e3a0a7; background: #fdf3f4; }
+  .icon {
+    flex: 0 0 26px;
+    height: 26px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+  }
+  .icon svg { width: 16px; height: 16px; stroke: #fff; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+  .txt { min-width: 0; flex: 1; }
+  .title { font-size: 12.5px; font-weight: 600; line-height: 1.2; word-break: break-word; }
+  .op { font-size: 10.6px; color: var(--muted); margin-top: 1px; line-height: 1.3; }
+  .op code {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 9.8px;
+    background: #f1f1f1;
+    border-radius: 3px;
+    padding: 0 3px;
+    color: #333;
+  }
+  .step {
+    position: absolute;
+    top: -8px;
+    right: 7px;
+    font-size: 8.8px;
+    font-weight: 700;
+    letter-spacing: .04em;
+    color: #616161;
+    background: #fff;
+    border: 1px solid #d1d1d1;
+    border-radius: 999px;
+    padding: 0 6px;
+    line-height: 14px;
+  }
+  .count {
+    position: absolute;
+    bottom: -9px;
+    right: 7px;
+    font-size: 8.8px;
+    font-weight: 700;
+    color: #424242;
+    background: #fff;
+    border: 1px solid #bdbdbd;
+    border-radius: 999px;
+    padding: 0 6px;
+    line-height: 14px;
+  }
+  .catch .count { color: #a4262c; border-color: #e3a0a7; }
+
+  .link {
+    position: relative;
+    width: 2px;
+    height: 16px;
+    background: var(--wire);
+    flex: 0 0 auto;
+  }
+  .link::after {
+    content: "";
+    position: absolute;
+    left: -3px;
+    bottom: -1px;
+    border-top: 5px solid var(--wire);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+  .link.tall { height: 26px; }
+  .link.dashed { background: none; border-left: 2px dashed var(--wire); width: 0; }
+  .link.dashed::after { left: -5px; }
+  .link.dashed.bad { border-left-color: #c4314b; }
+  .link.dashed.bad::after { border-top-color: #c4314b; }
+  .link.dashed.warn { border-left-color: #c19c00; }
+  .link.dashed.warn::after { border-top-color: #c19c00; }
+  .link .ra {
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    white-space: nowrap;
+    font-size: 9.5px;
+    font-weight: 600;
+    padding: 0 6px;
+    line-height: 14px;
+    border-radius: 4px;
+    background: #fff;
+    border: 1px solid #d1d1d1;
+    color: var(--muted);
+  }
+  .link.bad .ra { color: #a4262c; border-color: #f1bbbc; background: #fdf3f4; }
+  .link.warn .ra { color: #8a6d00; border-color: #f2e1a6; background: #fffbea; }
+
+  .branches { display: flex; align-items: stretch; }
+  .branch {
+    position: relative;
+    padding: 28px 9px 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .branch::before, .branch::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    width: 50%;
+    border-top: 2px solid var(--wire);
+  }
+  .branch::before { left: 0; }
+  .branch::after { right: 0; }
+  .branch:first-child::before { display: none; }
+  .branch:last-child::after { display: none; }
+  .branch > .drop {
+    position: absolute;
+    top: 0;
+    left: calc(50% - 1px);
+    width: 2px;
+    height: 28px;
+    background: var(--wire);
+  }
+  .branch > .drop::after {
+    content: "";
+    position: absolute;
+    left: -3px;
+    bottom: -1px;
+    border-top: 5px solid var(--wire);
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+  }
+  .branch > .lbl {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 0 7px;
+    line-height: 14px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid #d1d1d1;
+    z-index: 1;
+  }
+  .branch > .lbl.t { color: #0e7a0d; border-color: #9fd89f; background: #f1faf1; }
+  .branch > .lbl.f { color: #a4262c; border-color: #f1bbbc; background: #fdf3f4; }
+  .branch > .fill { flex: 1; width: 2px; min-height: 12px; background: var(--wire); }
+  .branch > .bl, .branch > .br {
+    position: absolute;
+    bottom: 0;
+    width: 50%;
+    border-bottom: 2px solid var(--wire);
+  }
+  .branch > .bl { left: 0; }
+  .branch > .br { right: 0; }
+  .branch:first-child > .bl { display: none; }
+  .branch:last-child > .br { display: none; }
+
+  .scope {
+    background: rgba(255,255,255,.55);
+    border: 1px solid #bdbdbd;
+    border-radius: 9px;
+    padding: 0 12px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .scope > .card.head {
+    width: auto;
+    align-self: stretch;
+    margin: 0 -12px;
+    border: none;
+    border-bottom: 1px solid #d6d6d6;
+    border-radius: 9px 9px 0 0;
+    box-shadow: none;
+    background: #fbfbfb;
+  }
+
+  .end {
+    font-size: 10.5px;
+    font-weight: 700;
+    padding: 2px 10px;
+    border-radius: 999px;
+    border: 1.5px solid;
+    background: #fff;
+    white-space: nowrap;
+  }
+  .end.neutral { color: #424242; border-color: #9e9e9e; }
+  .end.warn { color: #8a6d00; border-color: #e0c341; background: #fffbea; }
+  .end.ok { color: #0e7a0d; border-color: #6cc26c; background: #f1faf1; }
+  .end.bad { color: #a4262c; border-color: #e3a0a7; background: #fdf3f4; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="cmdbar">
+    <span class="back">&larr;</span>
+    <span class="name">Fabric Pol - DeleteCapacityPolicySet</span>
+    <span class="chip">UBS Workspace Provisioning</span>
+    <span class="chip">Automated cloud flow</span>
+  </div>
+  <div class="canvas"><div id="root" class="seq"></div></div>
+  <div class="footer">
+    <span><i style="background:#0e7a5f"></i>Dataverse</span>
+    <span><i style="background:#2b579a"></i>HTTP with Microsoft Entra ID</span>
+    <span><i style="background:#770bd6"></i>Variables</span>
+    <span><i style="background:#8c3693"></i>Data operation</span>
+    <span><i style="background:#484f58"></i>Control</span>
+    <span><i class="dash"></i>non-default run after</span>
+  </div>
+</div>
+
+<script>
+const ICON = {
+  dataverse: { c: 'var(--c-dataverse)', svg: '<ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6"/><path d="M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3"/>' },
+  http:      { c: 'var(--c-http)', svg: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.6 2.6 2.6 13.4 0 16M12 4c-2.6 2.6-2.6 13.4 0 16"/>' },
+  var:       { c: 'var(--c-var)', svg: '<path d="M8 5c-2 0-2 2-2 4s-1 3-2 3c1 0 2 1 2 3s0 4 2 4"/><path d="M16 5c2 0 2 2 2 4s1 3 2 3c-1 0-2 1-2 3s0 4-2 4"/><path d="M10 10l4 4M14 10l-4 4"/>' },
+  data:      { c: 'var(--c-data)', svg: '<path d="M8 5c-2 0-2 2-2 4s-1 3-2 3c1 0 2 1 2 3s0 4 2 4"/><path d="M16 5c2 0 2 2 2 4s1 3 2 3c-1 0-2 1-2 3s0 4-2 4"/>' },
+  cond:      { c: 'var(--c-control)', svg: '<path d="M12 4v6M12 10l-6 6M12 10l6 6"/><circle cx="6" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/>' },
+  scope:     { c: 'var(--c-control)', svg: '<rect x="5" y="5" width="14" height="14" rx="2"/><path d="M5 9.5h14"/>' },
+  loop:      { c: 'var(--c-control)', svg: '<path d="M18 9a6.5 6.5 0 1 0 .5 5"/><path d="M18.5 4.5V9H14"/>' },
+  child:     { c: 'var(--c-child)', svg: '<rect x="4" y="4" width="7" height="6" rx="1"/><rect x="13" y="14" width="7" height="6" rx="1"/><path d="M7.5 10v7H13"/>' }
+};
+
+const WARN = { tone: 'warn', label: 'is successful · has failed' };
+
+// The flow as built. Titles are the renamed action names; step tags match bau/DeleteCapacityPolicySet.md.
+const FLOW = [
+  { t: 'card', icon: 'dataverse', trigger: true, step: '1',
+    title: 'When a row is added, modified or deleted',
+    op: '<code>ubsppcoe_Node</code> · Modified · <code>statecode eq 2</code>' },
+  { t: 'card', icon: 'var', stack: true, title: 'Initialize variable × 3', op: 'outcome, message, policyRowId' },
+  { t: 'scope', name: 'Scope_try', body: [
+    { t: 'card', icon: 'dataverse', step: '2', title: 'Get_policy_row', op: 'List rows · <code>Capacity Policies</code> by Node' },
+    { t: 'cond', title: 'Condition_governed', op: 'exactly one row found',
+      yes: [
+        { t: 'card', icon: 'var', title: 'Set_policyRowId', op: 'kept for the Catch' },
+        { t: 'card', icon: 'http', step: '3a', title: 'Get_capacities', op: '<code>GET /v1/capacities</code>' },
+        { t: 'card', icon: 'data', title: 'Filter_capacity', op: 'Filter array · our <code>capacityid</code>' },
+        { t: 'cond', step: '3b', title: 'Condition_capacity_gone', op: 'absent, and list not empty',
+          yes: [
+            { t: 'card', icon: 'http', step: '3c', leaf: true, title: 'Delete_policy_set', op: '<code>DELETE …/policySets/{id}</code>' },
+            { t: 'card', icon: 'dataverse', leaf: true, title: 'Update_policy_row', op: 'status <code>Deleted</code> · row kept' },
+            { t: 'card', icon: 'var', leaf: true, title: 'Set_outcome', op: 'Deleted' },
+            { t: 'end', tone: 'ok', text: 'Deleted' }
+          ],
+          no: [
+            { t: 'card', icon: 'http', step: '3d', leaf: true, title: 'Deactivate', op: '<code>POST …/deactivate</code>' },
+            { t: 'card', icon: 'dataverse', leaf: true, title: 'Update_policy_row', op: '<code>Suspended</code> + lasterror', runAfter: WARN },
+            { t: 'card', icon: 'var', leaf: true, title: 'Set_outcome', op: 'Suspended, or Failed' },
+            { t: 'end', tone: 'warn', text: 'Suspended · or Failed' }
+          ]
+        }
+      ],
+      no: [
+        { t: 'card', icon: 'var', leaf: true, title: 'Set variable', op: 'outcome = <code>NotGoverned</code>' },
+        { t: 'end', tone: 'neutral', text: 'NotGoverned' }
+      ]
+    }
+  ]},
+  { t: 'collapsed', icon: 'scope', catch: true, title: 'Scope_catch', count: '8 actions',
+    op: 'lasterror + <code>Logging</code> row · Terminate Failed',
+    runAfter: { tone: 'bad', label: 'Scope_try has failed · skipped · timed out' } },
+  { t: 'card', icon: 'data', step: '4', title: 'Compose_result', op: 'outcome — message',
+    runAfter: { tone: '', label: 'after both scopes' } }
+];
+function el(tag, cls, html) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html !== undefined) e.innerHTML = html;
+  return e;
+}
+
+function card(n, extra) {
+  const cls = ['card'];
+  if (n.trigger) cls.push('trigger');
+  if (n.stack) cls.push('stack');
+  if (n.leaf) cls.push('leaf');
+  if (extra) cls.push(extra);
+  if (n.catch) cls.push('catch');
+  const c = el('div', cls.join(' '));
+  const ic = ICON[n.icon];
+  const tile = el('div', 'icon', '<svg viewBox="0 0 24 24">' + ic.svg + '</svg>');
+  tile.style.background = ic.c;
+  c.appendChild(tile);
+  const tx = el('div', 'txt');
+  tx.appendChild(el('div', 'title', n.title));
+  if (n.op) tx.appendChild(el('div', 'op', n.op));
+  c.appendChild(tx);
+  if (n.step) c.appendChild(el('span', 'step', 'STEP ' + n.step));
+  if (n.count) c.appendChild(el('span', 'count', '▸ ' + n.count));
+  return c;
+}
+
+function link(ra) {
+  const l = el('div', 'link');
+  if (ra) {
+    l.className = 'link tall dashed' + (ra.tone ? ' ' + ra.tone : '');
+    l.appendChild(el('span', 'ra', ra.label));
+  }
+  return l;
+}
+
+function branch(nodes, label, cls) {
+  const b = el('div', 'branch');
+  b.appendChild(el('div', 'drop'));
+  b.appendChild(el('span', 'lbl ' + cls, label));
+  b.appendChild(seq(nodes));
+  b.appendChild(el('div', 'fill'));
+  b.appendChild(el('div', 'bl'));
+  b.appendChild(el('div', 'br'));
+  return b;
+}
+
+function node(n) {
+  if (n.t === 'card') return card(n);
+  if (n.t === 'collapsed') return card(n, 'collapsed');
+  if (n.t === 'end') return el('div', 'end ' + n.tone, n.text);
+  if (n.t === 'cond') {
+    const wrap = el('div', 'seq');
+    wrap.appendChild(card({ icon: 'cond', title: n.title, op: 'Condition · ' + n.op, step: n.step }));
+    wrap.appendChild(link());
+    const br = el('div', 'branches');
+    br.appendChild(branch(n.yes, 'True', 't'));
+    br.appendChild(branch(n.no, 'False', 'f'));
+    wrap.appendChild(br);
+    return wrap;
+  }
+  if (n.t === 'scope') {
+    const s = el('div', 'scope');
+    s.appendChild(card({ icon: 'scope', title: n.name, op: 'Scope' }, 'head'));
+    const body = seq(n.body);
+    body.style.marginTop = '14px';
+    s.appendChild(body);
+    return s;
+  }
+}
+
+function seq(nodes) {
+  const s = el('div', 'seq');
+  nodes.forEach((n, i) => {
+    if (i > 0) s.appendChild(link(n.runAfter));
+    s.appendChild(node(n));
+  });
+  return s;
+}
+
+document.getElementById('root').appendChild(seq(FLOW));
+</script>
+</body>
+</html>

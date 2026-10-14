@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>The shared Try/Catch pattern</title>
+<style>
+  :root {
+    --ink: #1b1f2a;
+    --muted: #5b6475;
+    --line: #e3e7ef;
+    --try: #1f6feb;
+    --try-bg: #f3f8ff;
+    --ok: #2e9e5b;
+    --ok-bg: #f0faf4;
+    --bad: #d64545;
+    --bad-bg: #fdf1f1;
+    --log: #9456d4;
+    --log-bg: #f7f1fd;
+    --var: #c19c00;
+    --var-bg: #fffaf0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 10px;
+    background: #fff;
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+  }
+  .sheet {
+    width: 940px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    overflow: hidden;
+  }
+  .masthead {
+    background: linear-gradient(110deg, #0b2a5b 0%, #1f6feb 55%, #39b6e8 100%);
+    color: #fff;
+    padding: 22px 28px;
+  }
+  .masthead h1 { margin: 0; font-size: 23px; letter-spacing: .2px; }
+  .masthead p { margin: 7px 0 0; font-size: 14px; opacity: .93; line-height: 1.45; }
+  .body { padding: 22px 28px 26px; }
+
+  .kicker {
+    font-size: 11px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .card {
+    border: 1px solid var(--line);
+    border-left: 7px solid var(--line);
+    border-radius: 12px;
+    padding: 13px 16px;
+    background: #fff;
+  }
+  .card .name { font-size: 15.5px; font-weight: 800; margin-top: 3px; }
+  .card .sub { font-size: 13px; color: #333a4a; margin-top: 5px; line-height: 1.5; }
+  .card.var { border-left-color: var(--var); background: var(--var-bg); }
+  .card.try { border-left-color: var(--try); background: var(--try-bg); }
+  .card.ok { border-left-color: var(--ok); background: var(--ok-bg); }
+  .card.bad { border-left-color: var(--bad); background: var(--bad-bg); }
+
+  code {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12px;
+    background: #fff;
+    border: 1px solid #dde3ee;
+    border-radius: 5px;
+    padding: 0 5px;
+    color: #2b3346;
+  }
+  .down { text-align: center; color: #9aa6bd; font-size: 20px; font-weight: 700; line-height: 1; margin: 6px 0; }
+
+  .chips { margin-top: 9px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11.6px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+  .chip.g { background: #e5f6ec; color: #1f7a45; border-color: #bfe6cf; }
+  .chip.r { background: #fde3e3; color: #a52a2a; border-color: #f3c2c2; }
+  .chip.y { background: #fff6d6; color: #8a6400; border-color: #f1dc8f; }
+
+  .rule {
+    margin-top: 10px;
+    font-size: 12.4px;
+    line-height: 1.5;
+    border: 1px dashed #c9d3e6;
+    border-radius: 9px;
+    padding: 8px 11px;
+    background: #fff;
+    color: #2b3346;
+  }
+
+  .split { display: grid; grid-template-columns: 1fr 1.35fr; gap: 16px; margin-top: 2px; }
+  .branch-head {
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 6px 8px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+  }
+  .branch-head.ok { background: #e5f6ec; color: #1f7a45; }
+  .branch-head.bad { background: #fde3e3; color: #a52a2a; }
+
+  .steps { margin: 8px 0 0; padding: 0; list-style: none; counter-reset: s; }
+  .steps li {
+    counter-increment: s;
+    position: relative;
+    padding: 5px 0 5px 30px;
+    font-size: 12.8px;
+    line-height: 1.45;
+    border-top: 1px solid #f1d9d9;
+  }
+  .steps li:first-child { border-top: 0; }
+  .steps li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0;
+    top: 5px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--bad);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    text-align: center;
+    line-height: 20px;
+  }
+  .steps li b { font-weight: 800; }
+  .steps li .w { color: var(--muted); }
+
+  .badge {
+    display: block;
+    text-align: center;
+    margin-top: 10px;
+    font-size: 14px;
+    font-weight: 800;
+    padding: 9px 10px;
+    border-radius: 10px;
+    color: #fff;
+  }
+  .badge.ok { background: var(--ok); }
+  .badge.bad { background: var(--bad); }
+  .badge small { display: block; font-size: 11.5px; font-weight: 600; opacity: .92; margin-top: 2px; }
+
+  .lands { margin-top: 22px; }
+  .lands h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .lands .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .where {
+    border: 1px solid var(--line);
+    border-top: 5px solid var(--line);
+    border-radius: 12px;
+    padding: 12px 14px;
+    background: #fff;
+  }
+  .where.hist { border-top-color: var(--bad); }
+  .where.row { border-top-color: var(--try); }
+  .where.log { border-top-color: var(--log); }
+  .where .who { font-size: 14.5px; font-weight: 800; }
+  .where .via { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .where .holds { font-size: 12.8px; margin-top: 8px; line-height: 1.45; }
+  .where .not { font-size: 12.2px; margin-top: 7px; line-height: 1.45; color: #6b5050; }
+  .where .not b { color: #a52a2a; }
+
+  .footnotes {
+    margin-top: 20px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 9px 24px;
+  }
+  .footnotes div { font-size: 12.8px; color: #333a4a; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="masthead">
+    <h1>One error-handling shape, five event flows</h1>
+    <p>Handled failures end <b>green</b> and explain themselves in <b>Compose_result</b>. Anything that breaks outright goes to <b>Scope_catch</b>, is written twice, and ends the run <b>red</b>.</p>
+  </div>
+
+  <div class="body">
+    <div class="card var">
+      <div class="kicker">Above the scopes</div>
+      <div class="name">Initialize variable &times; n</div>
+      <div class="sub"><code>outcome</code> &middot; <code>message</code> &middot; <code>policyRowId</code> - declared here because the designer cannot save one inside a Scope, and so the Catch can read them.</div>
+    </div>
+
+    <div class="down">&#8595;</div>
+
+    <div class="card try">
+      <div class="kicker">Scope_try</div>
+      <div class="name">The whole flow body</div>
+      <div class="sub">Handled results are set in <code>outcome</code> as the body runs - including a rebuild the child flow reports as <code>Failed</code>.</div>
+      <div class="chips">
+        <span class="chip g">Created &middot; Added &middot; Removed &middot; Rebuilt &middot; Deleted</span>
+        <span class="chip y">AlreadyExists &middot; Skipped &middot; WrongCapacity &middot; Suspended &middot; StillExcepted &middot; NoWorkspace</span>
+        <span class="chip r">Failed - handled</span>
+      </div>
+      <div class="rule"><b>No action inside may run after <i>has failed</i>.</b> It makes the scope report Succeeded and silently skips the Catch. Deliberate exceptions: Initialize <code>Update_status</code> after <code>Activate</code>, Delete <code>Update_policy_row</code> after <code>Deactivate</code>.</div>
+    </div>
+
+    <div class="split arrows"><div class="down">&#8595;</div><div class="down">&#8595;</div></div>
+
+    <div class="split">
+      <div>
+        <div class="branch-head ok">Scope_try succeeded</div>
+        <div class="card ok">
+          <div class="kicker">Scope_catch</div>
+          <div class="name">Skipped</div>
+          <div class="sub">It runs only after <i>has failed</i>, <i>is skipped</i> or <i>has timed out</i>.</div>
+        </div>
+        <div class="down">&#8595;</div>
+        <div class="card ok">
+          <div class="kicker">Compose_result</div>
+          <div class="name">outcome - message</div>
+          <div class="sub">Runs after both scopes on all four statuses, so every non-caught outcome is written to the run history.</div>
+        </div>
+        <span class="badge ok">Run ends Succeeded<small>Green - but <b>Failed</b> here means the change was not published</small></span>
+      </div>
+
+      <div>
+        <div class="branch-head bad">Scope_try failed, skipped or timed out</div>
+        <div class="card bad">
+          <div class="kicker">Scope_catch</div>
+          <div class="name">Record it twice, then fail the run</div>
+          <ol class="steps">
+            <li><b>Compose_error</b> = <code>result('Scope_try')</code> <span class="w">- raw, for the run history only. Never written to a column or log</span></li>
+            <li><b>Filter_failed</b> - entries whose <code>status</code> is <code>Failed</code></li>
+            <li><b>outcome</b> = <code>Caught</code>; <b>message</b> = <code>action: error | run &lt;run ID&gt;</code></li>
+            <li><b>If <code>policyRowId</code> is known</b> - <b>Update_policy_error</b> writes <code>message</code> to <code>ubsppcoe_lasterror</code></li>
+            <li><b>Add_log_row</b> - a <code>Logging</code> row, <b>always</b>: Error, flow name, run link</li>
+            <li><b>Terminate</b>, status <b>Failed</b>, with the same text <span class="w">- without it the run would end green</span></li>
+          </ol>
+        </div>
+        <span class="badge bad">Run ends Failed<small>Red - <code style="background:transparent;border:0;color:#fff;padding:0">Caught</code>. Compose_result does not run on this path</small></span>
+      </div>
+    </div>
+
+    <div class="lands">
+      <h3>Where the evidence lands</h3>
+      <div class="grid">
+        <div class="where hist">
+          <div class="who">Run history</div>
+          <div class="via">The Terminate message, or Compose_result</div>
+          <div class="holds">The real error, one click from the run ID. Red runs are <code>Caught</code>.</div>
+          <div class="not"><b>Cannot:</b> say a green run published anything, or name the connection when every call fails <code>401</code>.</div>
+        </div>
+        <div class="where row">
+          <div class="who">ubsppcoe_lasterror</div>
+          <div class="via">Capacity Policies row</div>
+          <div class="holds"><i>What</i> went wrong - a signpost naming the failed action and the run.</div>
+          <div class="not"><b>Cannot:</b> keep history - the next successful rebuild blanks it. Empty when the row was not yet known.</div>
+        </div>
+        <div class="where log">
+          <div class="who">Logging</div>
+          <div class="via">Platform team's table, insert only</div>
+          <div class="holds"><i>That</i> it went wrong, which flow, and a link to the run.</div>
+          <div class="not"><b>Cannot:</b> say why - there is no message column. Never read back by any flow.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnotes">
+      <div><b>Nothing retries.</b> Fabric calls keep the default retry for 408, 429 and 5xx. After that a failure stays until someone re-runs the flow or runs <code>MIG_RebuildAllCapacityPolicies</code>.</div>
+      <div><b>One run at a time.</b> The five event flows run at concurrency degree 1, so a bulk change queues rather than collides.</div>
+      <div><b>The rebuild has no Catch.</b> <code>RebuildCapacityPolicyRules</code> answers <code>Outcome = Failed</code>, ends Succeeded, and stamps Fabric's error on the row itself.</div>
+      <div><b>Nothing alerts anyone.</b> A red run, a filled column and a <code>Logging</code> row are only seen by someone who goes and looks.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

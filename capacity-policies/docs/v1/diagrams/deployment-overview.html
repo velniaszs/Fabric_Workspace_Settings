@@ -1,0 +1,238 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Deploying Fabric Capacity Policies</title>
+<style>
+  :root {
+    --ink: #1b1f2a;
+    --muted: #5b6475;
+    --line: #e3e7ef;
+    --sol: #1f6feb;
+    --sol-bg: #f1f6ff;
+    --tbl: #c98a00;
+    --tbl-bg: #fff8e6;
+    --env: #d64545;
+    --env-bg: #fdf1f1;
+    --go: #2e9e5b;
+    --go-bg: #f0faf4;
+    --pre: #6b7488;
+    --pre-bg: #f6f7fa;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 6px;
+    background: #fff;
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+  }
+  .sheet {
+    width: 960px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .masthead {
+    background: linear-gradient(110deg, #0b2a5b 0%, #1f6feb 55%, #39b6e8 100%);
+    color: #fff;
+    padding: 22px 28px;
+  }
+  .masthead h1 { margin: 0; font-size: 23px; letter-spacing: .2px; }
+  .masthead p { margin: 6px 0 0; font-size: 14px; opacity: .92; }
+  .body { padding: 22px 26px 26px; }
+
+  h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .where { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+  .box {
+    border: 1px solid var(--line);
+    border-top: 6px solid var(--line);
+    border-radius: 12px;
+    padding: 13px 15px 14px;
+  }
+  .box.sol { border-top-color: var(--sol); background: var(--sol-bg); }
+  .box.tbl { border-top-color: var(--tbl); background: var(--tbl-bg); }
+  .box.env { border-top-color: var(--env); background: var(--env-bg); }
+  .box .kicker {
+    font-size: 10.5px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    font-weight: 800;
+  }
+  .sol .kicker { color: var(--sol); }
+  .tbl .kicker { color: #9a6a00; }
+  .env .kicker { color: var(--env); }
+  .box .name { font-size: 15.5px; font-weight: 800; margin-top: 3px; line-height: 1.3; }
+  .box .sub { font-size: 12.3px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+  .box ul { margin: 9px 0 0; padding: 0; list-style: none; }
+  .box li {
+    font-size: 12.8px;
+    line-height: 1.4;
+    padding: 6px 9px;
+    margin-top: 6px;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+  }
+  .box li b { display: block; font-size: 13px; }
+  .box li span { color: var(--muted); font-size: 12px; }
+  code {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11.5px;
+    color: #2b3346;
+  }
+
+  .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+  .step {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    gap: 10px;
+    align-items: start;
+    border: 1px solid var(--line);
+    border-left: 6px solid var(--line);
+    border-radius: 11px;
+    padding: 10px 12px;
+    background: #fff;
+  }
+  .step .n {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px; color: #fff;
+  }
+  .step .t { font-size: 14px; font-weight: 800; line-height: 1.3; }
+  .step .d { font-size: 12.3px; color: #3a4254; line-height: 1.42; margin-top: 2px; }
+  .step.pre { border-left-color: var(--pre); background: var(--pre-bg); }
+  .step.pre .n { background: var(--pre); }
+  .step.tbl { border-left-color: var(--tbl); background: var(--tbl-bg); }
+  .step.tbl .n { background: var(--tbl); }
+  .step.sol { border-left-color: var(--sol); background: var(--sol-bg); }
+  .step.sol .n { background: var(--sol); }
+  .step.env { border-left-color: var(--env); background: var(--env-bg); }
+  .step.env .n { background: var(--env); }
+  .step.go { border-left-color: var(--go); background: var(--go-bg); }
+  .step.go .n { background: var(--go); }
+
+  .order {
+    margin-top: 12px;
+    border: 1px dashed #bfe6cf;
+    border-radius: 11px;
+    padding: 11px 14px;
+    background: #fbfefc;
+  }
+  .order .lbl { font-size: 12.5px; font-weight: 800; color: #1f7a45; margin-bottom: 8px; }
+  .flowrow { display: flex; align-items: stretch; gap: 8px; }
+  .fl {
+    flex: 1;
+    border: 1px solid #cfe9da;
+    border-radius: 9px;
+    background: #fff;
+    padding: 7px 9px;
+    font-size: 11.8px;
+    line-height: 1.35;
+  }
+  .fl b { display: block; font-size: 12.3px; color: var(--ink); }
+  .fl span { color: var(--muted); }
+  .fl.last { border-color: #9fd6b6; background: #f0faf4; }
+  .arr { align-self: center; font-size: 20px; color: #9aa6bd; font-weight: 700; }
+
+  .footnotes {
+    margin-top: 20px;
+    border-top: 1px solid var(--line);
+    padding-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 22px;
+  }
+  .footnotes div { font-size: 12.6px; color: #333a4a; line-height: 1.45; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="masthead">
+    <h1>Deploying Fabric Capacity Policies to a new environment</h1>
+    <p>What travels with the solution, what has to be created or set in the target, and the order to do it in.</p>
+  </div>
+
+  <div class="body">
+    <h3>Where each component lives - and whether it travels</h3>
+    <div class="where">
+      <div class="box sol">
+        <div class="kicker">Travels with the export</div>
+        <div class="name">UBS Workspace Provisioning</div>
+        <div class="sub">Publisher prefix <code>ubsppcoe</code></div>
+        <ul>
+          <li><b>11 cloud flows</b><span>All named <code>Fabric Pol - &hellip;</code> - 7 BAU, 4 <code>MIG_</code></span></li>
+          <li><b>7 environment variables</b><span>Definitions and Default Values only</span></li>
+          <li><b>3 connection references</b><span>Fabric, Dataverse, Outlook - not the connections</span></li>
+          <li><b>Trigger settings</b><span>Inside each flow - still check Scope = Organization</span></li>
+        </ul>
+      </div>
+      <div class="box tbl">
+        <div class="kicker">Does not travel</div>
+        <div class="name">Common Data Services Default Solution</div>
+        <div class="sub">Every table the flows use</div>
+        <ul>
+          <li><b>Create in the target</b><span>Capacity Policies, Policy Item Types, Policy Exceptions</span></li>
+          <li><b>Must already exist</b><span><code>ubsppcoe_Node</code>, <code>ubsppcoe_Workspace</code>, <code>Logging</code> - platform team</span></li>
+          <li><b>Or move them</b><span>The three capacity-policy tables can be added to a solution that travels</span></li>
+        </ul>
+      </div>
+      <div class="box env">
+        <div class="kicker">Never travels</div>
+        <div class="name">Set in every environment</div>
+        <div class="sub">A solution imports cleanly without any of these</div>
+        <ul>
+          <li><b>Connections</b><span>Signed in as <i>workspace provisioning</i></span></li>
+          <li><b>Variable Current Values</b><span><code>PolicyMailRecipients</code> differs on purpose</span></li>
+          <li><b>Table data</b><span><code>PolicyItemTypes.csv</code>, <code>PolicyExceptions.csv</code></span></li>
+          <li><b>Fabric</b><span>Holder workspace, Contributor on it, Capacity Admin</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Deployment order</h3>
+    <div class="steps">
+      <div class="step pre"><div class="n">1</div><div><div class="t">Prerequisites</div><div class="d">Service account, holder workspace and Fabric roles, <code>ubsppcoe</code> publisher, DLP, platform tables with exact names.</div></div></div>
+      <div class="step sol"><div class="n">5</div><div><div class="t">Import UBS Workspace Provisioning</div><div class="d">Or rebuild every flow from its spec. Confirm every flow is Off afterwards.</div></div></div>
+      <div class="step tbl"><div class="n">2</div><div><div class="t">Create the three tables</div><div class="d">Primary column set before saving, <code>active</code> default No, nothing Required. Publish all customizations.</div></div></div>
+      <div class="step env"><div class="n">6</div><div><div class="t">Create the three connections</div><div class="d">As the service account. Smoke-test <code>GET /v1/capacities</code> - a short list means the wrong account.</div></div></div>
+      <div class="step tbl"><div class="n">3</div><div><div class="t">Seed Policy Item Types</div><div class="d">14 rows from <code>PolicyItemTypes.csv</code>, all Active = Yes.</div></div></div>
+      <div class="step env"><div class="n">7</div><div><div class="t">Set Current Values</div><div class="d">All seven variables. <code>PolicyApiBeta</code> = No until public preview.</div></div></div>
+      <div class="step tbl"><div class="n">4</div><div><div class="t">Seed Policy Exceptions</div><div class="d">Delete the EXAMPLE rows. Holder workspace first. Before any rebuild.</div></div></div>
+      <div class="step sol"><div class="n">8</div><div><div class="t">Trigger Scope = Organization</div><div class="d">On all five Dataverse triggers, or they never fire - silently.</div></div></div>
+    </div>
+
+    <div class="order">
+      <div class="lbl">9 &nbsp;Turn flows on - callees before callers, event flows last</div>
+      <div class="flowrow">
+        <div class="fl"><b>RebuildCapacityPolicyRules</b><span>Child - now</span></div>
+        <div class="arr">&rsaquo;</div>
+        <div class="fl"><b>ListCapacityPolicySets</b><span>Read-only - now</span></div>
+        <div class="arr">&rsaquo;</div>
+        <div class="fl"><b>DeleteCapacityPolicySet</b><span>Before registration</span></div>
+        <div class="arr">&rsaquo;</div>
+        <div class="fl"><b>MIG_ flows</b><span>One at a time during cutover, then off</span></div>
+        <div class="arr">&rsaquo;</div>
+        <div class="fl last"><b>4 event flows</b><span>Migration Phase 7.1 - BAU starts</span></div>
+      </div>
+    </div>
+
+    <div class="footnotes">
+      <div><b>Nothing in steps 1-8 changes anybody's access.</b> The first irreversible moment is activation, during migration.</div>
+      <div><b>A wrong connection fails quietly.</b> Signed in as the importer, the flows run - as that person, seeing only their capacities.</div>
+      <div><b>A blank variable is never safe.</b> It silently builds a malformed URL, or stops a flow publishing. Set a Current Value on all seven.</div>
+      <div><b>After cutover</b> delete three <code>MIG_</code> flows; keep <code>MIG_RebuildAllCapacityPolicies</code>, switched off.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

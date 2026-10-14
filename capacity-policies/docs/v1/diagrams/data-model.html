@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Data model and ownership</title>
+<style>
+  :root {
+    --ink: #1b1f2a;
+    --muted: #5b6475;
+    --line: #e3e7ef;
+    --plat: #7a3ec8;
+    --plat-bg: #f6f1fd;
+    --ours: #0f8a7e;
+    --ours-bg: #eff9f7;
+    --fab: #1f6feb;
+    --wire: #6b7385;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    background: #fff;
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+  }
+  .sheet {
+    width: 1120px;
+    margin: 0;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 10px 34px rgba(24, 33, 57, .10);
+    overflow: hidden;
+  }
+  .masthead {
+    background: linear-gradient(110deg, #3a1a6b 0%, #7a3ec8 40%, #0f8a7e 100%);
+    color: #fff;
+    padding: 22px 32px;
+  }
+  .masthead h1 { margin: 0; font-size: 24px; }
+  .masthead p { margin: 6px 0 0; font-size: 14px; opacity: .93; }
+
+  .board { position: relative; padding: 22px 32px 10px 56px; }
+  .zones { display: grid; grid-template-columns: 1fr 1fr; column-gap: 150px; }
+  .zone-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .zone-head b { font-size: 12.5px; letter-spacing: .09em; text-transform: uppercase; }
+  .zone-head span { font-size: 12px; color: var(--muted); }
+  .zone.plat .zone-head b { color: var(--plat); }
+  .zone.ours .zone-head b { color: var(--ours); }
+  .stack { display: flex; flex-direction: column; gap: 18px; }
+
+  .tbl {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    overflow: hidden;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05);
+    position: relative;
+    z-index: 2;
+  }
+  .tbl .hd { padding: 9px 13px 8px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .plat .tbl .hd { background: var(--plat-bg); border-top: 4px solid var(--plat); }
+  .ours .tbl .hd { background: var(--ours-bg); border-top: 4px solid var(--ours); }
+  .tbl .name { font-size: 15px; font-weight: 800; }
+  .tbl .lname { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; color: var(--muted); margin-top: 1px; }
+  .badge {
+    font-size: 10px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 999px; color: #fff; white-space: nowrap; margin-top: 2px;
+  }
+  .badge.ro { background: var(--plat); }
+  .badge.ins { background: #9b6fd6; }
+  .badge.rw { background: var(--ours); }
+  .badge.hand { background: #56a79d; }
+
+  .row {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    padding: 4px 13px;
+    border-bottom: 1px solid #f1f3f7;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+  .row:last-child { border-bottom: none; }
+  .key {
+    font-size: 9.5px; font-weight: 800; letter-spacing: .05em; text-align: center;
+    border-radius: 4px; padding: 1px 0; color: #fff; align-self: center;
+  }
+  .key.pk { background: #8b93a5; }
+  .key.fk { background: #c2410c; }
+  .key.gid { background: var(--fab); }
+  .key.flag { background: #d99a00; }
+  .key.none { background: transparent; }
+  .col code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11.3px; font-weight: 700; color: #2b3346; }
+  .col .note { color: var(--muted); }
+  .row.hot { background: #f3f8ff; }
+
+  svg.wires { position: absolute; left: 0; top: 0; z-index: 1; overflow: visible; }
+  .lbl {
+    position: absolute; z-index: 3;
+    font-size: 11px; font-weight: 700; line-height: 1.3;
+    background: #fff; border: 1px solid #d5dbe6; border-radius: 6px;
+    padding: 3px 7px; color: #3b4356; text-align: center; width: 132px;
+  }
+  .lbl.dash { border-style: dashed; color: var(--fab); border-color: #a9c6f5; }
+  .lbl.solid { color: #c2410c; border-color: #f0c2a6; }
+
+  .feeds { margin: 14px 32px 0; border-top: 1px solid var(--line); padding-top: 14px; }
+  .feeds h3 { margin: 0 0 10px; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .feeds .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .feed { border: 1px solid var(--line); border-left: 6px solid; border-radius: 10px; padding: 9px 12px; font-size: 12.3px; line-height: 1.45; }
+  .feed b { font-size: 13px; display: block; margin-bottom: 2px; }
+  .feed code { font-family: "Cascadia Mono", Consolas, monospace; font-size: 11px; background: #f3f5f9; border-radius: 3px; padding: 0 3px; }
+  .feed.r1 { border-left-color: #d64545; background: #fdf1f1; }
+  .feed.r2 { border-left-color: #2e9e5b; background: #f0faf4; }
+  .feed.r3 { border-left-color: #9456d4; background: #f7f1fd; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; padding: 12px 32px 20px; font-size: 11.5px; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 24px; height: 0; border-top: 2px solid var(--wire); }
+  .legend i.d { border-top: 2px dashed var(--fab); }
+  .legend .k { font-size: 9.5px; font-weight: 800; color: #fff; border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="masthead">
+    <h1>Data model and ownership</h1>
+    <p>Six Dataverse tables, all in the Common Data Services Default Solution. The platform team's three are read (or appended to) and never changed; the three capacity-policy tables hold the map, the approved item types and the exceptions.</p>
+  </div>
+
+  <div class="board" id="board">
+    <svg class="wires" id="wires"></svg>
+    <div class="zones">
+      <div class="zone plat">
+        <div class="zone-head"><b>Platform team</b><span>owned by the platform team - never changed by any flow</span></div>
+        <div class="stack">
+          <div class="tbl" id="t-node">
+            <div class="hd"><div><div class="name">Node</div><div class="lname">ubsppcoe_Node &middot; one row per capacity</div></div><span class="badge ro">read only</span></div>
+            <div class="row" id="node-key"><span class="key pk">ROW KEY</span><span class="col"><code>ubsppcoe_nodeid</code> <span class="note">&middot; Dataverse id, not the capacity</span></span></div>
+            <div class="row hot" id="node-guid"><span class="key gid">FABRIC</span><span class="col"><code>ubsppcoe_nodeuniqueid</code> <span class="note">&middot; the Fabric capacity GUID</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_nodename</code> <span class="note">&middot; display name</span></span></div>
+            <div class="row"><span class="key flag">STATE</span><span class="col"><code>ubsppcoe_statecode</code> <span class="note">&middot; 2 = deleted, any other = live</span></span></div>
+          </div>
+
+          <div class="tbl" id="t-ws">
+            <div class="hd"><div><div class="name">Workspace</div><div class="lname">ubsppcoe_Workspace &middot; one row per workspace</div></div><span class="badge ro">read only</span></div>
+            <div class="row"><span class="key pk">ROW KEY</span><span class="col"><code>ubsppcoe_workspaceuniqueid</code> <span class="note">&middot; never sent to Fabric</span></span></div>
+            <div class="row hot" id="ws-guid"><span class="key gid">FABRIC</span><span class="col"><code>ubsppcoe_workspaceid</code> <span class="note">&middot; Fabric workspace GUID, published</span></span></div>
+            <div class="row" id="ws-node"><span class="key fk">LOOKUP</span><span class="col"><code>ubsppcoe_nodeid</code> <span class="note">&middot; &rarr; Node: its capacity</span></span></div>
+            <div class="row"><span class="key flag">OAP</span><span class="col"><code>ubsppcoe_oapenabled</code> <span class="note">&middot; Yes = rule 2</span></span></div>
+            <div class="row"><span class="key flag">STATE</span><span class="col"><code>ubsppcoe_statecode</code> <span class="note">&middot; 1 = live, 2 = deleted</span></span></div>
+          </div>
+
+          <div class="tbl" id="t-log">
+            <div class="hd"><div><div class="name">Logging</div><div class="lname">shared error log &middot; columns by display name</div></div><span class="badge ins">insert only</span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>Log Category</code> <span class="note">&middot; always <i>Error</i></span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>Log Source Name</code> <span class="note">&middot; the flow's display name</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>Log Source URL</code> <span class="note">&middot; link to the failed run</span></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="zone ours">
+        <div class="zone-head"><b>Capacity policies</b><span>created for this solution</span></div>
+        <div class="stack">
+          <div class="tbl" id="t-cp">
+            <div class="hd"><div><div class="name">Capacity Policies</div><div class="lname">ubsppcoe_CapacityPolicy &middot; one row per governed capacity</div></div><span class="badge rw">flows write</span></div>
+            <div class="row hot" id="cp-cap"><span class="key gid">FABRIC</span><span class="col"><code>ubsppcoe_capacityid</code> <span class="note">&middot; capacity GUID, the flow key</span></span></div>
+            <div class="row" id="cp-node"><span class="key fk">LOOKUP</span><span class="col"><code>ubsppcoe_node</code> <span class="note">&middot; &rarr; Node, set by Initialize</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_policysetid</code>, <code>&hellip;name</code> <span class="note">&middot; the Fabric policy set</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_status</code> <span class="note">&middot; Active, Inactive, Suspended, Deleted</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_lastrebuild</code>, <code>ubsppcoe_lasterror</code></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>&hellip;workspacecount</code>, <code>&hellip;exceptioncount</code>, <code>&hellip;rulecount</code> <span class="note">&middot; cached at rebuild</span></span></div>
+          </div>
+
+          <div class="tbl" id="t-pe">
+            <div class="hd"><div><div class="name">Policy Exceptions</div><div class="lname">ubsppcoe_PolicyException &middot; rule 3</div></div><span class="badge hand">by hand</span></div>
+            <div class="row hot" id="pe-guid"><span class="key gid">FABRIC</span><span class="col"><code>ubsppcoe_workspaceid</code> <span class="note">&middot; Fabric workspace GUID, the key</span></span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_reason</code>, <code>ubsppcoe_approvedby</code></span></div>
+            <div class="row"><span class="key flag">ACTIVE</span><span class="col"><code>ubsppcoe_active</code> <span class="note">&middot; default No; revoke by setting No</span></span></div>
+          </div>
+
+          <div class="tbl" id="t-pit">
+            <div class="hd"><div><div class="name">Policy Item Types</div><div class="lname">ubsppcoe_PolicyItemType &middot; rule 2</div></div><span class="badge hand">by hand</span></div>
+            <div class="row"><span class="key none"></span><span class="col"><code>ubsppcoe_itemtype</code> <span class="note">&middot; Fabric item type, sent verbatim</span></span></div>
+            <div class="row"><span class="key flag">ACTIVE</span><span class="col"><code>ubsppcoe_active</code> <span class="note">&middot; default No</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="feeds">
+    <h3>What each rebuild publishes to Fabric, per capacity</h3>
+    <div class="grid">
+      <div class="feed r1"><b>Rule 1 - deny all, Power BI only</b>The sentinel workspace GUID from the <code>PolicySentinelWorkspaceId</code> environment variable. Read from no table.</div>
+      <div class="feed r2"><b>Rule 2 - OAP workspaces</b><code>Workspace.ubsppcoe_workspaceid</code> where the Node is this capacity, live and OAP-enabled, <b style="display:inline;font-size:12.3px">and</b> every active <code>ubsppcoe_itemtype</code>.</div>
+      <div class="feed r3"><b>Rule 3 - exceptions</b>Active <code>Policy Exceptions</code> GUIDs whose workspace is live on this capacity's Node. The OAP flag is not consulted.</div>
+    </div>
+  </div>
+
+  <div class="legend">
+    <span><i></i>Dataverse lookup</span>
+    <span><i class="d"></i>matched by the same Fabric GUID, no lookup</span>
+    <span><b class="k" style="background:#1f6feb">FABRIC</b>a Fabric GUID</span>
+    <span><b class="k" style="background:#8b93a5">ROW KEY</b>Dataverse key, never sent to Fabric</span>
+    <span><b class="k" style="background:#d99a00">STATE</b>filter column</span>
+  </div>
+</div>
+
+<script>
+const board = document.getElementById('board');
+const svg = document.getElementById('wires');
+const NS = 'http://www.w3.org/2000/svg';
+
+function box(id) {
+  const b = board.getBoundingClientRect();
+  const r = document.getElementById(id).getBoundingClientRect();
+  return { l: r.left - b.left, r: r.right - b.left, t: r.top - b.top, b: r.bottom - b.top, cy: (r.top + r.bottom) / 2 - b.top };
+}
+function path(d, dashed, colour) {
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke', colour);
+  p.setAttribute('stroke-width', '2');
+  if (dashed) p.setAttribute('stroke-dasharray', '6 5');
+  svg.appendChild(p);
+}
+function dot(x, y, colour) {
+  const c = document.createElementNS(NS, 'circle');
+  c.setAttribute('cx', x); c.setAttribute('cy', y); c.setAttribute('r', 4); c.setAttribute('fill', colour);
+  svg.appendChild(c);
+}
+function arrow(x, y, dir, colour) {
+  const p = document.createElementNS(NS, 'path');
+  const d = dir === 'left' ? `M${x} ${y} l9 -5 v10 z` : `M${x} ${y} l-9 -5 v10 z`;
+  p.setAttribute('d', d); p.setAttribute('fill', colour);
+  svg.appendChild(p);
+}
+function label(text, x, y, cls) {
+  const d = document.createElement('div');
+  d.className = 'lbl ' + cls;
+  d.innerHTML = text;
+  board.appendChild(d);
+  d.style.left = (x - d.offsetWidth / 2) + 'px';
+  d.style.top = (y - d.offsetHeight / 2) + 'px';
+}
+
+function draw() {
+  const bb = board.getBoundingClientRect();
+  svg.setAttribute('width', bb.width);
+  svg.setAttribute('height', bb.height);
+  const ORANGE = '#c2410c', BLUE = '#1f6feb';
+
+  // Capacity Policies.node -> Node row key (lookup)
+  const cpNode = box('cp-node'), nodeKey = box('node-key');
+  const gapMid = (box('t-node').r + box('t-cp').l) / 2;
+  path(`M${box('t-cp').l} ${cpNode.cy} H${gapMid + 18} V${nodeKey.cy} H${box('t-node').r + 8}`, false, ORANGE);
+  dot(box('t-cp').l, cpNode.cy, ORANGE);
+  arrow(box('t-node').r, nodeKey.cy, 'left', ORANGE);
+
+  // Capacity Policies.capacityid = Node.nodeuniqueid (same GUID)
+  const cpCap = box('cp-cap'), nodeGuid = box('node-guid');
+  path(`M${box('t-cp').l} ${cpCap.cy} H${gapMid - 18} V${nodeGuid.cy} H${box('t-node').r}`, true, BLUE);
+  dot(box('t-cp').l, cpCap.cy, BLUE); dot(box('t-node').r, nodeGuid.cy, BLUE);
+  label('Node lookup', gapMid + 18, cpNode.cy + 34, 'solid');
+  label('same capacity GUID', gapMid - 18, nodeKey.cy - 36, 'dash');
+
+  // Policy Exceptions.workspaceid = Workspace.workspaceid (same GUID)
+  const peGuid = box('pe-guid'), wsGuid = box('ws-guid');
+  path(`M${box('t-pe').l} ${peGuid.cy} H${gapMid} V${wsGuid.cy} H${box('t-ws').r}`, true, BLUE);
+  dot(box('t-pe').l, peGuid.cy, BLUE); dot(box('t-ws').r, wsGuid.cy, BLUE);
+  label('same workspace GUID<br>no lookup', gapMid, (peGuid.cy + wsGuid.cy) / 2 + (peGuid.cy > wsGuid.cy ? 0 : 0), 'dash');
+
+  // Workspace.nodeid -> Node row key (lookup), routed down the left margin
+  const wsNode = box('ws-node');
+  const xL = box('t-node').l - 24;
+  path(`M${box('t-ws').l} ${wsNode.cy} H${xL} V${nodeKey.cy} H${box('t-node').l - 8}`, false, ORANGE);
+  dot(box('t-ws').l, wsNode.cy, ORANGE);
+  arrow(box('t-node').l, nodeKey.cy, 'right', ORANGE);
+}
+window.addEventListener('load', draw);
+</script>
+</body>
+</html>
