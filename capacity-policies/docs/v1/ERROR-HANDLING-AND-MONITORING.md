@@ -2,7 +2,7 @@
 
 ## Scope of this document
 
-This document describes how the **Fabric Capacity Policies** flows handle failure, what each outcome means, where the evidence lands, and what a person has to check because nothing else will. It consolidates material from the architecture, troubleshooting, operations and handover documents. Where they disagree, it follows the current build specifications under [bau/](../../bau/) and [helper/](../../helper/) and [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md).
+This document describes how the **Fabric Capacity Policies** flows handle failure, what each outcome means, where the evidence lands, and what a person has to check because nothing else will. It brings together the failure-related material behind the solution and follows the current flow designs described in the *Architecture* document.
 
 **Nothing in the solution alerts anyone today.** No flow runs on a schedule, no BAU failure sends a mail, and nothing retries a failed run. Every failure is visible only to someone who goes and looks - this document says where to look.
 
@@ -36,11 +36,9 @@ Flows are referred to by short name. Every display name in the **UBS Workspace P
 
 ### 1.1 One shape, shared by the five event flows
 
-**The five event flows - `InitializeCapacityPolicySet`, `DeleteCapacityPolicySet`, `AddWorkspaceToPolicy`, `RemoveWorkspaceFromPolicy` and `RebuildOnExceptionChange` - handle failure the same way.** None of its details is arbitrary: each was established by experiment against the platform ([PLATFORM-FINDINGS.md](../PLATFORM-FINDINGS.md) sections 1-2).
+**The five event flows - `InitializeCapacityPolicySet`, `DeleteCapacityPolicySet`, `AddWorkspaceToPolicy`, `RemoveWorkspaceFromPolicy` and `RebuildOnExceptionChange` - handle failure the same way.** None of its details is arbitrary: each was established by experiment against the platform.
 
 ![The shared Try/Catch pattern](./diagrams/error-handling.png)
-
-> Source for the diagram: [`diagrams/error-handling.html`](./diagrams/error-handling.html). Re-render it to `error-handling.png` after any edit.
 
 | Part | What it does |
 |---|---|
@@ -89,7 +87,7 @@ Four rules keep the shape working:
 
 **"The rebuild failed" reaches a parent in two different ways.** When the child flow handles a Fabric error and answers `Outcome = Failed`, the parent reports `Failed` and stays green - the common case. When the child itself crashes, times out or is switched off, the parent's `Run_rebuild` action fails and the parent reports `Caught` - rare, and red.
 
-`Failed` is green on purpose: the error is already on the `Capacity Policies` row, and a run history that is mostly red hides the real failures. The specs record two open choices - **To confirm**: whether `Failed` should end red (a `Terminate` on the *No* branch of `Condition_rebuild_ok`), and whether `StillExcepted` and `NoWorkspace` should end red so a human sees them.
+`Failed` is green on purpose: the error is already on the `Capacity Policies` row, and a run history that is mostly red hides the real failures. Two choices remain open - **To confirm**: whether `Failed` should end red (a `Terminate` on the *No* branch of `Condition_rebuild_ok`), and whether `StillExcepted` and `NoWorkspace` should end red so a human sees them.
 
 ### 1.4 Deliberate exceptions to "no *has failed*"
 
@@ -143,7 +141,7 @@ Three actions run after *has failed* on purpose, because the failure is fully ha
 | Flow | Outcomes | Green / red | What each needs from a human |
 |---|---|---|---|
 | `InitializeCapacityPolicySet` | `Created`, `AlreadyExists`, `Skipped`, `Failed`, `Caught` | Red: `Caught` only | `Created` - provisioning must tell the capacity owner it is now Power BI-only. `AlreadyExists` - nothing; most runs end here. `Skipped` - read the message: grant Capacity Admin, resume the capacity, or accept a non-F SKU, then have the Node row re-saved, because nothing retries. `Failed` - activation failed; the set is registered and `Inactive`: fix the cause and activate the existing set (re-running answers `AlreadyExists`; method **To confirm**). `Caught` - open the run from `Logging`; if `Create_policy_set` succeeded, look for an orphan in the holder workspace |
-| `DeleteCapacityPolicySet` | `NotGoverned`, `Deleted`, `Suspended`, `Failed`, `Caught` | Red: `Caught` only | `NotGoverned`, `Deleted` - nothing. `Suspended` - the capacity is now ungoverned and the inventory disagrees with Fabric: reconcile with the platform team. `Failed` - the set still enforces on a retired capacity: finish the cleanup by hand ([runbook](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) section 2). `Caught` - the flow may not have known what to delete: check the holder workspace and the row |
+| `DeleteCapacityPolicySet` | `NotGoverned`, `Deleted`, `Suspended`, `Failed`, `Caught` | Red: `Caught` only | `NotGoverned`, `Deleted` - nothing. `Suspended` - the capacity is now ungoverned and the inventory disagrees with Fabric: reconcile with the platform team. `Failed` - the set still enforces on a retired capacity: finish the cleanup by hand - deactivate the set (only while the capacity is still in Fabric), delete the policy set item from the holder workspace, then set the row to `Deleted`. `Caught` - the flow may not have known what to delete: check the holder workspace and the row |
 | `AddWorkspaceToPolicy` | `Added`, `NotFound`, `WrongCapacity`, `NotEnabled`, `Failed`, `Caught` | Red: `Caught` only | `Added`, `NotEnabled` - nothing. `WrongCapacity` - nothing for an ungoverned capacity; on a governed one, check `ubsppcoe_capacityid` against the Node. `NotFound` - blank or duplicate workspace GUID: an inventory defect for the platform team. `Failed` - approved in Dataverse but not in Fabric: re-run, or rebuild the capacity. `Caught` - open the run |
 | `RemoveWorkspaceFromPolicy` | `Removed`, `StillEnabled`, `StillExcepted`, `Failed`, `Caught` | Red: `Caught` only | `Removed` - nothing. `StillEnabled` - another row still has the OAP flag: the platform team's. `StillExcepted` - the workspace can still create anything: deactivate its `Policy Exceptions` row if removal was meant. `Failed` and `Caught` - **access may still be live**: re-run or rebuild the same day |
 | `RebuildOnExceptionChange` | `Rebuilt`, `NoWorkspace`, `Failed`, `Caught` | Red: `Caught` only | `NoWorkspace` - the exception grants nothing: check `ubsppcoe_workspaceid` on the row. `Failed` - rebuild the capacity by hand. `Caught` - open the run from `Logging`; `ubsppcoe_lasterror` is often empty here |
@@ -151,7 +149,7 @@ Three actions run after *has failed* on purpose, because the failure is fully ha
 | `ListCapacityPolicySets` | `PolicySetsJson`, `ErrorMessage` | Green | A populated `ErrorMessage` with `[]` means the read failed, not that the estate is empty |
 | `MIG_RebuildAllCapacityPolicies` | Per capacity `Rebuilt` or `Failed`; a failure mail | A failed capacity does not stop the loop | Act on every capacity in the mail. **A clean run sends nothing** - confirm with `ubsppcoe_lastrebuild` |
 
-Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) sections [4](./ARCHITECTURE-v2.md#4-what-each-flow-does) and [5.3](./ARCHITECTURE-v2.md#53-fabric-pol---mig_rebuildallcapacitypolicies) is the short version of this table.
+Each flow's "three things to know" in the *Architecture* document, sections 4 and 5.3, is the short version of this table.
 
 ---
 
@@ -201,7 +199,7 @@ Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md)
 | A Node **soft-delete reversed** | Initialize answers `AlreadyExists` | The capacity is ungoverned while looking registered (`Suspended`) | No tool; reactivate by hand - **To confirm** method |
 | **Our policy set deactivated or replaced** in Fabric | Fabric changes fire nothing, and no flow reads activation state | Another set governs the capacity, or none does. **Undetectable** | Holder-workspace check (4.2) |
 | A column **renamed** on the platform team's tables | Nothing reads the schema | Filters return nothing; capacities lock silently | The platform team - a rebuild cannot fix it |
-| A policy set created with **no `Capacity Policies` row** (Initialize `Caught` after `Create_policy_set`) | The Catch does not clean up, and the drift scan was discarded | An orphan in the holder workspace | Holder-workspace check (4.2); the `Logging` row is the only trace |
+| A policy set created with **no `Capacity Policies` row** (Initialize `Caught` after `Create_policy_set`) | The Catch does not clean up, and no flow scans for orphans | An orphan in the holder workspace | Holder-workspace check (4.2); the `Logging` row is the only trace |
 
 ### 4.1 The estate-wide repair
 
@@ -217,7 +215,7 @@ Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md)
 
 ### 4.2 The holder-workspace check
 
-**This is the only check that finds a policy set no longer in force** ([HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) A2). Running the rebuild does not replace it.
+**This is the only check that finds a policy set no longer in force.** Running the rebuild does not replace it.
 
 1. Open the holder workspace named by `PolicyHolderWorkspaceId`.
 2. For each governed capacity, confirm **exactly one** active policy set, and that it is ours - `pol_<capacity name>`, with the id in `ubsppcoe_policysetid`, and `ubsppcoe_status` = `Active`.
@@ -233,15 +231,15 @@ Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md)
 
 | # | Check | How | How often | Owner |
 |---|---|---|---|---|
-| 1 | **Red runs** (`Caught`) on the five event flows | Run history, or new `Logging` rows from `Fabric Pol - ` flows | Per occurrence - **To confirm** how often someone looks | Unassigned - **To confirm** (A5) |
-| 2 | **Green outcomes that need a human** - `Failed`, `Skipped`, `Suspended`, `StillExcepted`, `StillEnabled`, `NoWorkspace`, `NotFound` | `Compose_result` in run history | **To confirm** | Unassigned - **To confirm** (A5) |
+| 1 | **Red runs** (`Caught`) on the five event flows | Run history, or new `Logging` rows from `Fabric Pol - ` flows | Per occurrence - **To confirm** how often someone looks | Unassigned - **To confirm** |
+| 2 | **Green outcomes that need a human** - `Failed`, `Skipped`, `Suspended`, `StillExcepted`, `StillEnabled`, `NoWorkspace`, `NotFound` | `Compose_result` in run history | **To confirm** | Unassigned - **To confirm** |
 | 3 | **Unhealthy rows** - non-blank `ubsppcoe_lasterror`, stale `ubsppcoe_lastrebuild`, status not `Active` | `ListCapacityPolicySets` app, or the table | **To confirm** | **To confirm** |
-| 4 | **Ungoverned capacities** - live Node rows with no `Capacity Policies` row | Compare the two tables (4.2 step 5) | **To confirm**; also after any API release-stage change | **To confirm** (D2) |
-| 5 | **Holder-workspace check** | Section 4.2 | No agreed cadence - **To confirm** | Unassigned - **To confirm** (A2) |
-| 6 | **Estate-wide rebuild** | Section 4.1 | On demand - after any change in section 4 | Dataverse team - Panuganti, Saikirankumar-Reddy (A1) |
-| 7 | **`Policy Item Types`** against new Fabric item types | Review the table | No agreed cadence - **To confirm** | Unassigned - **To confirm** (A4) |
+| 4 | **Ungoverned capacities** - live Node rows with no `Capacity Policies` row | Compare the two tables (4.2 step 5) | **To confirm**; also after any API release-stage change | **To confirm** |
+| 5 | **Holder-workspace check** | Section 4.2 | No agreed cadence - **To confirm** | Unassigned - **To confirm** |
+| 6 | **Estate-wide rebuild** | Section 4.1 | On demand - after any change in section 4 | Dataverse team - Panuganti, Saikirankumar-Reddy |
+| 7 | **`Policy Item Types`** against new Fabric item types | Review the table | No agreed cadence - **To confirm** | Unassigned - **To confirm** |
 | 8 | **`Policy Exceptions`** - reason and approver present, holder row active, no rows deleted | Review the table | **To confirm** | **To confirm** |
-| 9 | **`PolicyApiBeta`** matches the API's release stage | Section 9 of the [runbook](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) | The same day the service changes stage | **To confirm** |
+| 9 | **`PolicyApiBeta`** matches the API's release stage | Set its **Current Value** in every environment - the *Architecture* document, section 8.6 | The same day the service changes stage | **To confirm** |
 | 10 | **`PolicyMailRecipients`** current, with no leavers | Environment variable, or the group behind it | On every joiner or leaver; before any `MIG_` run | **To confirm** |
 
 **Service-account health.** Every Fabric, Dataverse and Outlook call runs as the `workspace provisioning` user account; there is no service principal and no second credential. **One password, one licence and one Conditional Access rule sit between the estate and a total `401`.**
@@ -288,7 +286,7 @@ Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md)
 
 **Deactivating the capacity's policy set removes all enforcement from that capacity immediately**, and is the one sanctioned way to unlock it.
 
-1. Deactivate the policy set. The documented method is `.\deactivate_policy_set.ps1 -WorkspaceId <holderWorkspaceId> -PolicySetId <policySetId>` from `C:\GIT\ubs-policies`.
+1. Deactivate the policy set with the Fabric REST call `POST /v1/workspaces/{holder}/policySets/{id}/deactivate`, made as the `workspace provisioning` service account - see the *Architecture* document, section 8.
 2. Set that capacity's `ubsppcoe_status` to `Inactive` in `Capacity Policies`, so the table matches Fabric.
 3. Record why, on which capacity, and who decided.
 4. Find out why - `ubsppcoe_rulecount` = 1 means no OAP workspace; one workspace refused means it is not whitelisted or its Node points elsewhere; many capacities refused means a `Policy Item Types` change; everything failing from one moment means `PolicyApiBeta`.
@@ -297,7 +295,7 @@ Each flow's "three things to know" in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md)
 
 The rules stay published while deactivated and rebuilds keep running against them, so re-activating needs no rebuild. **But a deactivated set is exactly the state no signal detects**, so nothing will remind anyone to re-lock the capacity.
 
-> **To confirm before it is needed:** `C:\GIT\ubs-policies` is not part of this handover ([HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) D4), so an accessible method to deactivate - and later re-activate - a policy set must be agreed in advance, along with where the unlock is recorded.
+> **To confirm before it is needed:** no ready-made tool for this call is delivered with the solution, so an accessible method to deactivate - and later re-activate - a policy set must be agreed in advance, along with where the unlock is recorded.
 
 ---
 
@@ -305,14 +303,6 @@ The rules stay published while deactivated and rebuilds keep running against the
 
 | Document | Use it for |
 |---|---|
-| [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) | What the solution is; per-flow "three things to know" (sections 4 and 5) |
-| [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) §6-§7 | Identity and security, data ownership, fail-closed rules |
-| [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) | Symptom, cause and fix in full |
-| [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) | What to do for each lifecycle event, and the emergency unlock |
-| [HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) | Manual obligations, accepted risks and gaps left unbuilt |
-| [PLATFORM-FINDINGS.md](../PLATFORM-FINDINGS.md) | Why the Try/Catch shape is built the way it is |
-| [CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) | `Capacity Policies` columns and the `Logging` table (section 5a) |
-| [SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md) | The service account and what breaks its connection |
-| [API-BETA-SWITCH.md](../API-BETA-SWITCH.md) | The `PolicyApiBeta` switch |
-| [ADR.md](../ADR.md) | The reasoning behind each decision, by question number |
-| [bau/](../../bau/), [helper/](../../helper/), [migration/MIG_RebuildAllCapacityPolicies.md](../../migration/MIG_RebuildAllCapacityPolicies.md) | Build specifications, each with its outcome table and Catch |
+| The *Architecture* document | What the solution is; per-flow "three things to know" (sections 4 and 5); identity, data ownership and fail-closed rules (sections 6 and 7); the Fabric calls and the `PolicyApiBeta` switch (section 8) |
+| The *Deployment guide* | Prerequisites, installation, connections, environment variables and verification after deployment |
+| The *Migration guide* | The one-off cutover of the existing estate, its rollback and its emergency procedure |

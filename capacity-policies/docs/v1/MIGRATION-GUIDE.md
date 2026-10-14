@@ -4,7 +4,7 @@
 
 This guide is the operational how-to for the **one-off cutover** that brings the existing Fabric estate under the **Fabric Capacity Policies** solution. It tells the person running the cutover which flow to run in each phase, with what input, what to check afterwards, when to stop and how to undo it.
 
-It does not explain how the four `MIG_` flows work - that is in [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) section 5 - and it does not repeat their build detail, which is in the flow specifications under [migration/](../../migration/). Day-to-day operation after cutover is in [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md).
+It does not explain how the four `MIG_` flows work - that is in the *Architecture* document section 5 - and it does not repeat their build detail. Day-to-day monitoring after cutover is in the *Error handling and monitoring* guide.
 
 ---
 
@@ -49,8 +49,6 @@ Every published policy set carries the same three rules:
 
 ![Migration phases 0-7](./diagrams/migration-phases.png)
 
-> Source for the diagram: [`diagrams/migration-phases.html`](./diagrams/migration-phases.html). Re-render it with `render-diagram.ps1 migration-phases` after any edit.
-
 **Everything before Phase 5 is inert.** A policy set with no rules, or with rules but deactivated, changes nobody's access. A wrong run in Phases 1-3 is undone by deleting the policy sets from the holder workspace and the rows from `Capacity Policies`, and nobody notices.
 
 **Phase 5 ends that.** An activated policy set with rule 1 and nothing else stops all governed item creation on its capacity; only Power BI items are unaffected. That is why the phases are separate runs with a review gate in front of activation: the gaps between them are where mistakes are caught. **Do not compress the phases.**
@@ -61,7 +59,7 @@ All Fabric calls are made as the `workspace provisioning` service account throug
 
 ## 2. Pre-flight checklist
 
-**Nothing in this section changes anything.** Every item is cheaper to fix now than to discover in Phase 5. The flows, tables and environment variables are assumed to be deployed already, per [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md).
+**Nothing in this section changes anything.** Every item is cheaper to fix now than to discover in Phase 5. The flows, tables and environment variables are assumed to be deployed already, per the *Deployment guide*.
 
 ### 2.1 Flows
 
@@ -71,7 +69,6 @@ All Fabric calls are made as the `workspace provisioning` service account throug
 | F2 | **Leave `Fabric Pol - DeleteCapacityPolicySet` on** | A Node row soft-deleted between registration and activation moves its `Capacity Policies` row to `Deleted` or `Suspended`, which keeps it out of activation. If it cannot be on, see Phase 5.1 |
 | F3 | **Leave `Fabric Pol - RebuildCapacityPolicyRules` on** | It is a child flow; a flow that is off cannot be called as one |
 | F4 | **`Fabric Pol - MIG_RebuildAllCapacityPolicies` off** until Phase 3 | An enabled manual flow is one stray button press from publishing rules before exceptions are seeded |
-| F5 | No `SyncCapacityPolicySets` flow exists | It was discarded on 2026-09-18 ([discarded/SyncCapacityPolicySets.md](../../discarded/SyncCapacityPolicySets.md)). If one exists, it is a leftover: turn it off and delete it |
 
 ### 2.2 Identity and permissions
 
@@ -81,14 +78,14 @@ All Fabric calls are made as the `workspace provisioning` service account throug
 | I2 | The account is **Contributor** on the holder workspace | Creating policy sets, Phase 1 |
 | I3 | The account is **Capacity Admin** on every capacity to be governed | Seeing the capacity at all in Phase 1, and activating it in Phase 5 - the first time the permission is exercised at scale |
 
-Both permissions are granted directly to the account; there is no service principal, app registration or client secret ([SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md) section 2).
+Both permissions are granted directly to the account; there is no service principal, app registration or client secret (see the *Architecture* document section 6).
 
 ### 2.3 Tables and seed data
 
 | # | Table | State required |
 |---|---|---|
 | T1 | `Capacity Policies` | Exists, empty or nearly so. **No rows left over from testing** - a leftover row makes that capacity answer `AlreadyExists` and be silently skipped |
-| T2 | `Policy Item Types` | **Seeded and active**: 14 rows from [input/PolicyItemTypes.csv](../../input/PolicyItemTypes.csv), `Active = Yes` on all of them. An empty or inactive table makes rule 2 carry an empty `item.type` list, which Fabric rejects |
+| T2 | `Policy Item Types` | **Seeded and active**: 14 rows from the seed list of item types (see the *Deployment guide* section 3, Step 3), `Active = Yes` on all of them. An empty or inactive table makes rule 2 carry an empty `item.type` list, which Fabric rejects |
 | T3 | `Policy Exceptions` | Exists. Seeding happens in Phase 2 |
 | T4 | Holder workspace in Fabric | **No policy sets left over from testing** - a leftover set causes a name collision in Phase 1 |
 
@@ -105,16 +102,16 @@ All seven need a **Current Value**, not only a Default Value. A missing one fail
 | `PolicyMaxWorkspacesPerRule` | `49` |
 | `PolicyMaxRulesPerPolicy` | `50` |
 | `PolicyNamePrefix` | `pol_` |
-| `PolicyApiBeta` | **No** while the API is in private preview; **Yes** once it is in public-preview beta ([API-BETA-SWITCH.md](../API-BETA-SWITCH.md)). Pointing the wrong way shows up as a `400`/`404` on every capacity with nothing naming the variable |
+| `PolicyApiBeta` | **No** while the API is in private preview; **Yes** once it is in public-preview beta (see the *Architecture* document section 8.6). Pointing the wrong way shows up as a `400`/`404` on every capacity with nothing naming the variable |
 | `PolicyMailRecipients` | A semicolon-separated list, ideally one distribution group, **read during the migration window**. Read it off the variable - do not assume it is not still pointing at a rehearsal mailbox |
 
 ### 2.5 Estate checks
 
 | # | Check | Why |
 |---|---|---|
-| E1 | **Duplicate capacity display names** | Policy set names are `pol_<capacity display name>`, and Fabric rejects a duplicate with `ItemDisplayNameAlreadyInUse`. If there are any, append the capacity-ID suffix unconditionally in `MIG_InitializeCapacityPolicySet` Step 5a ([spec](../../migration/MIG_InitializeCapacityPolicySet.md)) |
+| E1 | **Duplicate capacity display names** | Policy set names are `pol_<capacity display name>`, and Fabric rejects a duplicate with `ItemDisplayNameAlreadyInUse`. If there are any, append the capacity-ID suffix unconditionally in `MIG_InitializeCapacityPolicySet` Step 5a, where the policy set name is built |
 | E2 | **Where the holder workspace sits** | If it is on a capacity this solution will govern, rule 1 will stop the solution creating policy sets in it, and its `Policy Exceptions` row in Phase 2 is **mandatory**. If it sits on a capacity with no `ubsppcoe_Node` row, nothing governs it. Decide which case applies now |
-| E3 | **Rollback tooling is reachable** | Undoing an activation uses `deactivate_policy_set.ps1` in `C:\GIT\ubs-policies` (section 4). **To confirm:** that repository is not part of this handover ([HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) item D4), so confirm someone on the cutover can run it before Phase 5 |
+| E3 | **Rollback tooling is reachable** | Undoing an activation means deactivating the policy set with the Fabric REST call `POST /v1/workspaces/{holder}/policySets/{id}/deactivate`, made as the `workspace provisioning` service account (section 4; see the *Architecture* document section 8). **To confirm:** the tooling for making this call is not part of this handover, so confirm before Phase 5 that someone on the cutover can make it |
 
 ---
 
@@ -172,7 +169,7 @@ Work through every row of section 2.
 
 **Run:** nothing. This is a data import into `Policy Exceptions`, and it **must happen before Phase 3**. Rule 3 is derived from nothing else.
 
-1. **Prepare the file** from [input/PolicyExceptions.csv](../../input/PolicyExceptions.csv). Its headers are the Dataverse logical names. **Delete its three `EXAMPLE` rows first.**
+1. **Prepare the exceptions list** as a CSV import file (see the *Deployment guide* section 3, Step 4). Its headers are the Dataverse logical names. **Delete its three `EXAMPLE` rows first.**
 2. **Add the holder workspace row first** if section 2.5 E2 says the holder sits on a governed capacity:
 
    | Column | Value |
@@ -184,7 +181,7 @@ Work through every row of section 2.
    | `ubsppcoe_approvedby` | The owner of this solution |
 
    The row only works if the holder workspace has a **`ubsppcoe_Workspace` row under the Node of its capacity**. Without one there is no rule 3 entry and no error. Ask the platform team if it is missing.
-3. **Add the estate's existing exceptions** - from `fabric_workspaces_exceptions.csv` if the migration has one. Take the `workspace_id` column into `ubsppcoe_workspaceid`, set `ubsppcoe_active` to **Yes**, and copy reason and approver. **Do not import `capacity_id`** - the capacity is derived from the workspace's Node at rebuild time - but check that the two agree first: a mismatch is an exception that is about to move capacity on the first rebuild.
+3. **Add the estate's existing exceptions** - from the estate's current exceptions list, if the migration has one. Take its `workspace_id` column into `ubsppcoe_workspaceid`, set `ubsppcoe_active` to **Yes**, and copy reason and approver. **Do not import `capacity_id`** - the capacity is derived from the workspace's Node at rebuild time - but check that the two agree first: a mismatch is an exception that is about to move capacity on the first rebuild.
 4. **Import** through the maker portal: **Tables** > `Policy Exceptions` > **Import** > **Import data from Excel**, file type CSV. Leave the row key `ubsppcoe_policyexceptionid` unmapped.
 5. **Check** that every imported row reads `Active = Yes`. `ubsppcoe_active` defaults to **No**, and an unset flag is the usual reason an exception appears to do nothing.
 
@@ -193,7 +190,7 @@ Work through every row of section 2.
 | | |
 |---|---|
 | **Go** | Row count matches the source list (plus the holder row), all `Active = Yes`, no `EXAMPLE` rows, holder workspace has its `ubsppcoe_Workspace` row |
-| **No-go** | Any exception whose workspace is not in `ubsppcoe_Workspace`, or whose Node disagrees with the source CSV and nobody has decided |
+| **No-go** | Any exception whose workspace is not in `ubsppcoe_Workspace`, or whose Node disagrees with the source exceptions list and nobody has decided |
 | **Rollback** | Correct or remove the imported rows. Nothing has read them yet |
 
 ### Phase 3 - Rebuild
@@ -260,7 +257,7 @@ The first number is not stamped anywhere; it needs a query against `ubsppcoe_Wor
 **5.1 Dry run - mode `Report`.**
 
 1. Run it. It makes no Fabric call and no Dataverse write - check the run history shows the `Activate` action skipped.
-2. Read the `DRY RUN` mail. **Is the count what Phase 4 led you to expect?** Candidates are rows with `Status = Inactive`, a policy set and `ubsppcoe_rulecount` of 1 or more. **Capacities with `rulecount = 1` are included** and will activate with rule 1 alone; Phase 4 is the only thing that stops a total lock on a live capacity. The specification's dry-run mail text still says "a rule count greater than 1" - the filter, not that sentence, decides (**To confirm** whether the built flow's wording was corrected).
+2. Read the `DRY RUN` mail. **Is the count what Phase 4 led you to expect?** Candidates are rows with `Status = Inactive`, a policy set and `ubsppcoe_rulecount` of 1 or more. **Capacities with `rulecount = 1` are included** and will activate with rule 1 alone; Phase 4 is the only thing that stops a total lock on a live capacity. The dry-run mail text may still say "a rule count greater than 1" - the filter, not that sentence, decides (**To confirm** whether the built flow's wording was corrected).
 3. If `DeleteCapacityPolicySet` was **not** on since Phase 1, check the candidate list by hand against Node rows soft-deleted since registration - this query cannot see `ubsppcoe_Node`.
 
 **5.2 First tranche - mode `Activate`, about five capacities.** Cancel from the run history after about five, then on one of them:
@@ -309,7 +306,7 @@ The two creation tests are the acceptance test for the whole project. **Stop her
 | | |
 |---|---|
 | **Go** | Event flows on, final rebuild clean, three `MIG_` flows deleted, hand-over sent |
-| **Rollback** | Turning an event flow off again is safe. A deleted `MIG_` flow can only be rebuilt from its specification |
+| **Rollback** | Turning an event flow off again is safe. A deleted `MIG_` flow cannot be restored and would have to be rebuilt from scratch |
 
 ---
 
@@ -328,14 +325,14 @@ The two creation tests are the acceptance test for the whole project. **Stop her
 
 ### 4.2 Undoing activation for one capacity
 
-1. Deactivate the policy set: `.\deactivate_policy_set.ps1 -WorkspaceId <holderWorkspaceId> -PolicySetId <policySetId>`, from `C:\GIT\ubs-policies`.
+1. Deactivate the policy set with the Fabric REST call `POST /v1/workspaces/{holder}/policySets/{id}/deactivate`, made as the `workspace provisioning` service account (see the *Architecture* document section 8), where `{holder}` is the holder workspace ID and `{id}` the policy set ID. **To confirm:** how this call is made in practice must be agreed before Phase 5 (section 2.5 E3).
 2. Set that capacity's `ubsppcoe_status` back to `Inactive` in `Capacity Policies`, so a re-run of Phase 5 picks it up again.
 
 Deactivated, the policy set enforces nothing and its rules stay published, so re-activating later needs no rebuild.
 
 ### 4.3 Emergency - people are blocked
 
-Use 4.2 for each affected capacity, then find the cause ([CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) section 8). Two things not to do:
+Use 4.2 for each affected capacity, then find the cause (see the *Error handling and monitoring* guide section 6). Two things not to do:
 
 - **Do not delete the policy set.** It loses the registration and makes recovery a re-run of the whole migration for that capacity.
 - **Do not delete rules to unlock.** A policy with zero rules is unenforced, and the next rebuild silently re-locks it.
@@ -362,7 +359,7 @@ Use 4.2 for each affected capacity, then find the cause ([CAPACITY-POLICY-OPERAT
 
 **New capacities no longer need this guide.** A row added to `ubsppcoe_Node` triggers `InitializeCapacityPolicySet`, which creates, registers, rebuilds and activates that capacity on its own - including the capacities on the Phase 1 `noNode` list, once the platform team adds their rows.
 
-**Nothing converges the estate on its own, and nothing observes it.** A failed event flow, a workspace moved between Nodes, a hard-deleted exception row or a hand-edited rule all persist until someone runs `MIG_RebuildAllCapacityPolicies` (**Q49**), and a policy set deactivated or deleted outside the flows is not detected at all (**Q11**). Both are in [ADR.md](../ADR.md).
+**Nothing converges the estate on its own, and nothing observes it.** A failed event flow, a workspace moved between Nodes, a hard-deleted exception row or a hand-edited rule all persist until someone runs `MIG_RebuildAllCapacityPolicies`, and a policy set deactivated or deleted outside the flows is not detected at all. Both are open design questions; the *Error handling and monitoring* guide section 4 describes how to catch them.
 
 ---
 
@@ -392,17 +389,6 @@ Use 4.2 for each affected capacity, then find the cause ([CAPACITY-POLICY-OPERAT
 
 | Document | What it covers |
 |---|---|
-| [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) | The solution, the three rules, and section 5 - what each `MIG_` flow does |
-| [migration/MIG_RegisterAllCapacityPolicySets.md](../../migration/MIG_RegisterAllCapacityPolicySets.md) | Build specification - Phase 1 loop |
-| [migration/MIG_InitializeCapacityPolicySet.md](../../migration/MIG_InitializeCapacityPolicySet.md) | Build specification - Phase 1 child, including the duplicate-name suffix |
-| [migration/MIG_RebuildAllCapacityPolicies.md](../../migration/MIG_RebuildAllCapacityPolicies.md) | Build specification - Phase 3 and estate-wide repair |
-| [migration/MIG_ActivateAllCapacityPolicySets.md](../../migration/MIG_ActivateAllCapacityPolicySets.md) | Build specification - Phases 4 and 5 |
-| [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](../CAPACITY-POLICY-MIGRATION-RUNBOOK.md) | The detailed runbook this guide consolidates |
-| [CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) | Table schemas, seeding `Policy Item Types` and `Policy Exceptions`, environment variables (section 8.11) |
-| [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md) | Everything that must be deployed before Phase 0 |
-| [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) | Business as usual after cutover, and the emergency unlock |
-| [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) | Symptoms and causes |
-| [SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md) | The `workspace provisioning` account and its permissions |
-| [API-BETA-SWITCH.md](../API-BETA-SWITCH.md) | The `PolicyApiBeta` toggle |
-| [ADR.md](../ADR.md) | Open questions Q11 and Q49 |
-| [HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) | Item D4 - the rollback scripts live outside this handover |
+| The *Architecture* document | The solution, the three rules, identity and the Fabric REST calls, and section 5 - what each `MIG_` flow does |
+| The *Deployment guide* | Everything that must be deployed before Phase 0, including the tables, the seed list of item types, the exceptions list and the environment variables |
+| The *Error handling and monitoring* guide | Business as usual after cutover: failure handling, monitoring, common errors and the emergency unlock |

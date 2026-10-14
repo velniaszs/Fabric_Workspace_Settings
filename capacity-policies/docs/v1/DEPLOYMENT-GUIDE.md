@@ -2,9 +2,9 @@
 
 ## Scope of this document
 
-This guide is the single procedure for deploying the **Fabric Capacity Policies** solution to a new Power Platform environment: what has to exist first, what is created, imported, set and switched on, in which order, and how to prove it works before handing over. It consolidates the deployment runbook, the ALM notes, the identity requirements and the table build sheet; each section links to the detailed source for depth.
+This guide is the single procedure for deploying the **Fabric Capacity Policies** solution to a new Power Platform environment: what has to exist first, what is created, imported, set and switched on, in which order, and how to prove it works before handing over. It brings together the deployment steps, the ALM notes, the identity requirements and the table build in one place.
 
-It stops where the cutover starts. Bringing an existing estate under policy is the [migration runbook](../CAPACITY-POLICY-MIGRATION-RUNBOOK.md); day-to-day operation is the [operations runbook](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md).
+It stops where the cutover starts. Bringing an existing estate under policy is covered by the *Migration guide*; day-to-day operation and failure handling by the *Error handling and monitoring* guide.
 
 ---
 
@@ -28,8 +28,6 @@ It stops where the cutover starts. Bringing an existing estate under policy is t
 
 ![Deploying Fabric Capacity Policies - what travels, and the order of deployment](./diagrams/deployment-overview.png)
 
-> Source for the diagram: [`diagrams/deployment-overview.html`](./diagrams/deployment-overview.html). Re-render it to `deployment-overview.png` after any edit.
-
 ---
 
 ## 1. What gets deployed
@@ -46,7 +44,7 @@ The solution is split across two Power Platform solutions in the same environmen
 | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` | 3 tables | **Common Data Services Default Solution** | This project |
 | `ubsppcoe_Node`, `ubsppcoe_Workspace`, `Logging` | 3 tables | Common Data Services Default Solution | **Platform team** |
 | Holder workspace - holds every policy set | 1 | Fabric | This project |
-| Seed files `input\PolicyItemTypes.csv`, `input\PolicyExceptions.csv` | 2 | This repository | This project |
+| Seed data - the seed list of item types and the exceptions list | 2 | Steps 3 and 4 of this guide | This project |
 
 The flows are:
 
@@ -72,7 +70,7 @@ The flows are:
 | | **The holder workspace**, and the Fabric roles on it and on every capacity |
 | | The platform team's tables and their data |
 
-**The two that catch people are environment variable values and connections.** A solution imports cleanly with neither, and the flows then fail at runtime - or, worse, run as the wrong person. See [DEPLOYMENT-ALM.md](../DEPLOYMENT-ALM.md) §2.
+**The two that catch people are environment variable values and connections.** A solution imports cleanly with neither, and the flows then fail at runtime - or, worse, run as the wrong person. See section 6.
 
 ### 1.3 What is deliberately not deployed
 
@@ -81,14 +79,13 @@ The flows are:
 | `SyncCapacityPolicySets` | Discarded. No flow in this solution runs on a schedule |
 | `ubsppcoe_PolicyDrift`, `ubsppcoe_ScanState` | Dropped - no writer. **Do not create `Policy Drift`** |
 | `GetPolicyToken` | Retired. There is no token flow |
-| Anything in [discarded/](../../discarded/) | Record only |
 | The `crbab_` workspace-settings solution | A different system that shares the tenant |
 
 ---
 
 ## 2. Prerequisites
 
-**Everything in this section must be true before step 1 of section 3.** None of it changes anybody's access, and every item is cheaper to find missing now than during the first rebuild. Detail: [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md) §2 and [SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md).
+**Everything in this section must be true before step 1 of section 3.** None of it changes anybody's access, and every item is cheaper to find missing now than during the first rebuild. Why each identity and permission is needed is explained in the *Architecture* document, section 6.
 
 ### 2.1 Identity - the service account
 
@@ -126,13 +123,13 @@ The flows are:
 | # | Requirement | Note |
 |---|---|---|
 | P1 | A target **environment with Dataverse** | |
-| P2 | The **publisher with prefix `ubsppcoe`** exists | It owns `ubsppcoe_Workspace`, so it already exists. **Reuse it; never create one with another prefix** - every logical name in every spec would be wrong |
+| P2 | The **publisher with prefix `ubsppcoe`** exists | It owns `ubsppcoe_Workspace`, so it already exists. **Reuse it; never create one with another prefix** - every logical name the flows use would be wrong |
 | P3 | **DLP policy** puts *HTTP with Microsoft Entra ID (preauthorized)*, *Microsoft Dataverse* and *Office 365 Outlook* in the **same data group** | Otherwise the flows will not save or run |
 | P4 | The person deploying holds **System Customizer** or **System Administrator** | Needed to create tables and import |
 | P5 | The **platform team's tables exist with the exact names below** | **Stop if they do not.** A renamed column does not error - the filter returns nothing and the capacity silently locks down |
 | P6 | A Dataverse **security role** for the service account, at **Organization** depth | Privileges below |
 
-The platform team's tables and the columns this solution depends on ([CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) §1):
+The platform team's tables and the columns this solution depends on (the names that cause the most mistakes are explained in the *Architecture* document, section 7.4):
 
 | Table | Columns that must exist |
 |---|---|
@@ -140,7 +137,7 @@ The platform team's tables and the columns this solution depends on ([CAPACITY-P
 | `ubsppcoe_Node` | `ubsppcoe_nodeid` (row key), `ubsppcoe_nodeuniqueid` (**Fabric capacity GUID**), `ubsppcoe_statecode` (Choice, `2` = Deleted) |
 | `Logging` | *Log Category*, *Log Source Name*, *Log Source URL* |
 
-The security role for the service account ([SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md) §3.2):
+The security role for the service account (the *Architecture* document, section 6.3):
 
 | Table | Read | Create | Write | Delete |
 |---|---|---|---|---|
@@ -153,9 +150,9 @@ The security role for the service account ([SECURITY-AND-IDENTITY.md](../SECURIT
 
 ### 2.5 Licences
 
-The sources state only that the service account must be **licensed for Power Automate and Dataverse** (I2) and that licence removal breaks the connections.
+The only stated licence requirement is that the service account must be **licensed for Power Automate and Dataverse** (I2) and that licence removal breaks the connections.
 
-> **To confirm:** the exact licence SKU for the service account, and whether the request quota of that tier was checked. The estate-wide rebuild is roughly 5,000-6,000 actions per run at 250 capacities ([MIG_RebuildAllCapacityPolicies.md](../../migration/MIG_RebuildAllCapacityPolicies.md)).
+> **To confirm:** the exact licence SKU for the service account, and whether the request quota of that tier was checked. The estate-wide rebuild is roughly 5,000-6,000 actions per run of `Fabric Pol - MIG_RebuildAllCapacityPolicies` at 250 capacities.
 
 ---
 
@@ -175,7 +172,7 @@ The sources state only that the service account must be **licensed for Power Aut
 | 8 | Check every Dataverse trigger's Scope is `Organization` | Each event flow |
 | 9 | Turn flows on, in order | UBS Workspace Provisioning |
 
-> **If the solution cannot be exported**, step 5 becomes "rebuild every flow by hand from its spec", in the build order of [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md) §3: `RebuildCapacityPolicyRules` first, `ListCapacityPolicySets` last. **Create UBS Workspace Provisioning with the `ubsppcoe` publisher and do step 7 before step 5** - a flow cannot bind to a variable that does not exist yet, and the `MIG_` flows will not publish while `PolicyMailRecipients` is blank. See section 6.
+> **If the solution cannot be exported**, step 5 becomes "rebuild every flow by hand", starting with `RebuildCapacityPolicyRules` and ending with `ListCapacityPolicySets`. **Create UBS Workspace Provisioning with the `ubsppcoe` publisher and do step 7 before step 5** - a flow cannot bind to a variable that does not exist yet, and the `MIG_` flows will not publish while `PolicyMailRecipients` is blank. See section 6.
 
 ### Step 1 - Prerequisites
 
@@ -184,7 +181,7 @@ The sources state only that the service account must be **licensed for Power Aut
 
 ### Step 2 - Create the three tables
 
-Build sheet with every column and type: [CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) §2-§4 and §8.
+What each table holds, and who reads and writes it, is in the *Architecture* document, section 7.
 
 | Table | Schema name | Primary column |
 |---|---|---|
@@ -198,13 +195,32 @@ Build sheet with every column and type: [CAPACITY-POLICY-TABLES.md](../CAPACITY-
 4. Add the remaining columns. **Leave every column Optional** - in particular, do not tick Required on the `ubsppcoe_node` lookup.
 5. Set **Default value = No** on both `ubsppcoe_active` columns.
 6. **Publish all customizations.**
-7. Verify every logical name character by character against the build sheet ([CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) §8.9).
+7. Verify every logical name character by character against the names in this guide.
 
 ### Step 3 - Seed `Policy Item Types`
 
 **Required.** An empty table makes Fabric reject rule 2.
 
-1. **Tables** > `Policy Item Types` > **Import** > **Import data from Excel**, file type CSV, file `input\PolicyItemTypes.csv`.
+The seed list:
+
+| Item name (`ubsppcoe_itemname`) | Item type value (`ubsppcoe_itemtype`) | Active (`ubsppcoe_active`) |
+|---|---|---|
+| Lakehouse | `Lakehouse` | Yes |
+| Warehouse | `Warehouse` | Yes |
+| Eventhouse | `Eventhouse` | Yes |
+| Notebook | `Notebook` | Yes |
+| Spark Job Definition | `SparkJobDefinition` | Yes |
+| Dataflow Gen2 (with and without CICD) | `Dataflow` | Yes |
+| Pipeline | `DataPipeline` | Yes |
+| Copy Job | `CopyJob` | Yes |
+| Mirrored Database (all sources) | `MirroredDatabase` | Yes |
+| Variable Library | `VariableLibrary` | Yes |
+| Environment | `Environment` | Yes |
+| Graph Queryset | `GraphQuerySet` | Yes |
+| Graph Model | `GraphModel` | Yes |
+| KQL Queryset | `KQLQueryset` | Yes |
+
+1. Save the seed list as a CSV file with the logical names `ubsppcoe_itemname`, `ubsppcoe_itemtype` and `ubsppcoe_active` as headers, then **Tables** > `Policy Item Types` > **Import** > **Import data from Excel**, file type CSV.
 2. The headers are logical names and map column for column. **Leave the row key unmapped.**
 3. Check there are **14 rows** and `Active` reads **Yes** on all of them.
 4. Review the list against the target tenant's Fabric item types - a type missing here cannot be created in any governed workspace.
@@ -213,8 +229,17 @@ Build sheet with every column and type: [CAPACITY-POLICY-TABLES.md](../CAPACITY-
 
 **Before any rebuild.** A missing exception is not an error - the workspace simply loses rule 3 at the first rebuild.
 
-1. Copy `input\PolicyExceptions.csv` and **delete its three `EXAMPLE` rows**.
-2. **Add the holder workspace first**, if it sits on a governed capacity - otherwise the solution locks itself out of its own store. It also needs a `ubsppcoe_Workspace` row under that capacity's Node ([CAPACITY-POLICY-MIGRATION-RUNBOOK.md](../CAPACITY-POLICY-MIGRATION-RUNBOOK.md) Phase 2).
+1. Prepare the exceptions list as a CSV file with these logical names as headers, one row per excepted workspace:
+
+   | Column | What to fill in |
+   |---|---|
+   | `ubsppcoe_workspacename` | The workspace's display name |
+   | `ubsppcoe_workspaceid` | The **Fabric workspace GUID** |
+   | `ubsppcoe_reason` | Why the workspace needs item types outside the governed list |
+   | `ubsppcoe_approvedby` | Who approved the exception, for example their email address |
+   | `ubsppcoe_active` | **Yes** |
+
+2. **Add the holder workspace first**, if it sits on a governed capacity - otherwise the solution locks itself out of its own store. It also needs a `ubsppcoe_Workspace` row under that capacity's Node (the *Migration guide*, Phase 2).
 3. Add the estate's real exceptions: the Fabric workspace GUID in `ubsppcoe_workspaceid`, `ubsppcoe_active` = **Yes**, with `ubsppcoe_reason` and `ubsppcoe_approvedby`.
 4. Import as in step 3, row key unmapped. Skip the import if the environment has no exceptions.
 
@@ -224,7 +249,7 @@ Build sheet with every column and type: [CAPACITY-POLICY-TABLES.md](../CAPACITY-
 2. If the import wizard asks for connections and environment variable values, provide them as in steps 6 and 7 - and check them there afterwards anyway.
 3. **Confirm every flow is Off** after import. Turn off any that are on.
 4. Confirm all 7 environment variables and 3 connection references are present.
-5. If the target estate still needs a cutover, confirm the four `MIG_` flows are present. Three of them are deleted after a cutover, so they may need rebuilding from [migration/](../../migration/).
+5. If the target estate still needs a cutover, confirm the four `MIG_` flows are present. Three of them are deleted after a cutover, so they may need rebuilding by hand.
 
 ### Step 6 - Connections
 
@@ -259,7 +284,7 @@ Build sheet with every column and type: [CAPACITY-POLICY-TABLES.md](../CAPACITY-
 
 1. Open each variable from inside UBS Workspace Provisioning and set its **Current Value**.
 2. **Point `PolicyMailRecipients` at a test mailbox outside production**, before anything runs. Prefer a distribution group; never leave it blank and never clear it.
-3. Set `PolicyApiBeta` to match the API's release stage at the time of deployment ([API-BETA-SWITCH.md](../API-BETA-SWITCH.md) §1). Optionally prove it resolves with the two-minute Compose test in §3.2 of that document.
+3. Set `PolicyApiBeta` to match the API's release stage at the time of deployment: **No** at private preview and at general availability, **Yes** at public preview (beta). The *Architecture* document, section 8.6, explains the switch.
 
 The two numeric variables are Text on purpose - the flows cast them with `int(...)`. **Do not add an eighth variable** for the policy type; `ItemCreation` is a literal in the rebuild body.
 
@@ -275,7 +300,7 @@ The two numeric variables are Text on purpose - the flows cast them with `int(..
 | `Fabric Pol - RemoveWorkspaceFromPolicy` | `ubsppcoe_Workspace` | Modified | **Organization** |
 | `Fabric Pol - RebuildOnExceptionChange` | `Policy Exceptions` | Added or Modified | **Organization** |
 
-While each flow is open, confirm its connection references point at the connections from step 6. The exact *Select columns* and *Filter rows* values are in each flow's spec under [bau/](../../bau/).
+While each flow is open, confirm its connection references point at the connections from step 6.
 
 ### Step 9 - Turn flows on, in order
 
@@ -285,10 +310,10 @@ While each flow is open, confirm its connection references point at the connecti
 |---|---|---|---|
 | 1 | `Fabric Pol - RebuildCapacityPolicyRules` | Now | Child flow. Inert until called; every rebuild needs it on |
 | 2 | `Fabric Pol - ListCapacityPolicySets` | Now | Read-only, no Fabric calls |
-| 3 | `Fabric Pol - DeleteCapacityPolicySet` | Before any registration run | Read its [§0](../../bau/DeleteCapacityPolicySet.md) first. Activation relies on it to drop soft-deleted capacities |
+| 3 | `Fabric Pol - DeleteCapacityPolicySet` | Before any registration run | It is the one flow that takes governance away: on a Node soft-delete it deletes the policy set if Fabric no longer lists the capacity, otherwise only deactivates it (the *Architecture* document, section 4.2). Activation relies on it to drop soft-deleted capacities |
 | 4 | `Fabric Pol - MIG_InitializeCapacityPolicySet` | Only while `MIG_RegisterAllCapacityPolicySets` runs | Child of the registration loop. **Unsafe standalone** |
-| 5 | `Fabric Pol - MIG_RegisterAllCapacityPolicySets`, `Fabric Pol - MIG_RebuildAllCapacityPolicies`, `Fabric Pol - MIG_ActivateAllCapacityPolicySets` | One at a time, in the migration runbook's phases | On, run, off again |
-| 6 | `Fabric Pol - InitializeCapacityPolicySet`, `Fabric Pol - AddWorkspaceToPolicy`, `Fabric Pol - RemoveWorkspaceFromPolicy`, `Fabric Pol - RebuildOnExceptionChange` | Migration runbook Phase 7.1 | **This is the moment BAU starts** |
+| 5 | `Fabric Pol - MIG_RegisterAllCapacityPolicySets`, `Fabric Pol - MIG_RebuildAllCapacityPolicies`, `Fabric Pol - MIG_ActivateAllCapacityPolicySets` | One at a time, in the phases of the *Migration guide* | On, run, off again |
+| 6 | `Fabric Pol - InitializeCapacityPolicySet`, `Fabric Pol - AddWorkspaceToPolicy`, `Fabric Pol - RemoveWorkspaceFromPolicy`, `Fabric Pol - RebuildOnExceptionChange` | The *Migration guide*, Phase 7, step 1 | **This is the moment BAU starts** |
 
 After cutover, delete `MIG_RegisterAllCapacityPolicySets`, `MIG_InitializeCapacityPolicySet` and `MIG_ActivateAllCapacityPolicySets`. **Keep `MIG_RebuildAllCapacityPolicies`, switched off** - it is the only estate-wide repair tool.
 
@@ -296,7 +321,7 @@ After cutover, delete `MIG_RegisterAllCapacityPolicySets`, `MIG_InitializeCapaci
 
 ## 4. Verification after deployment
 
-Run these before handing the environment over, and before the migration starts. **Use one throwaway, non-production capacity for every test that writes to Fabric** - `InitializeCapacityPolicySet` activates deny-all on it within minutes. Sources: [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md) §8 and [API-BETA-SWITCH.md](../API-BETA-SWITCH.md) §5.4.
+Run these before handing the environment over, and before the migration starts. **Use one throwaway, non-production capacity for every test that writes to Fabric** - `InitializeCapacityPolicySet` activates deny-all on it within minutes. If a check fails, use the *Error handling and monitoring* guide, section 6.
 
 **Configuration checks**
 
@@ -324,7 +349,7 @@ Run these before handing the environment over, and before the migration starts. 
 
 **T1 needs `InitializeCapacityPolicySet` switched on, ahead of the order in step 9.** Turn it on for the test only and off again straight after: while it is on, any edit to any Node row in the environment initialises and activates that capacity.
 
-**Clean up afterwards.** Delete any policy set and `Capacity Policies` row left by testing - a leftover set causes a name collision at registration, and a leftover row makes that capacity return `AlreadyExists` and be skipped ([CAPACITY-POLICY-MIGRATION-RUNBOOK.md](../CAPACITY-POLICY-MIGRATION-RUNBOOK.md) Phase 0.6).
+**Clean up afterwards.** Delete any policy set and `Capacity Policies` row left by testing - a leftover set causes a name collision at registration, and a leftover row makes that capacity return `AlreadyExists` and be skipped (the *Migration guide*, section 2.3).
 
 ---
 
@@ -364,17 +389,17 @@ Collect these before starting. **`PolicyMailRecipients` is the one value that mu
 
 ## 6. Source control and ALM
 
-**The flow specs in this repository are the source of truth.** The documents in [bau/](../../bau/), [helper/](../../helper/) and [migration/](../../migration/) are the specifications every flow was built from, and the only basis for a rebuild.
+**The solution as built in the environment is the system of record.** UBS Workspace Provisioning in the environment is what runs, and every flow is described in these documents. Changes must be made in the environment and reflected in these documents.
 
 | Point | What it means |
 |---|---|
-| **The sources state the solution cannot be exported from the customer environment** | No flow JSON in the repository and no automated pipeline. A deployment either imports an export, if one becomes possible, or rebuilds every flow by hand from the specs |
-| **Changes in the environment do not flow back** | A flow edited without updating its spec leaves the two out of step, with nothing to detect it. Update the spec in the same change |
+| **The solution is recorded as not exportable from the customer environment** | No exported flow definition and no automated pipeline. A deployment either imports an export, if one becomes possible, or rebuilds every flow by hand |
+| **Changes in the environment are not tracked anywhere else** | A flow edited without updating these documents leaves the two out of step, with nothing to detect it. Update the documents in the same change |
 | **An export carries no table** | The tables are in the Default Solution. Create them per step 2, or move them into a solution that travels |
 | **Default Values travel, Current Values do not** | Defaults are committed with an export; that is why `PolicyApiBeta` defaults to No and `PolicyMailRecipients` defaults to a generic mailbox |
-| **If export becomes possible** | Reconcile each spec against its exported definition before trusting action names and `runAfter` details; then the repository can become authoritative |
+| **If export becomes possible** | Reconcile each exported definition against the flow as documented before trusting action names and `runAfter` details; then the export can become authoritative |
 
-> **To confirm:** whether UBS Workspace Provisioning can now be exported, and whether it is deployed managed or unmanaged. The source documents record export as impossible and the solution type as open.
+> **To confirm:** whether UBS Workspace Provisioning can now be exported, and whether it is deployed managed or unmanaged. Export is currently recorded as impossible and the solution type as open.
 
 ---
 
@@ -382,13 +407,6 @@ Collect these before starting. **`PolicyMailRecipients` is the one value that mu
 
 | Document | Use it for |
 |---|---|
-| [ARCHITECTURE-v2.md](./ARCHITECTURE-v2.md) | What the solution is, the components inventory and what each flow does |
-| [DEPLOYMENT-RUNBOOK.md](../DEPLOYMENT-RUNBOOK.md) | Detailed prerequisites, flow build order and cross-tenant constraints |
-| [DEPLOYMENT-ALM.md](../DEPLOYMENT-ALM.md) | What travels with an export, and source control |
-| [SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md) | The service account, Fabric roles, Dataverse privileges and failure modes |
-| [CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md) | Table build sheet (§8), seeding (§3-§4), environment variables (§8.11) |
-| [API-BETA-SWITCH.md](../API-BETA-SWITCH.md) | The `PolicyApiBeta` toggle and its verification |
-| [CAPACITY-POLICY-MIGRATION-RUNBOOK.md](../CAPACITY-POLICY-MIGRATION-RUNBOOK.md) | The cutover that follows deployment |
-| [CAPACITY-POLICY-OPERATIONS-RUNBOOK.md](../CAPACITY-POLICY-OPERATIONS-RUNBOOK.md) | Day-to-day operation after cutover |
-| [HANDOVER-REGISTER.md](../HANDOVER-REGISTER.md) | Obligations, dependencies and accepted risks |
-| [TROUBLESHOOTING.md](../TROUBLESHOOTING.md) | When a verification check fails |
+| The *Architecture* document | What the solution is, the components inventory, what each flow does, identity and security, the data model and the Fabric API integration, including the `PolicyApiBeta` switch |
+| The *Migration guide* | The phased cutover that follows deployment: registering, rebuilding, reviewing and activating the existing estate, with rollback and sign-off |
+| The *Error handling and monitoring* guide | Day-to-day operation after cutover: how failures are reported, where to look, routine monitoring, and common errors and fixes when a verification check fails |

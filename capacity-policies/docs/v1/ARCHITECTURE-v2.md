@@ -57,7 +57,7 @@ This document describes the architecture of the **Fabric Capacity Policies** sol
    - 8.6 The release-stage switch - `PolicyApiBeta`
 - Appendix A. Glossary
 
-**Companion documents:** [DEPLOYMENT-GUIDE.md](./DEPLOYMENT-GUIDE.md) - deploying to an environment; [MIGRATION-GUIDE.md](./MIGRATION-GUIDE.md) - running the one-off cutover; [ERROR-HANDLING-AND-MONITORING.md](./ERROR-HANDLING-AND-MONITORING.md) - how failures are handled, where to look and what to check routinely.
+This document is accompanied by three others: the *Deployment guide*, for deploying the solution to an environment; the *Migration guide*, for running the one-off cutover; and the *Error handling and monitoring* guide, for how failures are handled, where to look and what to check routinely.
 
 ---
 
@@ -108,8 +108,6 @@ This solution uses exactly one policy type - **`ItemCreation`**, at **Capacity**
 ### 2.2 What a policy set contains here - three rules
 
 ![One capacity, one policy set, three rules](./diagrams/policy-set-rules.png)
-
-> Source for the diagram: [`diagrams/policy-set-rules.html`](./diagrams/policy-set-rules.html). Re-render it to `policy-set-rules.png` after any edit.
 
 Each governed capacity gets one policy set, and every policy set is built from the same three rules. The capacity starts closed, and each rule opens it a step further for a narrower group of workspaces:
 
@@ -243,9 +241,9 @@ Common Data Services Default Solution                         every table the fl
 
 Outside Power Platform
 ├── Fabric holder workspace                                   holds every policy set in the tenant
-└── input/
-    ├── PolicyItemTypes.csv                                   seed for Policy Item Types
-    └── PolicyExceptions.csv                                  seed for Policy Exceptions
+└── Seed data
+    ├── Seed list of item types                               seed for Policy Item Types
+    └── Exceptions list                                       seed for Policy Exceptions
 ```
 
 **There is no custom connector.** Fabric is called through the built-in *HTTP with Microsoft Entra ID (preauthorized)* connector, signed in as the `workspace provisioning` service account, so there is no connector definition, app registration or client secret to deploy.
@@ -273,8 +271,8 @@ All six tables live in the **Common Data Services Default Solution**, not in UBS
 | Table | Owner | What it holds |
 |---|---|---|
 | **Capacity Policies** | Capacity policies | One row per governed capacity: its policy set id, status, last rebuild, last error and cached counts. The presence of a row is what makes a capacity "governed" |
-| **Policy Item Types** | Capacity policies | The Fabric item types rule 2 allows for OAP workspaces. Only *Active* rows are published. Seeded from `PolicyItemTypes.csv`, then maintained by hand |
-| **Policy Exceptions** | Capacity policies | The workspaces rule 3 allows to create anything, each with a reason and an approver. Seeded from `PolicyExceptions.csv`, then maintained by hand. Revoke by deactivating, never by deleting |
+| **Policy Item Types** | Capacity policies | The Fabric item types rule 2 allows for OAP workspaces. Only *Active* rows are published. Seeded from the seed list of item types, then maintained by hand |
+| **Policy Exceptions** | Capacity policies | The workspaces rule 3 allows to create anything, each with a reason and an approver. Seeded from the exceptions list, then maintained by hand. Revoke by deactivating, never by deleting |
 | `ubsppcoe_Node` | Platform team | The capacity inventory. Its rows trigger policy set creation and retirement. **Read only** |
 | `ubsppcoe_Workspace` | Platform team | The workspace inventory: which capacity each workspace sits on and whether it is OAP-enabled. **Read only** |
 | `Logging` | Platform team | A shared error log. Flows insert a row when they fail and never read it back |
@@ -307,17 +305,12 @@ All six tables live in the **Common Data Services Default Solution**, not in UBS
 
 ## 4. What each flow does
 
-Each flow gets a short explanation and one diagram drawn the way the flow looks in the Power Automate designer: every card is a real action under its renamed action name, the icon colour shows the connector, Conditions split into **True** and **False** branches, and dashed lines mark a non-default *run after* setting. To fit one A4 page, repeated actions are drawn as a stacked card (*Set variable × 3*), and self-contained blocks such as the Catch scope are shown **collapsed**, with a count of the actions inside. The *Step* tags match the step numbers in the flow's build specification under [bau/](../../bau/), [helper/](../../helper/) or [migration/](../../migration/).
-
-> Each diagram is an HTML file in [`diagrams/`](./diagrams/), rendered to PNG with `.\render-diagram.ps1 <name>`, which also reports whether the result fits an A4 portrait page.
-
+Each flow gets a short explanation and one diagram drawn the way the flow looks in the Power Automate designer: every card is a real action under its renamed action name, the icon colour shows the connector, Conditions split into **True** and **False** branches, and dashed lines mark a non-default *run after* setting. To fit one A4 page, repeated actions are drawn as a stacked card (*Set variable × 3*), and self-contained blocks such as the Catch scope are shown **collapsed**, with a count of the actions inside. The *Step* tags number the actions in the order the flow runs them.
 ### 4.1 Fabric Pol - InitializeCapacityPolicySet
 
 **Turns a new capacity row into a live, enforced policy set.** When the platform team adds a capacity to `ubsppcoe_Node`, this flow checks the capacity is new to us and governable by Fabric, creates its policy set in the holder workspace, registers it in `Capacity Policies`, has the child flow build its rules, and activates it. The capacity ends up **Power BI-only**, because it has no OAP workspaces yet.
 
 ![Fabric Pol - InitializeCapacityPolicySet](./diagrams/flow-initialize-capacity-policy-set.png)
-
-> Source for the diagram: [`diagrams/flow-initialize-capacity-policy-set.html`](./diagrams/flow-initialize-capacity-policy-set.html). Build specification: [bau/InitializeCapacityPolicySet.md](../../bau/InitializeCapacityPolicySet.md).
 
 Three things to know when reading its run history:
 
@@ -331,8 +324,6 @@ Three things to know when reading its run history:
 
 ![Fabric Pol - DeleteCapacityPolicySet](./diagrams/flow-delete-capacity-policy-set.png)
 
-> Source for the diagram: [`diagrams/flow-delete-capacity-policy-set.html`](./diagrams/flow-delete-capacity-policy-set.html). Build specification: [bau/DeleteCapacityPolicySet.md](../../bau/DeleteCapacityPolicySet.md).
-
 Three things to know when reading its run history:
 
 - **Most runs end in `NotGoverned` and do nothing.** Every Node soft-delete in the tenant fires the flow, and most of those capacities were never governed, so there is no Fabric call.
@@ -344,8 +335,6 @@ Three things to know when reading its run history:
 **Checks that a workspace really belongs on a governed capacity, then republishes that capacity's rules.** It runs when a `ubsppcoe_Workspace` row is OAP-enabled, assigned to a Node and Active. It finds the capacity through `Capacity Policies`, checks that the Node lookup leads back to the same Node, and if every check passes has `RebuildCapacityPolicyRules` rebuild that capacity's rules so the workspace is allowed on it. It reads Dataverse only, and writes nothing unless `Scope_catch` records an error in `ubsppcoe_lasterror` and `Logging`.
 
 ![Fabric Pol - AddWorkspaceToPolicy](./diagrams/flow-add-workspace-to-policy.png)
-
-> Source for the diagram: [`diagrams/flow-add-workspace-to-policy.html`](./diagrams/flow-add-workspace-to-policy.html). Build specification: [bau/AddWorkspaceToPolicy.md](../../bau/AddWorkspaceToPolicy.md).
 
 Three things to know when reading its run history:
 
@@ -359,8 +348,6 @@ Three things to know when reading its run history:
 
 ![Fabric Pol - RemoveWorkspaceFromPolicy](./diagrams/flow-remove-workspace-from-policy.png)
 
-> Source for the diagram: [`diagrams/flow-remove-workspace-from-policy.html`](./diagrams/flow-remove-workspace-from-policy.html). Build specification: [bau/RemoveWorkspaceFromPolicy.md](../../bau/RemoveWorkspaceFromPolicy.md).
-
 Three things to know when reading its run history:
 
 - **A green run does not mean access was removed.** `StillEnabled` or `StillExcepted` in `Compose_result` means the workspace can still create items on this capacity, and nothing else reports it.
@@ -372,8 +359,6 @@ Three things to know when reading its run history:
 **Puts an approved or revoked exception live in Fabric within minutes.** It runs when a `Policy Exceptions` row is added or its `ubsppcoe_active` flag changes. It finds the live workspace with that GUID, follows that workspace's Node to its row in `Capacity Policies`, and has `RebuildCapacityPolicyRules` rebuild that whole capacity, rule 3 included. It never writes to the exception table; the only things it writes are an error to `ubsppcoe_lasterror` and a `Logging` row, and only when an action fails.
 
 ![Fabric Pol - RebuildOnExceptionChange](./diagrams/flow-rebuild-on-exception-change.png)
-
-> Source for the diagram: [`diagrams/flow-rebuild-on-exception-change.html`](./diagrams/flow-rebuild-on-exception-change.html). Build specification: [bau/RebuildOnExceptionChange.md](../../bau/RebuildOnExceptionChange.md).
 
 Three things to know when reading its run history:
 
@@ -387,7 +372,7 @@ Three things to know when reading its run history:
 
 ![Fabric Pol - RebuildCapacityPolicyRules](./diagrams/flow-rebuild-capacity-policy-rules.png)
 
-> Source for the diagram: [`diagrams/flow-rebuild-capacity-policy-rules.html`](./diagrams/flow-rebuild-capacity-policy-rules.html). Build specification: [bau/RebuildCapacityPolicyRules.md](../../bau/RebuildCapacityPolicyRules.md). The flow is one long straight line, so the diagram is drawn in three columns: **A** and **B** mark where each column continues.
+> The flow is one long straight line, so the diagram is drawn in three columns: **A** and **B** mark where each column continues.
 
 Three things to know when reading its run history:
 
@@ -400,8 +385,6 @@ Three things to know when reading its run history:
 **Returns every governed capacity and the state of its policy set to the app, as one JSON string.** A Power App outside the solution calls it with no inputs whenever it needs the list. It reads `Capacity Policies` with one `List rows` sorted by capacity name, maps each row to ten text fields in `Select_rows`, and returns the array as a string in `PolicySetsJson`, together with `ErrorMessage`.
 
 ![Fabric Pol - ListCapacityPolicySets](./diagrams/flow-list-capacity-policy-sets.png)
-
-> Source for the diagram: [`diagrams/flow-list-capacity-policy-sets.html`](./diagrams/flow-list-capacity-policy-sets.html). Build specification: [helper/ListCapacityPolicySets.md](../../helper/ListCapacityPolicySets.md).
 
 Three things to know when using it:
 
@@ -423,8 +406,6 @@ After cutover three of the four are deleted. `MIG_RebuildAllCapacityPolicies` is
 
 ![Fabric Pol - MIG_RegisterAllCapacityPolicySets](./diagrams/flow-mig-register-all-capacity-policy-sets.png)
 
-> Source for the diagram: [`diagrams/flow-mig-register-all-capacity-policy-sets.html`](./diagrams/flow-mig-register-all-capacity-policy-sets.html). Build specification: [migration/MIG_RegisterAllCapacityPolicySets.md](../../migration/MIG_RegisterAllCapacityPolicySets.md).
-
 Three things to know when running it:
 
 - **Check `Compose_eligible_count` before going further.** A count well below the estate means the `workspace provisioning` account is missing Capacity Admin, not that the data is wrong.
@@ -436,8 +417,6 @@ Three things to know when running it:
 **Creates one capacity's policy set in Fabric and registers it as `Inactive` - no rules, no activation.** `MIG_RegisterAllCapacityPolicySets` calls it once per Active F-SKU capacity, passing the capacity id and display name. It looks up the live `ubsppcoe_Node` row, creates the policy set in the holder workspace and adds a `Capacity Policies` row with status `Inactive`, leaving the capacity unenforced until the estate-wide rebuild and activation.
 
 ![Fabric Pol - MIG_InitializeCapacityPolicySet](./diagrams/flow-mig-initialize-capacity-policy-set.png)
-
-> Source for the diagram: [`diagrams/flow-mig-initialize-capacity-policy-set.html`](./diagrams/flow-mig-initialize-capacity-policy-set.html). Build specification: [migration/MIG_InitializeCapacityPolicySet.md](../../migration/MIG_InitializeCapacityPolicySet.md).
 
 Three things to know when running it:
 
@@ -451,8 +430,6 @@ Three things to know when running it:
 
 ![Fabric Pol - MIG_RebuildAllCapacityPolicies](./diagrams/flow-mig-rebuild-all-capacity-policies.png)
 
-> Source for the diagram: [`diagrams/flow-mig-rebuild-all-capacity-policies.html`](./diagrams/flow-mig-rebuild-all-capacity-policies.html). Build specification: [migration/MIG_RebuildAllCapacityPolicies.md](../../migration/MIG_RebuildAllCapacityPolicies.md).
-
 Three things to know when running it:
 
 - **It is the only thing that applies out-of-band changes.** Hand-edited rules, a workspace moved between Nodes, or a hard-deleted `Policy Exceptions` row only reach Fabric when someone runs this flow.
@@ -464,8 +441,6 @@ Three things to know when running it:
 **Activates every registered but inactive policy set, putting rule 1 into force across the estate.** It was run by hand, once, at cutover, after the register and rebuild runs had finished. It reads the `Capacity Policies` rows that are `Inactive`, have a policy set and have at least one rule, calls Fabric `activate` for each, writes `ubsppcoe_status` and `ubsppcoe_lasterror`, and mails a summary to `PolicyMailRecipients`. Activated capacities end up `Active` - only OAP workspaces and exceptions can create Fabric items there - while failures stay `Inactive` with the reason in `ubsppcoe_lasterror`.
 
 ![Fabric Pol - MIG_ActivateAllCapacityPolicySets](./diagrams/flow-mig-activate-all-capacity-policy-sets.png)
-
-> Source for the diagram: [`diagrams/flow-mig-activate-all-capacity-policy-sets.html`](./diagrams/flow-mig-activate-all-capacity-policy-sets.html). Build specification: [migration/MIG_ActivateAllCapacityPolicySets.md](../../migration/MIG_ActivateAllCapacityPolicySets.md).
 
 Three things to know when running it:
 
@@ -562,7 +537,7 @@ The service account does the work, but four groups of people touch the solution.
 
 Two tenant-level checks also apply once: if user consent to applications is disabled, a tenant administrator must consent to the *HTTP with Microsoft Entra ID (preauthorized)* connector; and the environment's **DLP policy** must place that connector, Dataverse and Office 365 Outlook in the same data group, or the flows will neither save nor run.
 
-**Still open:** naming an owner for the account, exempting it from password expiry and interactive MFA, confirming that the Dataverse connection uses the same account, and confirming which security role carries the privileges in 6.3. Full detail is in [SECURITY-AND-IDENTITY.md](../SECURITY-AND-IDENTITY.md).
+**Still open:** naming an owner for the account, exempting it from password expiry and interactive MFA, confirming that the Dataverse connection uses the same account, and confirming which security role carries the privileges in 6.3.
 
 ---
 
@@ -571,8 +546,6 @@ Two tenant-level checks also apply once: if user consent to applications is disa
 ### 7.1 Six tables, two owners
 
 ![Data model and ownership](./diagrams/data-model.png)
-
-> Source for the diagram: [`diagrams/data-model.html`](./diagrams/data-model.html).
 
 **All six tables live in the Common Data Services Default Solution, and all six carry the `ubsppcoe_` prefix - so the prefix does not tell you who owns a table.** The solution's own tables were deliberately created with the platform team's publisher prefix. Ownership is therefore always stated **by table name**, never by prefix.
 
@@ -645,9 +618,6 @@ Reading the inventory removed a whole class of problem - there is no second copy
 | `RemoveWorkspaceFromPolicy` finds an odd-looking row | **Rebuild anyway.** Republishing the current truth can only narrow or keep access |
 | A new option appears on the workspace `ubsppcoe_statecode` | **Excluded** - filters use `eq 1`, so an unknown state stays out of rule 2 |
 | A new option appears on the Node `ubsppcoe_statecode` | **Governed** - filters use `ne 2`, so an unknown state is still protected |
-
-The full column-by-column build sheet is in [CAPACITY-POLICY-TABLES.md](../CAPACITY-POLICY-TABLES.md).
-
 ---
 
 ## 8. Fabric REST API integration
@@ -758,7 +728,7 @@ Rule 2 and rule 3 repeat, numbered `(1/n)`, once per 49 workspaces. **Rule 3 is 
 
 | Limit | Value | Where it bites |
 |---|---|---|
-| Workspaces per rule condition | **49** - as found against the service ([PLATFORM-FINDINGS.md](../PLATFORM-FINDINGS.md)); Microsoft's documentation says 50 | Rule 2 and rule 3 are split into chunks of 49 (`PolicyMaxWorkspacesPerRule`) |
+| Workspaces per rule condition | **49** - as found by testing against the service; Microsoft's documentation says 50 | Rule 2 and rule 3 are split into chunks of 49 (`PolicyMaxWorkspacesPerRule`) |
 | Rules per capacity-scope policy | **50** | `1 + ceil(OAP / 49) + ceil(exceptions / 49)`. The rebuild checks this before calling Fabric (`PolicyMaxRulesPerPolicy`) |
 | Rule display name | **60 characters** | The rule names are kept short so `(10/12)` still fits |
 | Policy sets active per capacity | **1** | Activating another set silently deactivates ours - undetectable from the solution |
@@ -783,10 +753,10 @@ Rule 2 and rule 3 repeat, numbered `(1/n)`, once per 49 workspaces. **Rule 3 is 
 **A toggle pointing the wrong way fails every capacity at once**, at Fabric, with an error that names nothing. It is a Two options variable rather than text because an empty text value cannot be stored and a cleared one is silently ignored.
 
 > **To confirm before public preview:**
-> - **The flow edits.** [API-BETA-SWITCH.md](../API-BETA-SWITCH.md) records the variable as built and proven, and the flow specifications as updated, but the edits to the six actions in the built flows as *not done*. Confirm they have been made.
+> - **The flow edits.** The variable is built and proven, but the edits to the six actions in the built flows were recorded as *not done*. Confirm they have been made.
 > - **`Deactivate` is not in the inventory.** The *deactivate* call in `DeleteCapacityPolicySet` (capacity still in Fabric) is a policy call but is not one of the six. It most likely needs the same suffix, or a suspend will fail at public preview.
 
-The full procedure for both switches is in [API-BETA-SWITCH.md](../API-BETA-SWITCH.md).
+Setting the variable in each environment is covered in the *Deployment guide*.
 
 ---
 
