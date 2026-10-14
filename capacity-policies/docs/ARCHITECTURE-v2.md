@@ -15,10 +15,9 @@ This document describes the architecture of the **Fabric Capacity Policies** sol
 5. Ownership boundary - derived, never stored
 6. Functional architecture - the policy model
 7. Flow inventory
-8. Data model
-9. Integration surface - Fabric REST API
-10. Design decisions and their rationale
-11. Architectural constraints and known limitations
+8. Migration - the one-off cutover
+9. Data model
+10. Integration surface - Fabric REST API
 
 ---
 
@@ -54,7 +53,7 @@ Every publish is a **full rebuild** of one capacity's rule list through `replace
 
 Two consequences of that principle run through every flow:
 
-- **Membership is derived, never stored.** Whether a workspace is whitelisted is read at rebuild time from Dataverse table s`Workspace`, `Node`. No policies flow write to these tables  (§5).
+- **Membership is derived, never stored.** Whether a workspace is whitelisted is read at rebuild time from the Dataverse tables `Workspace` and `Node`. No policy flow writes to these tables (§5).
 - **When the desired state cannot be seen, refuse.** A flow that cannot resolve which workspaces belong to a capacity stops, rather than publishing an empty list that would lock the capacity on the strength of somebody else's data-entry error (§5).
 
 ---
@@ -83,7 +82,7 @@ Two flows sit outside the pattern: **`RebuildCapacityPolicyRules`**, the child f
 
 A capacity under this system is **closed by default**: nothing governed can be created on it until a workspace is whitelisted. **Power BI items are not governed** and are unaffected throughout.
 
-**The existing estate was brought onto the solution by a separate one-off cutover**, run with four `MIG_` flows that are no part of business as usual. That work is described on its own in §7.
+**The existing estate was brought onto the solution by a separate one-off cutover**, run with four `MIG_` flows that are no part of business as usual. That work is described on its own in §8.
 
 ### What it delivers
 
@@ -194,11 +193,11 @@ Each of these was a considered decision rather than an omission:
 |---|---|
 | **Deciding which workspaces are whitelisted** | The platform team, through `ubsppcoe_oapenabled`. This solution publishes the flag; it never sets it |
 | **Populating or correcting the inventory** | The platform team. A wrong workspace GUID, a missing row or a stale Node assignment is a request to them, not a local fix |
-| **Validating workspace GUIDs** | Wherever the inventory row is created. Fabric accepts any well-formed GUID and silently never matches a wrong one (§11) |
+| **Validating workspace GUIDs** | Wherever the inventory row is created. Fabric accepts any well-formed GUID and silently never matches a wrong one (§12) |
 | **Creating capacities, or granting Capacity Admin on them** | Capacity provisioning. A capacity the service account does not administer is invisible to every flow here |
 | **Telling a capacity owner that a new capacity is locked** | The provisioning process. The policy set activates with nobody deciding (§6.3) |
 | **Governing Power BI items** | Nobody - `ItemCreation` policy does not cover them |
-| **Scheduled convergence or drift detection** | Nobody, by decision. There is no scheduled flow in the solution (§6.5, §10) |
+| **Scheduled convergence or drift detection** | Nobody, by decision. There is no scheduled flow in the solution (§6.5, §11) |
 | **Emergency unlock at scale** | An operator procedure that sits outside this solution |
 
 ---
@@ -214,10 +213,10 @@ Each of these was a considered decision rather than an omission:
 | Component | Count | Detail |
 |---|---|---|
 | **Cloud flows - business as usual** | 7 | Six event and worker flows, plus one read-only helper. Listed in §7 |
-| **Cloud flows - migration** | 4 | Prefixed `MIG_`. Three are deleted after cutover; one is kept, switched off |
+| **Cloud flows - migration** | 4 | Prefixed `MIG_`. Three are deleted after cutover; one is kept, switched off. §8 |
 | **Dataverse tables created by this solution** | 3 | `Capacity Policies`, `Policy Item Types`, `Policy Exceptions` |
 | **Dataverse tables required, owned elsewhere** | 3 | `ubsppcoe_Workspace`, `ubsppcoe_Node`, `Logging` - all the platform team's |
-| **Environment variables** | 7 | §8 |
+| **Environment variables** | 7 | §9 |
 | **Connection references** | 3 | Fabric (*HTTP with Microsoft Entra ID (preauthorized)*), Microsoft Dataverse, Office 365 Outlook |
 | **Fabric holder workspace** | 1 | Holds every policy set in the tenant. Created by this project, but a Fabric object rather than a solution component |
 | **Seed files** | 2 | `PolicyItemTypes.csv` and `PolicyExceptions.csv` - import templates for the two hand-maintained tables |
@@ -297,7 +296,7 @@ A delegated connection has failure modes an application identity does not, and t
 
 > **The run history never says "the connection is the problem".** A lapsed credential presents as `401` against every capacity simultaneously. If an estate-wide run fails wholesale, suspect the account before suspecting Fabric - and before suspecting the data.
 
-**The account must be exempt from password expiry and interactive MFA, not blocked by Conditional Access, kept licensed, and excluded from leaver reviews** - or the solution stops on a schedule nobody set. **Naming an owner for the account and monitoring it is currently unassigned** (§11).
+**The account must be exempt from password expiry and interactive MFA, not blocked by Conditional Access, kept licensed, and excluded from leaver reviews** - or the solution stops on a schedule nobody set. **Naming an owner for the account and monitoring it is currently unassigned** (§12).
 
 ---
 
@@ -529,64 +528,6 @@ Add **refuses** whenever reality does not match, because reporting `Added` for a
 >
 > **The holder workspace needs its own active exception** whenever it sits on a governed capacity. Otherwise rule 1 applies to it like any other workspace, and what it blocks is **creating policy set items** - so `InitializeCapacityPolicySet` fails for every capacity provisioned afterwards, and the policy system locks itself out of its own store. The row looks like an over-broad exception with no business owner, which is exactly what an access review removes; `ubsppcoe_reason` is the only thing that stops that. **Placing the holder workspace on an ungoverned capacity removes the dependency altogether**, and is the better answer where possible.
 
-### 6.5 What no event covers - the manual backstop
-
-**No flow in the solution runs on a schedule.** The event flows publish their own change promptly, so the ordinary path is covered. What is not covered is every change that fires no event, and every event-flow failure that nobody acts on.
-
-```mermaid
-flowchart TB
-    CH["A change that affects<br/>a capacity's rules"] --> Q1{"Does it fire a<br/>Dataverse event?"}
-    Q1 -->|Yes| BAU["Event flow publishes it<br/>within minutes"]
-    BAU --> Q2{"Run succeeded?"}
-    Q2 -->|Yes| OK["Fabric matches Dataverse"]
-    Q2 -->|"No - Failed or Caught"| MAN
-    Q1 -->|"No - move, hard delete,<br/>item type edit, hand edit"| MAN["<b>Stale</b> until an operator runs<br/>MIG_RebuildAllCapacityPolicies"]
-    MAN --> OK
-    PS["Our policy set deactivated,<br/>replaced or deleted in Fabric"] --> BLIND["<b>Not detected by anything</b><br/>manual check of the holder workspace only"]
-```
-
-Five cases persist until somebody runs **`MIG_RebuildAllCapacityPolicies`**:
-
-1. A `Failed` outcome from any event flow that nobody acted on.
-2. A workspace **moved** between capacities. The flag does not change, so neither Add nor Remove fires, and the old capacity keeps granting.
-3. A `Policy Exceptions` row **hard-deleted** instead of deactivated.
-4. Any `Policy Item Types` edit. That table has no trigger.
-5. Any rule **edited by hand** in the Fabric portal - including the removal of rule 1, which leaves a capacity unenforced.
-
-`MIG_RebuildAllCapacityPolicies` is manual, walks every registered capacity oldest-rebuild-first, rebuilds them one at a time, and mails a failure summary to `ubsppcoe_PolicyMailRecipients`. Sorting by last rebuild makes an interrupted run degrade well: the next run starts with exactly the capacities the last one missed.
-
-**What it cannot fix is drift in the policy set itself.** If somebody deactivates ours, or creates and activates a replacement, the rebuild writes rules to a set that is not in force, gets `200`, stamps `ubsppcoe_lastrebuild` and leaves `ubsppcoe_lasterror` empty. **Every signal reports healthy.** The only check is a person confirming, in the holder workspace, one active policy set per capacity and that it is ours.
-
-### 6.6 Cutover - register, rebuild and activate as separate runs
-
-The estate was brought under the flows by four `MIG_` flows, run by hand in phases. **Everything before activation is inert**: policy sets with no rules or with rules but deactivated change nobody's access, so a wrong run is undone by deleting items and rows.
-
-```mermaid
-flowchart LR
-    P0["<b>0</b> Pre-flight"] --> P1["<b>1</b> Register<br/>MIG_RegisterAll...<br/><i>inert</i>"]
-    P1 --> P2["<b>2</b> Seed<br/>Policy Exceptions<br/><i>inert</i>"]
-    P2 --> P3["<b>3</b> Rebuild<br/>MIG_RebuildAll...<br/><i>inert</i>"]
-    P3 --> P4{"<b>4</b> Review gate<br/>who loses access?"}
-    P4 -->|"agreed and signed off"| P5["<b>5</b> Activate<br/>MIG_ActivateAll...<br/><b>enforcement begins</b>"]
-    P5 --> P6["<b>6</b> Verify"]
-    P6 --> P7["<b>7</b> Clean up<br/>BAU on · MIG_ deleted"]
-```
-
-Design points that carry beyond cutover:
-
-- **Registration walks Fabric, not the inventory.** `MIG_RegisterAllCapacityPolicySets` loops `GET /v1/capacities`, so its most valuable output is the list of live capacities **with no Node row** - the ones that would fail every rebuild until the platform team adds one.
-- **Exceptions are seeded before the first rebuild**, holder workspace first. Rule 3 membership is derived from nothing else, so an exception that is not seeded disappears silently at activation.
-- **The review gate is the decision point.** Per capacity, *workspaces under the Node − whitelisted − excepted* is the number of workspaces about to lose item creation. `MIG_ActivateAllCapacityPolicySets` has a `Report` mode that serves as a dry run.
-- **The `MIG_` flows are copies, not a mode switch on the BAU flows.** A Power Apps trigger cannot be called as a child flow and a trigger cannot be swapped afterwards, so a separate copy avoids re-testing anything already verified for BAU.
-- **After cutover**, three `MIG_` flows are deleted. `MIG_InitializeCapacityPolicySet` in particular is **unsafe standalone** - it has no eligibility check, because the loop did that. `MIG_RebuildAllCapacityPolicies` is **kept, switched off**: it is the only estate-wide repair tool.
-
-### 6.7 Visibility - one table read
-
-`ListCapacityPolicySets` is the only flow with a Power Apps trigger. It reads `Capacity Policies` and returns every row as a single JSON string - no Fabric call, no second table.
-
-At 200-300 capacities, both richer designs break the **120-second** Power Apps budget: asking Fabric needs a list plus a `GET` per set, because list responses frequently omit the capacity scope; counting workspaces needs a query per capacity. So the rebuild **stamps** the workspace, exception and rule counts as it publishes, and this flow simply reads them.
-
-> **The counts are as of the last rebuild, not live.** A flag changed this morning is not reflected until that capacity is rebuilt. They must always be displayed next to `lastRebuild`, so a stale number reads as stale rather than as fact.
 
 ---
 
@@ -621,14 +562,9 @@ At 200-300 capacities, both richer designs break the **120-second** Power Apps b
 
 **The five event flows run with concurrency control at degree 1**, so a bulk change queues rather than collides. Degree 1 serialises a bulk change; it does not shrink it - 500 workspaces enabled in one import is 500 runs.
 
-### Migration - 4 flows
+### Migration - 4 flows, covered in §8
 
-| Flow | Trigger | Purpose | After cutover |
-|---|---|---|---|
-| `MIG_RegisterAllCapacityPolicySets` | Manual | Walks `GET /v1/capacities` and registers each eligible capacity, deactivated | Deleted |
-| `MIG_InitializeCapacityPolicySet` | Manual (child) | Creates and registers one policy set. No rules, no activation. **Unsafe standalone** | Deleted |
-| `MIG_RebuildAllCapacityPolicies` | Manual | Rebuilds every registered capacity, one at a time, and mails a failure summary | **Kept, switched off** - the estate-wide repair tool |
-| `MIG_ActivateAllCapacityPolicySets` | Manual | Puts the deny-all baseline into force across the estate. `Report` mode is the dry run | Deleted |
+They are manual, they were run once, and each one's fate after cutover is listed in §8.
 
 ### How every flow handles failure
 
@@ -643,7 +579,45 @@ The event flows share one error-handling shape, and its details are not arbitrar
 
 ---
 
-## 8. Data model
+## 8. Migration - the one-off cutover
+
+**This section describes work that happened once, to bring an estate that already existed under the flows in §7.** Nothing here runs as business as usual, and nothing in §2-§7 depends on it. One of the four flows outlives the cutover, as the estate-wide repair tool of §6.5.
+
+### The four `MIG_` flows
+
+| Flow | Trigger | Purpose | After cutover |
+|---|---|---|---|
+| `MIG_RegisterAllCapacityPolicySets` | Manual | Walks `GET /v1/capacities` and registers each eligible capacity, deactivated | Deleted |
+| `MIG_InitializeCapacityPolicySet` | Manual (child) | Creates and registers one policy set. No rules, no activation. **Unsafe standalone** | Deleted |
+| `MIG_RebuildAllCapacityPolicies` | Manual | Rebuilds every registered capacity, one at a time, and mails a failure summary | **Kept, switched off** - the estate-wide repair tool |
+| `MIG_ActivateAllCapacityPolicySets` | Manual | Puts the deny-all baseline into force across the estate. `Report` mode is the dry run | Deleted |
+
+### Register, rebuild and activate as separate runs
+
+The flows were run by hand in phases. **Everything before activation is inert**: policy sets with no rules, or with rules but deactivated, change nobody's access, so a wrong run is undone by deleting items and rows.
+
+```mermaid
+flowchart LR
+    P0["<b>0</b> Pre-flight"] --> P1["<b>1</b> Register<br/>MIG_RegisterAll...<br/><i>inert</i>"]
+    P1 --> P2["<b>2</b> Seed<br/>Policy Exceptions<br/><i>inert</i>"]
+    P2 --> P3["<b>3</b> Rebuild<br/>MIG_RebuildAll...<br/><i>inert</i>"]
+    P3 --> P4{"<b>4</b> Review gate<br/>who loses access?"}
+    P4 -->|"agreed and signed off"| P5["<b>5</b> Activate<br/>MIG_ActivateAll...<br/><b>enforcement begins</b>"]
+    P5 --> P6["<b>6</b> Verify"]
+    P6 --> P7["<b>7</b> Clean up<br/>BAU on · MIG_ deleted"]
+```
+
+### Design points that carry beyond cutover
+
+- **Registration walks Fabric, not the inventory.** `MIG_RegisterAllCapacityPolicySets` loops `GET /v1/capacities`, so its most valuable output is the list of live capacities **with no Node row** - the ones that would fail every rebuild until the platform team adds one.
+- **Exceptions are seeded before the first rebuild**, holder workspace first. Rule 3 membership is derived from nothing else, so an exception that is not seeded disappears silently at activation.
+- **The review gate is the decision point.** Per capacity, *workspaces under the Node − whitelisted − excepted* is the number of workspaces about to lose item creation. `MIG_ActivateAllCapacityPolicySets` has a `Report` mode that serves as a dry run.
+- **The `MIG_` flows are copies, not a mode switch on the BAU flows.** A Power Apps trigger cannot be called as a child flow and a trigger cannot be swapped afterwards, so a separate copy avoids re-testing anything already verified for BAU.
+- **After cutover**, three `MIG_` flows are deleted. `MIG_InitializeCapacityPolicySet` in particular is **unsafe standalone** - it has no eligibility check, because the loop did that. `MIG_RebuildAllCapacityPolicies` is **kept, switched off**: it is the only estate-wide repair tool.
+
+---
+
+## 9. Data model
 
 ```mermaid
 erDiagram
@@ -736,14 +710,14 @@ Seven, all created inside the solution. All are Text except `PolicyApiBeta`.
 | `ubsppcoe_PolicyMaxWorkspacesPerRule` | `49` | Rebuild |
 | `ubsppcoe_PolicyMaxRulesPerPolicy` | `50` | Rebuild |
 | `ubsppcoe_PolicyNamePrefix` | `pol_` | Initialize, `MIG_Initialize` |
-| `ubsppcoe_PolicyApiBeta` | **Two options.** No today; Yes while the API is in public-preview beta | The six policy-API calls (§9) |
+| `ubsppcoe_PolicyApiBeta` | **Two options.** No today; Yes while the API is in public-preview beta | The six policy-API calls (§10) |
 | `ubsppcoe_PolicyMailRecipients` | A semicolon-separated address list - **per environment** | The report mails of the `MIG_` flows |
 
 **Set a Current Value, not only a Default Value** - variable values do not reliably travel with a solution import. A missing holder-workspace or sentinel value is pasted into a URL or a rule and fails quietly; a missing `PolicyApiBeta` or `PolicyMailRecipients` value fails loudly, and the flows that read it will not publish. `PolicyMailRecipients` is the one that **should** differ per environment, so a test run never mails the platform team, and it can never be blank - "send to nobody" is not expressible. There is deliberately no variable for the policy type: `ItemCreation` is a literal in the rebuild body.
 
 ---
 
-## 9. Integration surface - Fabric REST API
+## 10. Integration surface - Fabric REST API
 
 Base: `https://api.fabric.microsoft.com/v1`
 
@@ -813,105 +787,3 @@ An exception rule is the whitelist rule with the `item.type` condition removed.
 The capacity-policy API is in **private preview**. At **public preview** it is re-released as beta and every policy call needs `?beta=true`; at **GA** the parameter goes away again. Six calls in four flows - create, activate, `replaceByPolicy` and delete - end their URL with an expression that reads **`ubsppcoe_PolicyApiBeta`**, so both transitions are a toggle in the solution rather than an edit to any flow. `GET /capacities` and the operation-polling calls are unaffected and do not read it.
 
 **A toggle pointing the wrong way fails every capacity at once, at Fabric, naming nothing.** It was built as Two options after a Text variable failed every way it was tried: an empty value cannot be stored, a cleared value is silently ignored, and a bare `?` is rejected by Fabric.
-
----
-
-## 10. Design decisions and their rationale
-
-| Decision | Rationale |
-|---|---|
-| **Rebuild the whole rule list every time; never edit a rule** | `PATCH` replaces the whole conditions array with no ETag, so concurrent edits lose data. A full rebuild recomputes chunks and names from the full list, and overwrites hand edits |
-| **The desired state is the platform team's existing tables, read only** | A junction table would be a second copy of a list that is already mastered, with a synchronisation problem attached. Writing their columns would repurpose fields other systems act on |
-| **Whitelist membership is `ubsppcoe_oapenabled`, and `false` equals null** | One flag, already maintained. `eq true` excludes both other values, so nothing needs the complement of the whitelist |
-| **Exceptions are a table of ours, keyed on the workspace GUID, with no capacity column** | The capacity is derived from the workspace's Node, so moves need no cleanup. The cost - an exception follows its workspace without re-approval - is accepted; per-capacity approval would silently revoke exceptions on every move |
-| **No flow writes `Policy Exceptions` or `Policy Item Types`** | Both are human decisions. Flows read and publish; people grant |
-| **`Capacity Policies` is a separate table, linked to the Node by lookup** | Ownership, churn, lifecycle and deletion all decide against columns on `ubsppcoe_Node`. A lookup survives renames, and a blank one makes the rebuild fail closed |
-| **Counts are stamped by the rebuild, not computed on read** | Counting per capacity at read time breaks the 120-second Power Apps budget at 200-300 capacities |
-| **Add and Remove survive as validators** | A bare refresh cannot report on the workspace it was triggered by. The validation is the value |
-| **Event flows fire on Dataverse row changes, not on application calls** | The changes that matter originate in the platform team's processes. A row trigger publishes them without anyone having to remember to call a flow |
-| **One identity: a service account behind the preauthorized connector** | No client secret, no app registration, no tenant setting. The cost - a user account's failure modes - is the largest operational risk, accepted explicitly |
-| **Delete asks Fabric, then deletes or suspends** | A Node soft-delete is an inventory event. Only Fabric knows whether the capacity still exists, and only then is deletion safe |
-| **No scheduled flow; the estate-wide rebuild is operator-initiated** | Ongoing change is carried by the event flows. The cost - five no-event cases persist until somebody runs the rebuild - is accepted |
-| **Drift in the policy set itself is not detected** | The scan that would have detected it was discarded. Two options remain open if it ever needs closing: a periodic manual check of the holder workspace, or having the estate-wide rebuild re-activate with `allowReplace` - which corrects silently and never reports that anything was taken over |
-| **Migration is three separate runs - register, rebuild, activate** | Everything before activation is inert, which gives the review gate a place to happen |
-| **The API release stage is a Two options toggle** | The URL changes twice on dates nobody here controls. A toggle carries both transitions without opening a flow |
-| **The solution's tables use the `ubsppcoe_` prefix** | One publisher for the subsystem. The cost is that the prefix no longer indicates ownership, so every read-only rule is stated by table name |
-| **`Logging` receives three columns, insert only** | It is a shared table with no message column. It records that a flow failed and links to the run; `ubsppcoe_lasterror` holds the diagnosis |
-
----
-
-## 11. Architectural constraints and known limitations
-
-### Platform constraints
-
-| Constraint | Consequence |
-|---|---|
-| **The policy API is in preview** | The route changes at public preview and again at GA (§9). Behaviour may change too, and the published reference has already been found incomplete once - the paths these flows call are the working authority |
-| **50 rules per policy, 49 workspaces per rule** | About 2,400 whitelisted workspaces per capacity. Exceeding it fails the rebuild readably; going beyond it needs a design decision |
-| **Only F SKU capacities can hold a policy set** | P, A, EM and PP capacities report `Skipped` and stay ungoverned |
-| **Only one active policy set per capacity** | Activating another set deactivates ours without removing it - the undetected state in §6.5 |
-| **`GET /capacities` is scoped to the caller** | A capacity the account does not administer looks exactly like one that does not exist |
-| **Deactivate returns `404` once a capacity is gone** | Cleanup after deprovisioning is delete-only |
-| **Power Apps calls have a 120-second response budget** | Why the visibility flow reads one table and nothing else |
-
-### Accepted risks
-
-Understood, decided and deliberately not mitigated.
-
-| # | Risk |
-|---|---|
-| R1 | **A policy set that is not in force still reports healthy.** The rebuild writes to a deactivated set and succeeds |
-| R2 | **Ten of eleven `ubsppcoe_Node` states are untested.** Only `2` = Deleted is confirmed; the rest are treated as live |
-| R3 | **Reversing a Node soft-delete does not restore enforcement.** The capacity returns ungoverned while looking registered |
-| R4 | **A new capacity is born locked, and nobody decides** |
-| R5 | **Nothing retries a `Skipped` capacity** |
-| R6 | **Workspace GUIDs are never validated.** A typo or stale entry denies the owner with no error anywhere |
-| R7 | **An exception follows its workspace to a new capacity** with nobody on that capacity approving it |
-| R8 | **A workspace move is not detected.** The old capacity keeps granting until an estate-wide rebuild |
-
-> **R1 and R6 share a shape, and it is the one to teach a new operator: the failure presents as *everything looks fine*.** Both are invisible to every automated signal in the system. If somebody reports being denied while every signal reads healthy, check the holder workspace for one active policy set per capacity, then check the published GUID against the workspace in Fabric.
-
-### Gaps left unbuilt
-
-| # | Gap |
-|---|---|
-| G1 | **Drift detection.** Nothing observes whether Fabric matches Dataverse. A scheduled scan was specified and then discarded |
-| G2 | **Ungoverned-capacity sweep.** A Node row written once and never touched again, while Fabric did not yet know the capacity, is never initialised |
-| G3 | **Alerting.** No mail, SLA or escalation on a BAU failure. `ubsppcoe_lasterror` and `Logging` hold the evidence; nobody is notified |
-| G4 | **Emergency unlock at scale** depends on an operator procedure that sits outside this solution and is not specified here |
-| G5 | **`Policy Exceptions` has no upstream.** Its rows come from people, or from the migration's exceptions file if one exists |
-
-### A deletion risk specific to `DeleteCapacityPolicySet`
-
-The delete branch runs when the capacity is absent from `GET /v1/capacities` - which is also what happens when the account **loses Capacity Admin** on a capacity that is alive. The flow guards against an empty list, not against a single missing capacity. **Losing the role on one capacity, followed by that capacity's Node row being soft-deleted, deletes a live capacity's policy set.** The safeguard is operational: Capacity Admin grants must not lapse.
-
-### Power Platform conventions that the implementation depends on
-
-These are not preferences - each was established by experiment or after a real defect, and departing from them reintroduces it.
-
-| Convention | Why |
-|---|---|
-| **Every Dataverse trigger at `Organization` scope** | At `User` scope a trigger fires only for the connection account's own changes - so never, with an empty run history |
-| **`Select columns` decides whether a trigger fires, and only on updates** | It is ignored on the *Added* half of *Added or Modified*. `Filter rows` is what constrains inserts |
-| **Lookup filters use `_x_value eq <unquoted GUID>`** | Quoting gives a misleading error, and filtering the lookup's own name returns `400` |
-| **A zero GUID, never an empty string, when a filter value may be missing** | `x eq ` is malformed OData that fails the action. The zero GUID is well-formed, matches nothing, and lets the flow reach its reporting step |
-| **A child flow needs the *Manually trigger a flow* trigger** | A Power Apps (V2) trigger cannot be called by `Run a Child Flow`, and a trigger cannot be swapped afterwards - build fresh |
-| **Request-response flows cannot have trigger concurrency** | Why the rebuild cannot serialise itself, and the callers do it instead |
-| **A handled failure inside a Scope reports success at every level** | No action inside `Scope_try` may run after *has failed*, and every Catch ends in `Terminate` Failed |
-| **`Terminate` inside a Scope shows *Aborted*, which nothing can catch** | The only `Terminate` belongs at the end of the Catch - or, in the rebuild, after a guard's `Respond` |
-| **`result()` does not recurse** | A failure nested inside a container reports boilerplate. Keep actions inside `Scope_try` as immediate children so the Catch can name the real one |
-| **`Initialize variable` cannot sit inside a Scope, Condition or loop** | The designer accepts it and fails on save. All variables are declared at the top level |
-| **Every Power Apps response field is a string** | A field typed otherwise fails validation and makes *every* field unreadable. `ListCapacityPolicySets` returns one JSON string |
-| **`"@expr"` and `"@{expr}"` are not interchangeable** | The braced form yields a string. On a `values` array, Fabric then receives a quoted string instead of an array |
-| **Leave Retry Policy at Default** | It covers `408`, `429` and `5xx`. Setting it to None turns routine throttling into a failed capacity |
-
-### Open points
-
-| Item | Status |
-|---|---|
-| Does the Dataverse connection use the same service account as the Fabric connection? | **To confirm** - if not, there is a second credential to monitor |
-| Which Dataverse security role carries the privileges in §4? | **To confirm** - if System Administrator, a scoped custom role is the correct long-term answer |
-| Solution name, managed or unmanaged, and whether the tables share the solution with the flows | **To confirm** |
-| The six policy-API call sites read `ubsppcoe_PolicyApiBeta` in the built flows | The flow edits were last recorded as outstanding. **Confirm in the environment before public preview** |
-| Owners for monitoring the service account, checking the holder workspace, reviewing governed item types as Fabric ships new ones, and acting on failed BAU runs | **Unassigned** |
-| Re-approval of exceptions on a capacity move; detecting moves rather than relying on a manual rebuild; confirming that a workspace exists in Fabric before its GUID is published | **Open** |
