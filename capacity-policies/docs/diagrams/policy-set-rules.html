@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>What a capacity policy set contains</title>
+<style>
+  :root {
+    --ink: #1b1f2a;
+    --muted: #5b6475;
+    --line: #e3e7ef;
+    --deny: #d64545;
+    --deny-bg: #fdf1f1;
+    --allow: #2e9e5b;
+    --allow-bg: #f0faf4;
+    --exc: #9456d4;
+    --exc-bg: #f7f1fd;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 36px;
+    background: #f5f7fb;
+    font-family: "Segoe UI", "Segoe UI Variable", system-ui, -apple-system, sans-serif;
+    color: var(--ink);
+  }
+  .sheet {
+    width: 1180px;
+    margin: 0 auto;
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: 0 10px 34px rgba(24, 33, 57, .10);
+    overflow: hidden;
+  }
+  .masthead {
+    background: linear-gradient(110deg, #0b2a5b 0%, #1f6feb 55%, #39b6e8 100%);
+    color: #fff;
+    padding: 26px 34px;
+  }
+  .masthead h1 { margin: 0; font-size: 25px; letter-spacing: .2px; }
+  .masthead p { margin: 7px 0 0; font-size: 14.5px; opacity: .92; }
+  .body { padding: 28px 34px 34px; }
+
+  .chain { display: flex; align-items: stretch; gap: 14px; margin-bottom: 26px; }
+  .node {
+    flex: 1;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 16px;
+    background: #fbfcfe;
+  }
+  .node .kicker {
+    font-size: 11px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 700;
+  }
+  .node .name { font-size: 16px; font-weight: 700; margin-top: 4px; }
+  .node .sub { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+  .node.capacity { border-color: #bcd6fb; background: #f3f8ff; }
+  .arrow { align-self: center; font-size: 26px; color: #9aa6bd; font-weight: 700; }
+
+  .rules { display: flex; flex-direction: column; gap: 14px; }
+  .rule {
+    display: grid;
+    grid-template-columns: 196px 1fr 300px;
+    gap: 18px;
+    border: 1px solid var(--line);
+    border-left: 7px solid var(--line);
+    border-radius: 12px;
+    padding: 16px 18px;
+    background: #fff;
+  }
+  .rule.deny { border-left-color: var(--deny); background: var(--deny-bg); }
+  .rule.allow { border-left-color: var(--allow); background: var(--allow-bg); }
+  .rule.exception { border-left-color: var(--exc); background: var(--exc-bg); }
+
+  .rule .label { font-size: 15.5px; font-weight: 800; line-height: 1.3; }
+  .rule .tag {
+    display: inline-block;
+    margin-top: 8px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 3px 9px;
+    border-radius: 999px;
+    color: #fff;
+  }
+  .deny .tag { background: var(--deny); }
+  .allow .tag { background: var(--allow); }
+  .exception .tag { background: var(--exc); }
+
+  .rule .what { font-size: 14px; line-height: 1.55; }
+  .rule .cond {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 12.3px;
+    line-height: 1.6;
+    background: #fff;
+    border: 1px dashed #cfd6e4;
+    border-radius: 9px;
+    padding: 10px 12px;
+    color: #2b3346;
+  }
+  .cond .k { color: #1f6feb; font-weight: 700; }
+  .cond .op { color: #9456d4; font-weight: 700; }
+  .cond .note {
+    display: block;
+    margin-top: 6px;
+    color: var(--muted);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-size: 11.6px;
+  }
+
+  .footnotes {
+    margin-top: 26px;
+    border-top: 1px solid var(--line);
+    padding-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px 26px;
+  }
+  .footnotes div { font-size: 13.2px; color: #333a4a; line-height: 1.5; }
+  .pill {
+    display: inline-block;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: #eef2f9;
+    color: #2b3346;
+    border: 1px solid #dde3ee;
+  }
+
+  .outcome { margin-top: 24px; }
+  .outcome h3 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .outcome .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .ws {
+    border: 1px solid var(--line);
+    border-top: 5px solid var(--line);
+    border-radius: 12px;
+    padding: 13px 15px;
+    background: #fff;
+  }
+  .ws.deny { border-top-color: var(--deny); }
+  .ws.allow { border-top-color: var(--allow); }
+  .ws.exception { border-top-color: var(--exc); }
+  .ws .who { font-size: 14.5px; font-weight: 800; }
+  .ws .via { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .chips { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    font-size: 11.8px;
+    font-weight: 700;
+    padding: 3px 9px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+  .chip.pbi { background: #fff6d6; color: #8a6400; border-color: #f1dc8f; }
+  .chip.gov { background: #e5f6ec; color: #1f7a45; border-color: #bfe6cf; }
+  .chip.any { background: #efe6fb; color: #6a35a8; border-color: #d9c6f3; }
+  .chip.no { background: #f6f7fa; color: #8b93a5; border-color: #e3e7ef; text-decoration: line-through; }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="masthead">
+    <h1>One capacity &rarr; one policy set &rarr; three rules</h1>
+    <p>Closed by default, then opened in two steps: <b>everyone</b> gets Power BI only, <b>OAP workspaces</b> get an approved list of Fabric item types, and a few <b>exceptions</b> get everything.</p>
+  </div>
+
+  <div class="body">
+    <div class="chain">
+      <div class="node">
+        <div class="kicker">Holder workspace</div>
+        <div class="name">Every policy set in the tenant</div>
+        <div class="sub">Policy sets are Fabric items, so they live in a workspace. One central workspace holds them all.</div>
+      </div>
+      <div class="arrow">&rsaquo;</div>
+      <div class="node">
+        <div class="kicker">Policy set</div>
+        <div class="name">pol_&lt;capacity&gt;</div>
+        <div class="sub">A list of rules, rebuilt in full whenever the desired state changes.</div>
+      </div>
+      <div class="arrow">&rsaquo;</div>
+      <div class="node capacity">
+        <div class="kicker">Activated on</div>
+        <div class="name">One capacity</div>
+        <div class="sub">One active policy set per capacity, enforced for every workspace sitting on it.</div>
+      </div>
+    </div>
+
+    <div class="rules">
+      <div class="rule deny">
+        <div>
+          <div class="label">Rule 1<br>Deny all &mdash; Power BI only</div>
+          <span class="tag">Always present</span>
+        </div>
+        <div class="what">
+          <strong>Blocks every Fabric item type for every workspace on the capacity &mdash; Power BI items stay available.</strong>
+          This is the rule that applies to <strong>non-OAP workspaces</strong>: they can keep creating reports, semantic models and dashboards, and nothing else.
+          Power BI items stay open because the ItemCreation policy does not track them at all.
+          <br><br>
+          Fabric has no Deny effect, so the rule is written as an Allow that can never match. Its job is to keep the policy non-empty &mdash; a policy with no rules is not enforced, and the capacity would silently open.
+        </div>
+        <div class="cond">
+          <span class="k">workspace.id</span> <span class="op">AnyOf</span> [ 000&hellip;000 ]
+          <span class="note">A sentinel GUID that matches no real workspace. Rule name: <i>Deny all item creation (PBI items not tracked)</i>.</span>
+        </div>
+      </div>
+
+      <div class="rule allow">
+        <div>
+          <div class="label">Rule 2<br>OAP workspaces &mdash; approved item types</div>
+          <span class="tag">OAP-enabled only</span>
+        </div>
+        <div class="what">
+          <strong>Lets OAP-enabled workspaces create a specific list of Fabric item types</strong> &mdash; lakehouses, warehouses, notebooks, pipelines and so on &mdash; on top of Power BI.
+          Both conditions must hold: the workspace is OAP-enabled in the inventory <em>and</em> the item is on the approved list.
+          The approved types are kept in a table, so adding one is a data change, not a code change.
+        </div>
+        <div class="cond">
+          <span class="k">workspace.id</span> <span class="op">AnyOf</span> [ OAP workspaces ]<br>
+          <span class="op">AND</span><br>
+          <span class="k">item.type</span> <span class="op">AnyOf</span> [ approved types ]
+          <span class="note">Up to 49 workspaces per rule, so a large capacity carries several copies of rule 2.</span>
+        </div>
+      </div>
+
+      <div class="rule exception">
+        <div>
+          <div class="label">Rule 3<br>Exceptions &mdash; allow all</div>
+          <span class="tag">Only when exceptions exist</span>
+        </div>
+        <div class="what">
+          <strong>Lets a short, owned list of workspaces create any item type at all.</strong>
+          The missing item-type condition is the whole point: with nothing to narrow it, the rule matches every type.
+          Because every rule is an Allow rule, an exception simply supersedes rule 2 &mdash; there is no precedence to implement.
+        </div>
+        <div class="cond">
+          <span class="k">workspace.id</span> <span class="op">AnyOf</span> [ excepted ]
+          <span class="note">And nothing else &mdash; no item.type condition. Up to 49 workspaces per rule.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="outcome">
+      <h3>What a workspace on this capacity can create</h3>
+      <div class="grid">
+        <div class="ws deny">
+          <div class="who">Non-OAP workspace</div>
+          <div class="via">Covered by rule 1 only</div>
+          <div class="chips">
+            <span class="chip pbi">Power BI items</span>
+            <span class="chip no">Fabric item types</span>
+          </div>
+        </div>
+        <div class="ws allow">
+          <div class="who">OAP-enabled workspace</div>
+          <div class="via">Rule 1 + rule 2</div>
+          <div class="chips">
+            <span class="chip pbi">Power BI items</span>
+            <span class="chip gov">Approved Fabric item types</span>
+          </div>
+        </div>
+        <div class="ws exception">
+          <div class="who">Exception workspace</div>
+          <div class="via">Rule 1 + rule 3</div>
+          <div class="chips">
+            <span class="chip pbi">Power BI items</span>
+            <span class="chip any">Every item type</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="footnotes">
+      <div><b>A capacity with no OAP workspace carries rule 1 alone.</b> That is a correctly locked, Power BI-only capacity, not an error.</div>
+      <div><b>Every publish replaces the whole list.</b> Rules are never edited one at a time, so hand edits made in the portal do not survive the next rebuild.</div>
+      <div><b>Rules cost against a ceiling of 50.</b> <span class="pill">1 + ceil(OAP / 49) + ceil(exceptions / 49)</span> &mdash; roughly 2,400 OAP workspaces per capacity.</div>
+      <div><b>Every rule is an Allow, and rules are ORed.</b> A creation is permitted if any one rule matches it.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
