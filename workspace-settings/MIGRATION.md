@@ -315,7 +315,7 @@ Instead, create each connection by **signing in as the broker service account** 
 
 **Role:** System Administrator
 
-Create it **in the maker portal** — never by editing `customizations.xml` — and add it to the solution. Import the 28 seed rows from [`data/PrivateLinkTargets.csv`](../data/PrivateLinkTargets.csv).
+Create it **in the maker portal** — never by editing `customizations.xml` — and add it to the solution. Import the 28 seed rows from [`app/data/PrivateLinkTargets.csv`](app/data/PrivateLinkTargets.csv).
 
 > **Check the column mapping rather than trusting auto-match.** The CSV headers are *schema* names and the mapping screen shows *display* names. An unmapped sub-resource column imports 28 rows of blanks, which the create panel then sends to Fabric on every attempt — and Fabric does not validate sub-resources, so the endpoint provisions and fails later.
 

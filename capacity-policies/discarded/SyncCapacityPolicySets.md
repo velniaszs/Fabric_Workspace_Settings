@@ -433,7 +433,7 @@ The last action is therefore either `Add_drift_conflict` (Step 7c) or the option
 
 If the app needs the four counts on a screen, it reads them from the table, not from this flow.
 
-> The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](../../docs/FLOWS.md) §4.
+> The **"Scan now"** variant in Step 1 is the exception: a Power Apps (V2) trigger does need a `Respond to a Power App or flow` as its last action. Return four **Text** outputs — `untracked`, `missing`, `inactive`, `conflict` — each `string(length(body('Filter_...')))`. Every field Text, per the trap in [FLOWS.md](../../workspace-settings/docs/FLOWS.md) §4.
 
 ---
 

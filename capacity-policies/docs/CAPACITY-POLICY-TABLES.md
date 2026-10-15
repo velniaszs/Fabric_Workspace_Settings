@@ -10,7 +10,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-
 
 ## 0. Rules that apply to every table here
 
-**Create tables and columns in the maker portal. Never by editing [customizations.xml](../../customizations.xml).** Hand-edited solution XML is how a column ends up with a schema name the designer will not show you and the connector will not offer.
+**Create tables and columns in the maker portal. Never by editing [customizations.xml](../../workspace-settings/app/customizations.xml).** Hand-edited solution XML is how a column ends up with a schema name the designer will not show you and the connector will not offer.
 
 > ### The prefix is `ubsppcoe_`, and it is **not** a placeholder
 >
@@ -416,7 +416,7 @@ Design rationale for all of it is in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-
 5. Set both `ubsppcoe_active` columns to default **No**.
 4. Seed `ubsppcoe_PolicyItemType` from [input/PolicyItemTypes.csv](../input/PolicyItemTypes.csv) — **not** from the raw `fabric_item_types.csv`, which has nine rows sharing one item type (§3).
 7. Seed `ubsppcoe_PolicyException` from [input/PolicyExceptions.csv](../input/PolicyExceptions.csv) — **a template, not data.** Delete its three `EXAMPLE` rows and replace them with the real workspace GUIDs (§4).
-8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](../../docs/OPEN-ISSUES.md) §8.1.
+8. Create the environment variables in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §6. Their **values** do not reliably travel with a solution export — same caveat as [OPEN-ISSUES.md](../../workspace-settings/docs/OPEN-ISSUES.md) §8.1.
 9. Only then start on [GetPolicyToken.md](../discarded/GetPolicyToken.md), following the build order in [CAPACITY-POLICY-FLOWS.md](CAPACITY-POLICY-FLOWS.md) §8.
 
 ---

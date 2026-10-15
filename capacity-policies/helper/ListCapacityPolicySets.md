@@ -122,7 +122,7 @@ The three counts are **as of the last rebuild**, not live. A `ubsppcoe_oapenable
 
 **`'[]'` on failure, not blank.** An empty string throws in `ParseJSON`; an empty array parses to zero rows and the app shows an empty list with whatever `ErrorMessage` says. One of those is a screen the user can read.
 
-Both outputs **Text**. A field typed Number or Boolean fails schema validation at runtime and makes *every* output unreadable to the app, not just the bad one — the trap that cost two flows a field each in [FLOWS.md](../../docs/FLOWS.md) §4.
+Both outputs **Text**. A field typed Number or Boolean fails schema validation at runtime and makes *every* output unreadable to the app, not just the bad one — the trap that cost two flows a field each in [FLOWS.md](../../workspace-settings/docs/FLOWS.md) §4.
 
 ### Setting `errorMessage`
 

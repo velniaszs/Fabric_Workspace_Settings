@@ -74,16 +74,16 @@ Both are detailed in [SECURITY.md](./SECURITY.md) §10 and should be built toget
 
 ## Engineering documentation
 
-Build-level detail lives in [`docs/`](../docs) and is referenced from these documents where relevant:
+Build-level detail lives in [`docs/`](docs) and is referenced from these documents where relevant:
 
 | Topic | Location |
 |---|---|
-| Per-flow behaviour and verified test paths | [`docs/FLOWS.md`](../docs/FLOWS.md) |
-| Individual flow specifications | [`docs/flows/`](../docs/flows) |
-| Custom connector build instructions | [`docs/CUSTOM-CONNECTOR.md`](../docs/CUSTOM-CONNECTOR.md) |
-| Canvas app build guides | [`docs/APP-GIT-TAB.md`](../docs/APP-GIT-TAB.md) · [`docs/APP-OUTBOUND-TAB.md`](../docs/APP-OUTBOUND-TAB.md) · [`docs/APP-PRIVATE-ENDPOINTS-TAB.md`](../docs/APP-PRIVATE-ENDPOINTS-TAB.md) |
-| Private-endpoint design rationale | [`docs/APP-PRIVATE-ENDPOINTS.md`](../docs/APP-PRIVATE-ENDPOINTS.md) |
-| Open defects and undecided points | [`docs/OPEN-ISSUES.md`](../docs/OPEN-ISSUES.md) |
+| Per-flow behaviour and verified test paths | [`docs/FLOWS.md`](docs/FLOWS.md) |
+| Individual flow specifications | [`docs/flows/`](docs/flows) |
+| Custom connector build instructions | [`docs/CUSTOM-CONNECTOR.md`](docs/CUSTOM-CONNECTOR.md) |
+| Canvas app build guides | [`docs/APP-GIT-TAB.md`](docs/APP-GIT-TAB.md) · [`docs/APP-OUTBOUND-TAB.md`](docs/APP-OUTBOUND-TAB.md) · [`docs/APP-PRIVATE-ENDPOINTS-TAB.md`](docs/APP-PRIVATE-ENDPOINTS-TAB.md) |
+| Private-endpoint design rationale | [`docs/APP-PRIVATE-ENDPOINTS.md`](docs/APP-PRIVATE-ENDPOINTS.md) |
+| Open defects and undecided points | [`docs/OPEN-ISSUES.md`](docs/OPEN-ISSUES.md) |
 
 > Where the engineering notes and these documents disagree, **these documents are the more recent** — they were verified against the solution export on 2026-09-25. Differences found during that verification are recorded in [MIGRATION.md](./MIGRATION.md) §Known migration defects.
 
@@ -91,11 +91,13 @@ Build-level detail lives in [`docs/`](../docs) and is referenced from these docu
 
 ## Solution artefacts in this repository
 
+Everything that belongs to the solution itself is under [`app/`](app). It is the unpacked solution export, so `solution.xml`, `customizations.xml` and `[Content_Types].xml` sit at the top of that folder, next to the component folders.
+
 | Path | Contents |
 |---|---|
-| [`Workflows/`](../Workflows) | The 17 cloud flows, as unpacked solution JSON. **Never hand-edited** |
-| [`CanvasApps/`](../CanvasApps) | The canvas app package |
-| [`Connector/`](../Connector) | The custom connector definition and OpenAPI |
-| [`environmentvariabledefinitions/`](../environmentvariabledefinitions) | The three environment variables |
-| [`data/`](../data) | Reference data, including the private-link target seed file |
-| [`scripts/`](../scripts) | Diagnostic helpers |
+| [`app/Workflows/`](app/Workflows) | The 17 cloud flows, as unpacked solution JSON. **Never hand-edited** |
+| [`app/CanvasApps/`](app/CanvasApps) | The canvas app package |
+| [`app/Connector/`](app/Connector) | The custom connector definition and OpenAPI |
+| [`app/environmentvariabledefinitions/`](app/environmentvariabledefinitions) | The three environment variables |
+| [`app/data/`](app/data) | Reference data, including the private-link target seed file |
+| [`scripts/`](scripts) | Diagnostic helpers. These are not part of the solution |

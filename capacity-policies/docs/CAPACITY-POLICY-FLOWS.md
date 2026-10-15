@@ -6,7 +6,7 @@ Plan for the Power Automate flows that operate the capacity-scoped `ItemCreation
 
 Source material reviewed 2026-09-02, all in `C:\GIT\ubs-policies`: `migrate_policy_sets.ps1`, `add_policy_rule.ps1`, `remove_workspace_from_rule.ps1`, `new_policy_set.ps1`, `list_policy_sets.ps1`, `FabricPolicies.Common.ps1`, `Migration-Steps.md`, and `docs/Fabric-Policies-REST-API-Reference.md`.
 
-> **Different system, same tenant.** This is not the workspace-settings app. It governs capacities rather than workspace settings, and shares no component, table, identity or publisher prefix with it. **It does not share that app's broker-service-principal pattern either** — every Fabric call here is made by the *HTTP with Microsoft Entra ID (preauthorized)* connector signed in as the `workspace provisioning` service account, with no app registration and no client secret anywhere. See [ARCHITECTURE.md](ARCHITECTURE.md) §4. What the two solutions genuinely have in common is the Fabric REST conventions in [FLOWS.md](../../docs/FLOWS.md).
+> **Different system, same tenant.** This is not the workspace-settings app. It governs capacities rather than workspace settings, and shares no component, table, identity or publisher prefix with it. **It does not share that app's broker-service-principal pattern either** — every Fabric call here is made by the *HTTP with Microsoft Entra ID (preauthorized)* connector signed in as the `workspace provisioning` service account, with no app registration and no client secret anywhere. See [ARCHITECTURE.md](ARCHITECTURE.md) §4. What the two solutions genuinely have in common is the Fabric REST conventions in [FLOWS.md](../../workspace-settings/docs/FLOWS.md).
 
 ---
 
@@ -368,7 +368,7 @@ The **only** flow that writes rules. Flows 1, 3 and 4 call it.
 | Trigger | **Manually trigger a flow** — `capacityId` |
 | Returns | `outcome`, `policysetid`, `rulecount`, `workspacecount`, `message` |
 
-> **The trigger must be *Manually trigger a flow*, not Power Apps (V2).** A child flow can only be invoked by `Run a Child Flow` if its trigger is the manual one. This solution already learned that the hard way — `GetGitOperationStatus` had to stop being a child flow when its trigger became `PowerAppV2` ([FLOWS.md](../../docs/FLOWS.md) §2).
+> **The trigger must be *Manually trigger a flow*, not Power Apps (V2).** A child flow can only be invoked by `Run a Child Flow` if its trigger is the manual one. This solution already learned that the hard way — `GetGitOperationStatus` had to stop being a child flow when its trigger became `PowerAppV2` ([FLOWS.md](../../workspace-settings/docs/FLOWS.md) §2).
 
 1. Look up the `CapacityPolicy` row by `capacity_id`. Missing → `Failed`, tell the caller to run flow 1 first. This one read yields both `policy_set_id` and the `node` lookup value.
 2. **The `node` lookup must be populated** → otherwise `Failed`. Blank means we cannot see which workspaces belong to this capacity, which is not the same as there being none.
@@ -428,7 +428,7 @@ Per row: `capacityId`, `capacityName`, `policySetId`, `policySetName`, `status`,
 >
 > The consequence is that it is **as of the last rebuild**. Always render it beside `lastRebuild`, so a stale count reads as stale rather than as fact.
 
-Return the payload as **one JSON string** and `ParseJSON` app-side. Keep every Respond field typed string — the trap that cost two flows a field each in [FLOWS.md](../../docs/FLOWS.md) §4 applies here too.
+Return the payload as **one JSON string** and `ParseJSON` app-side. Keep every Respond field typed string — the trap that cost two flows a field each in [FLOWS.md](../../workspace-settings/docs/FLOWS.md) §4 applies here too.
 
 ### Flow 3 — `AddWorkspaceToPolicy`
 

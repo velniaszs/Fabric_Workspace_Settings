@@ -4,7 +4,7 @@ Governs **which Fabric item types can be created, in which workspaces, on which 
 
 A capacity under this system is **closed by default**. Nothing governed can be created on it until a workspace is explicitly whitelisted. Power BI items are not governed and are unaffected.
 
-> **This is not the workspace-settings app.** It shares the tenant and the Fabric REST conventions, nothing else. That app is documented in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
+> **This is not the workspace-settings app.** It shares the tenant and the Fabric REST conventions, nothing else. That app is documented in [workspace-settings/](../workspace-settings/README.md).
 
 ---
 
