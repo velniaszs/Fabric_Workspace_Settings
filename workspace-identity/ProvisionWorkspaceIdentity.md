@@ -119,9 +119,150 @@ When Fabric rejects the call, the action fails and the Catch takes over. Because
 
 The status code is on `outputs(...)`, never on `body(...)`. **Confirm on the first real run** that this connector surfaces `statusCode` and `headers`. The capacity-policies flows rely on the same thing, and they carry the same warning.
 
-**Yes branch — `202`.** The LRO poll from [README.md](README.md) → *Long-running operations*, with `<POST action>` = `Provision_identity`.
+**No branch — `200`.** Leave it empty. Fabric has finished provisioning. The `200` body contains the IDs, but Step 5 reads them back from the workspace anyway, so there is only one source.
 
-**No branch — `200`.** Leave it empty. The `200` body contains the IDs, but Step 5 reads them back from the workspace anyway, so there is only one source.
+**Yes branch — `202`.** Fabric has accepted the request but has not finished. The branch waits until Fabric reports the operation as `Succeeded` or `Failed`. Build it as follows.
+
+#### What the finished Yes branch looks like
+
+```
+Condition_accepted
+└─ Yes
+   ├─ 1. Set_operationId          Set variable
+   ├─ 2. Set_opStatus_initial     Set variable
+   └─ 3. Do_until_done            Do until  (stop when opStatus = Succeeded OR Failed)
+         ├─ 3a. Delay             Delay 5 seconds
+         ├─ 3b. Get_operation     Invoke an HTTP request (GET operation status)
+         ├─ 3c. Set_opStatus      Set variable
+         └─ 3d. Set_opError       Set variable
+```
+
+All of these actions are already declared as variables in Step 2. This branch only uses **Set variable**. Never use **Initialize variable** here, because the designer will refuse to save it.
+
+#### 1. `Set_operationId` — remember which operation to ask about
+
+1. In the **Yes** branch of `Condition_accepted`, click **+** → **Add an action**.
+2. Search for **Set variable** and select it.
+3. Rename the action to `Set_operationId`. In the new designer, click the action title. In the classic designer, use **⋯** → **Rename**.
+4. **Name:** select `operationId`.
+5. **Value:** open the **ƒx** (expression) tab, paste the expression below, and click **Add** (or **OK**):
+
+   ```
+   outputs('Provision_identity')?['headers']?['x-ms-operation-id']
+   ```
+
+The `202` response carries the operation ID in its `x-ms-operation-id` header. Every later call in this branch uses this value.
+
+#### 2. `Set_opStatus_initial` — start the loop in a known state
+
+1. Under `Set_operationId`, still in the **Yes** branch, click **+** → **Add an action** → **Set variable**.
+2. Rename it to `Set_opStatus_initial`.
+3. **Name:** `opStatus`.
+4. **Value:** type the plain text `Running`. This is text, not an expression.
+
+#### 3. `Do_until_done` — repeat until Fabric is finished
+
+1. Under `Set_opStatus_initial`, click **+** → **Add an action**, search for **Do until** (it is under **Control**), and select it.
+2. Rename it to `Do_until_done`.
+3. Build the exit condition as **two rows joined with `Or`**:
+
+   | Row | Left (ƒx expression) | Operator | Right (plain text) |
+   |---|---|---|---|
+   | 1 | `variables('opStatus')` | is equal to | `Succeeded` |
+   | 2 | `variables('opStatus')` | is equal to | `Failed` |
+
+   - Fill row 1. Then click **+ Add** → **Add row** and fill row 2.
+   - Change the group operator from **And** to **Or**. **This is the step most likely to go wrong.** With **And** the loop never ends, because the status can't be both values at once. It then runs until the limits below stop it.
+   - The left-hand values must go in through the **ƒx** tab. If you type `variables('opStatus')` as plain text, the loop compares the literal words and never stops.
+4. Set the loop limits. In the new designer these are the **Count** and **Timeout** fields on the action. In the classic designer, click **Change limits**.
+
+   | Field | Value | Meaning |
+   |---|---|---|
+   | Count | `60` | At most 60 checks |
+   | Timeout | `PT10M` | At most 10 minutes in total |
+
+   Hitting a limit is not an error by itself. The loop just stops, `opStatus` is still `Running`, and Step 5 then reports `Failed` with that status in the message.
+
+The next four actions go **inside** `Do_until_done`. Add each one with the **+** inside the loop box, not the **+** below it.
+
+#### 3a. `Delay` — wait before each check
+
+1. Inside `Do_until_done`, click **+** → **Add an action**, search for **Delay** (under **Schedule**), and select it.
+2. Rename it to `Delay`.
+3. **Count:** `5`. **Unit:** `Second`.
+
+The delay comes **first** because Fabric's `202` asks the caller to wait 5 seconds (`Retry-After: 5`). Without it, the loop uses up its 60 checks in a few seconds.
+
+#### 3b. `Get_operation` — ask Fabric how the operation is going
+
+1. Under `Delay`, inside the loop, click **+** → **Add an action** → **HTTP with Microsoft Entra ID (preauthorized)** → **Invoke an HTTP request**.
+2. Check that the **Fabric** connection is the one selected (Base Resource URL `https://api.fabric.microsoft.com`).
+3. Rename it to `Get_operation`.
+4. Fill in:
+
+   | Field | Value |
+   |---|---|
+   | Method | `GET` |
+   | URL of the request | `https://api.fabric.microsoft.com/v1/operations/@{variables('operationId')}` |
+   | Header `Accept` | `application/json` |
+   | Body | none |
+
+   Type the URL up to `/operations/`. Then insert `variables('operationId')` from the **ƒx** tab, or pick **operationId** from the **Variables** list in **Dynamic content**.
+
+5. Do **not** add an `Authorization` header. Leave **Retry Policy** at its default.
+
+Fabric answers with a body like this:
+
+```json
+{ "status": "Running", "createdTimeUtc": "…", "lastUpdatedTimeUtc": "…", "percentComplete": 50 }
+```
+
+When it is finished, `status` is `Succeeded` or `Failed`. A `Failed` body also contains an `error` object with a `message`.
+
+#### 3c. `Set_opStatus` — record the latest status
+
+1. Under `Get_operation`, inside the loop, click **+** → **Add an action** → **Set variable**.
+2. Rename it to `Set_opStatus`.
+3. **Name:** `opStatus`.
+4. **Value (ƒx):**
+
+   ```
+   coalesce(body('Get_operation')?['status'], 'Running')
+   ```
+
+This is the value the loop's exit condition checks. If the response has no `status`, the `coalesce` keeps the loop going instead of leaving `opStatus` blank.
+
+#### 3d. `Set_opError` — keep Fabric's error text, if there is one
+
+1. Under `Set_opStatus`, inside the loop, click **+** → **Add an action** → **Set variable**.
+2. Rename it to `Set_opError`.
+3. **Name:** `opError`.
+4. **Value (ƒx):**
+
+   ```
+   coalesce(body('Get_operation')?['error']?['message'], '')
+   ```
+
+`opError` stays empty while the operation runs or succeeds. When the operation fails, it holds Fabric's reason, and Step 5 puts that reason in the flow's `message`.
+
+#### Check the Yes branch before saving
+
+| Check | Correct |
+|---|---|
+| Where is `Do_until_done`? | Inside the **Yes** branch of `Condition_accepted`, after `Set_opStatus_initial` |
+| What is inside `Do_until_done`? | Exactly `Delay`, `Get_operation`, `Set_opStatus` and `Set_opError`, in that order |
+| Loop condition group operator | **Or** |
+| Loop limits | Count `60`, Timeout `PT10M` |
+| Any action with *Configure run after → has failed*? | **None** (it would silently switch off the Catch) |
+| `Set_outcome_created` / `Set_message_created` | **Not** in this branch. They go after `Condition_accepted`, as described below |
+
+#### Check on the first run that returns `202`
+
+Open the run history and expand `Condition_accepted` → **Yes**:
+
+1. **`Set_operationId`** should show a GUID as its output. If it is empty, the connector is not passing response headers through. `Get_operation` then calls `/v1/operations/` with no ID and fails. If that happens, read the exact header name from `Provision_identity` → **Show raw outputs** → `headers` and correct the expression.
+2. **`Do_until_done`** should show a few iterations. In the last one, `Get_operation` should return `"status": "Succeeded"`.
+3. If `Get_operation` fails (for example with a `404`), the loop fails, `Scope_try` fails, and `Scope_catch` reports the error. That is intended, so don't add *has failed* handling here.
 
 ### After `Condition_accepted` — still inside the *No* branch of `Condition_already_exists`
 
