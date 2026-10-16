@@ -104,8 +104,10 @@ All of these go at the top level, above `Scope_try`.
 | Header `Accept` | `application/json` |
 
 ```
-https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId%20eq%20'@{if(empty(variables('clientId')), '00000000-0000-0000-0000-000000000000', variables('clientId'))}'&$select=id,appId,displayName
+https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '@{if(empty(variables('clientId')), '00000000-0000-0000-0000-000000000000', variables('clientId'))}'&$select=id,appId,displayName
 ```
+
+> **Type the spaces as plain spaces, not `%20`.** The connector URL-encodes the query string itself. A pre-encoded `%20` is encoded a second time into `%2520`, and Graph rejects the filter with **`400 BadRequest`** (`Invalid filter clause` or similar). Write the URL exactly as shown and let the connector encode it once. If you still get a `400`, open the failed run, expand `Get_service_principal`, and compare the URL under **Raw inputs** with the body's `error.message`. Both should show a single encoding, and the message names the part Graph could not parse.
 
 **Pick the Graph connection on this action.** The designer offers the most recently used connection, which is the Fabric one. A Graph URL sent through the Fabric connection fails with an audience error that does not mention the connection.
 
@@ -186,6 +188,6 @@ if(empty(variables('clientId')), 'Workspace has no identity in Fabric.', if(empt
 | 2 | Workspace without an identity | `NotProvisioned`. `clientid` and `name` are empty, and `Get_service_principal` ran with the zero GUID and returned an empty `value` |
 | 3 | Rename the workspace in Fabric, wait a minute, run it again | `Verified`, `name` = the new workspace name, and the same `clientid` as before |
 | 4 | Random GUID as `workspaceId` | `Failed`. The message names **`Get_workspace`** and carries Fabric's `404` text, and the run is red |
-| 5 | **Run first, on any workspace with an identity** | `Get_service_principal` answers `200`. On `403`, stop and take §0 |
+| 5 | **Run first, on any workspace with an identity** | `Get_service_principal` answers `200`. On `403`, stop and take §0. On `400`, check the URL encoding ([Step 4](#step-4--ask-entra)) |
 | 6 | Run it immediately after [ProvisionWorkspaceIdentity](ProvisionWorkspaceIdentity.md) returns `Created` | `Verified`, or `NotFoundInEntra` followed by `Verified` on a rerun a few seconds later. Note which one you see. It tells the provisioning solution whether it needs a delay before relying on the identity |
 | 7 | Inspect the `Get_service_principal` run inputs | The Graph connection is used, and the host is `graph.microsoft.com` |
