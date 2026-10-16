@@ -113,7 +113,18 @@ The URL it produces must read exactly like this, with no `=` after `eq`:
 https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '<guid>'&$select=id,appId,displayName
 ```
 
-> **Build the whole URL in one expression.** When plain text and an expression are mixed in the URL field, the designer can rewrite the text around the token. One build produced `appId eq = '<guid>'`, which Graph rejects with **`400 BadRequest`**. A single `concat()` leaves the designer nothing to edit. Inside an expression, `''` is an escaped single quote. Use plain spaces, not `%20`, because the connector encodes the URL itself. If you still get a `400`, open the failed run, expand `Get_service_principal`, and compare the URL under **Raw inputs** with the body's `error.message`. The message names the part Graph could not parse.
+> **Build the whole URL in one expression.** When plain text and an expression are mixed in the URL field, the designer can rewrite the text around the token. One build produced `appId eq = '<guid>'`, which Graph rejects with **`400 BadRequest`**. A single `concat()` leaves the designer nothing to edit. Inside an expression, `''` is an escaped single quote. Use plain spaces, not `%20`, because the connector encodes the URL itself. If you still get a `400`, read the error body as described in the next note.
+
+> **Reading a failed call: the error body is base64.** When the connector cannot identify a response as JSON, it returns `{"$content-type": "application/octet-stream", "$content": "<base64>"}`, and the run history shows only the encoded text. To read it, add a temporary **Compose** named `Compose_decode_graph` directly after `Get_service_principal` inside `Scope_try`. Set **Configure run after** to *is successful* **and** *has failed*, and use:
+>
+> ```
+> base64ToString(body('Get_service_principal')?['$content'])
+> ```
+>
+> - **JSON such as `{"error":{"code":"…","message":"…"}}`** means Graph rejected the request, and `message` names the part it could not parse.
+> - **Plain text or HTML** means the connector rejected the request before it reached Graph. Check the connection (next paragraph) and its Base Resource URL ([README.md](README.md) → *Solution and connections*).
+>
+> **Delete `Compose_decode_graph` when you have finished.** While it is in place, it changes how the try/catch behaves. A Graph failure is followed by a Compose that succeeds, so `Scope_try` can finish as succeeded, the Catch does not run, and the flow reports a finding instead of `Failed`. It also breaks on a normal JSON response, where `$content` is null.
 
 **Pick the Graph connection on this action.** The designer offers the most recently used connection, which is the Fabric one. A Graph URL sent through the Fabric connection fails with an audience error that does not mention the connection.
 
