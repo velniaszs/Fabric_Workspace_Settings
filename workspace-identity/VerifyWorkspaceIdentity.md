@@ -100,14 +100,20 @@ All of these go at the top level, above `Scope_try`.
 | Field | Value |
 |---|---|
 | Method | `GET` |
-| URL of the request | the expression below |
+| URL of the request | the expression below, entered as **one** expression (*fx*). Do not type any part of it as plain text |
 | Header `Accept` | `application/json` |
 
 ```
-https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '@{if(empty(variables('clientId')), '00000000-0000-0000-0000-000000000000', variables('clientId'))}'&$select=id,appId,displayName
+concat('https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq ''', if(empty(variables('clientId')), '00000000-0000-0000-0000-000000000000', variables('clientId')), '''&$select=id,appId,displayName')
 ```
 
-> **Type the spaces as plain spaces, not `%20`.** The connector URL-encodes the query string itself. A pre-encoded `%20` is encoded a second time into `%2520`, and Graph rejects the filter with **`400 BadRequest`** (`Invalid filter clause` or similar). Write the URL exactly as shown and let the connector encode it once. If you still get a `400`, open the failed run, expand `Get_service_principal`, and compare the URL under **Raw inputs** with the body's `error.message`. Both should show a single encoding, and the message names the part Graph could not parse.
+The URL it produces must read exactly like this, with no `=` after `eq`:
+
+```
+https://graph.microsoft.com/v1.0/servicePrincipals?$filter=appId eq '<guid>'&$select=id,appId,displayName
+```
+
+> **Build the whole URL in one expression.** When plain text and an expression are mixed in the URL field, the designer can rewrite the text around the token. One build produced `appId eq = '<guid>'`, which Graph rejects with **`400 BadRequest`**. A single `concat()` leaves the designer nothing to edit. Inside an expression, `''` is an escaped single quote. Use plain spaces, not `%20`, because the connector encodes the URL itself. If you still get a `400`, open the failed run, expand `Get_service_principal`, and compare the URL under **Raw inputs** with the body's `error.message`. The message names the part Graph could not parse.
 
 **Pick the Graph connection on this action.** The designer offers the most recently used connection, which is the Fabric one. A Graph URL sent through the Fabric connection fails with an audience error that does not mention the connection.
 
